@@ -127,7 +127,7 @@ batchedReadImpl batchSize logger warcFile action = do
             case fromByteStringRemainder contents of
 
                 Left err ->
-                    logger err
+                    logger $ C8.pack err
 
                 Right (szRead', we, remainder) ->
                     go fileSz (szRead + fromIntegral szRead') (n + 1) (we:acc) remainder
