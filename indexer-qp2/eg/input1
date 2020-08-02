@@ -1,0 +1,11 @@
+{
+	"docs": [{
+			"url": "http://doc1",
+			"content": "foo Bar foo bar"
+		},
+		{
+			"url": "http://doc3",
+			"content": "baz foo gaz"
+		}
+	]
+}

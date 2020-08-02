@@ -1,0 +1,11 @@
+{
+	"docs": [{
+			"url": "http://doc4",
+			"content": "foo Bar food bar"
+		},
+		{
+			"url": "http://doc3",
+			"content": "bazar food gaz"
+		}
+	]
+}
