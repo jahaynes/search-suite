@@ -10,4 +10,4 @@ COPY --from=searchapi3 /usr/src/haskell/searchapi3 .
 ENV COLLECTIONS_DIR=/run/collections
 ENV INDEXER_BINARY=/run/indexer-qp2
 
-CMD ["./searchapi3", "+RTS", "-N16"]
+CMD ["./searchapi3", "+RTS", "-N8"]
