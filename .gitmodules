@@ -1,0 +1,3 @@
+[submodule "searchapi3/WebArchive"]
+	path = searchapi3/WebArchive
+	url = https://github.com/jahaynes/WebArchive
