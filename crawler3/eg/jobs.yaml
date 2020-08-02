@@ -1,0 +1,28 @@
+---
+jobs:
+  -
+    actions:
+      -
+        action: postTo
+        param: "http://127.0.0.1:8081/index/foo"
+    seedUrls:
+
+      - "https://www.anu.edu.au/"
+      - "https://www.rmit.edu.au/"
+      - "https://www.sydney.edu.au/"
+      - "https://www.unsw.edu.au/"
+
+      - "https://www.st-andrews.ac.uk/"
+      - "https://www.cam.ac.uk/"
+      - "http://www.ox.ac.uk/"
+      - "https://www.ucl.ac.uk/"
+
+      - "https://www.harvard.edu/"
+      - "https://www.yale.edu/"
+      - "https://www.mit.edu/"
+
+      - "https://www.kth.se/"
+      - "https://www.lu.se/"
+      - "https://www.su.se/"
+      - "https://www.umu.se/"
+      - "https://www.ltu.se/"
