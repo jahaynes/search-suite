@@ -1,0 +1,65 @@
+cabal-version:       2.4
+
+name:                searchapi3
+version:             0.1.0.0
+license:             BSD-3-Clause
+license-file:        LICENSE
+author:              John Haynes
+extra-source-files:  CHANGELOG.md
+
+executable searchapi3
+
+  main-is:             Main.hs
+
+  ghc-options:         -Wall -O3 -threaded
+
+  other-modules:       Api,
+                       Compactor,
+                       CompactorStrategy,
+                       Component,
+                       Controller,
+                       Environment,
+                       Importer,
+                       ImporterTypes,
+                       Indexer,
+                       QueryParams,
+                       QueryProcessor,
+                       QueryProcessorTypes,
+                       Registry,
+                       Service,
+                       Types,
+                       WarcFileReader,
+                       WarcFileWriter
+
+  build-depends:       async,
+                       aeson,
+                       base,
+                       binary,
+                       bytestring,
+                       case-insensitive,
+                       cereal,
+                       containers,
+                       directory,
+                       http-types,
+                       process,
+                       process-extras,
+                       resourcet,
+                       safe,
+                       safe-exceptions,
+                       split,
+                       stm,
+                       tagsoup,
+                       temporary,
+                       text,
+                       uuid,
+                       vector,
+                       vector-builder,
+                       vector-split,
+                       wai,
+                       wai-middleware-prometheus,
+                       warp,
+                       WebArchive
+
+  hs-source-dirs:      src
+
+  default-language:    Haskell2010
