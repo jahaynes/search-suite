@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+import           Pipeline.FrontierTypes
 import           Pipeline.TimedFrontier
 import qualified Storage.MultiMap      as MM
 import           Url
@@ -100,8 +101,8 @@ testTriggerRace = property $ do
 
     frontier <- liftIO $ create 1
 
-    tf_submit frontier (Now later) url1
-    tf_submit frontier (Now later) url2
+    tf_submit frontier (Now later) [url1]
+    tf_submit frontier (Now later) [url2]
 
     (=== WaitMicros 1000000) =<< tf_nextUrl frontier (Now now)
 
@@ -126,7 +127,7 @@ testNextUrl = property $ do
     (=== Done) =<< tf_nextUrl frontier (Now time0_0)
 
     -- Submit url1
-    tf_submit frontier (Now time0_1) url1
+    tf_submit frontier (Now time0_1) [url1]
 
     -- Should return url1
     (=== Url url1) =<< tf_nextUrl frontier (Now time0_1)
@@ -136,8 +137,8 @@ testNextUrl = property $ do
     -- This is maybe not right.  Does it return Done if there are URLs on other hosts?  
 
     -- Submit url2, url3
-    tf_submit frontier (Now time1_0) url2
-    tf_submit frontier (Now time1_0) url3
+    tf_submit frontier (Now time1_0) [url2]
+    tf_submit frontier (Now time1_0) [url3]
 
     -- Should return url2
     (=== Url url3) =<< tf_nextUrl frontier (Now time1_0)

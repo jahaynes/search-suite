@@ -9,7 +9,7 @@ newtype Now =
 
 data Result = Url !Url
             | WaitMicros !Int
-            | Done deriving Eq
+            | Done deriving (Eq, Show)
 
 data PushBackTime = PushBackTime
                   | DontPushBackTime
