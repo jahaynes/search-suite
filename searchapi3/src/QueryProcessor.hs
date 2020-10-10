@@ -59,23 +59,18 @@ runQueryImpl env registry wfr logger collectionName@(CollectionName cn) params =
         mapM_ (takeLock registry) components
         pure components
 
-    case lockedComponents of
-        [] -> do
+    if null lockedComponents
+        then do
             let errMsg = C8.pack $ printf "No such collection: %s" cn
             logger errMsg
             pure $ Left errMsg
 
-        _  -> do
-
+        else do
             as <- forM lockedComponents $ async . queryAndUnlockComponent
-
             (bads, goods) <- partitionEithers <$> mapM wait as
-
             let errMsg = C8.unlines (map C8.pack bads)
-
             unless (null bads)
-                (logger errMsg)
-
+                   (logger errMsg)
             pure $ if null goods
                     then Left errMsg
                     else Right $ limit (maxResults params) (mconcat goods)

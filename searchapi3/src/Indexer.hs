@@ -23,7 +23,7 @@ import WarcFileReader      (WarcFileReader (..))
 import WarcFileWriter      (WarcFileWriter (..))
 
 import           Control.Exception.Safe           (catchIO)
-import           Control.Monad                    (void, when)
+import           Control.Monad                    (void)
 import           Data.Aeson                       (encode)
 import           Data.ByteString.Char8            (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as L8
@@ -34,7 +34,6 @@ import qualified Data.Vector                as V
 import           Debug.Trace                      (trace)
 import           System.Process                   (readProcessWithExitCode)
 import           System.IO.Temp                   (getCanonicalTemporaryDirectory, createTempDirectory)
-import           Text.Printf
 
 data Indexer =
     Indexer { indexDocuments      :: CollectionName -> [Doc] -> IO (Either String Int)
