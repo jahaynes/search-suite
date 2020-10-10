@@ -1,4 +1,4 @@
-FROM haskell:8.8.3
+FROM haskell:8.8.4
 
 RUN cabal v2-update
 

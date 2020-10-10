@@ -1,4 +1,4 @@
-FROM rust:1.45
+FROM rust:1.46
 
 WORKDIR /usr/src
 RUN rustup target add x86_64-unknown-linux-musl
