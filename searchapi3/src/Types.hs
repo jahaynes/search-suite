@@ -1,4 +1,4 @@
-module Types ( CollectionName
+module Types ( CollectionName (..)
              , getCollectionPath
              , parseCollectionName
              , HasPath (..)

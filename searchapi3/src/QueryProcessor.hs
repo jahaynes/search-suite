@@ -17,7 +17,7 @@ import WarcFileReader
 
 import           Control.Concurrent.Async       (async, wait)
 import           Control.Concurrent.STM         (atomically)
-import           Control.Exception.Safe         (catchIO)
+import           Control.Exception.Safe         (catchAnyDeep)
 import           Control.Monad                  (forM, unless)
 import           Data.Aeson                     (eitherDecodeStrict')
 import           Data.ByteString                (ByteString)
@@ -52,25 +52,33 @@ runQueryImpl :: Environment
              -> CollectionName
              -> QueryParams
              -> IO (Either ByteString QueryResults)
-runQueryImpl env registry wfr logger collectionName params = do
+runQueryImpl env registry wfr logger collectionName@(CollectionName cn) params = do
 
     lockedComponents <- atomically $ do
         components <- toList <$> viewCollectionComponents registry collectionName
         mapM_ (takeLock registry) components
         pure components
 
-    as <- forM lockedComponents $ async . queryAndUnlockComponent
+    case lockedComponents of
+        [] -> do
+            let errMsg = C8.pack $ printf "No such collection: %s" cn
+            logger errMsg
+            pure $ Left errMsg
 
-    (bads, goods) <- partitionEithers <$> mapM wait as
+        _  -> do
 
-    let errMsg = C8.unlines (map C8.pack bads)
+            as <- forM lockedComponents $ async . queryAndUnlockComponent
 
-    unless (null bads)
-           (logger errMsg)
+            (bads, goods) <- partitionEithers <$> mapM wait as
 
-    pure $ if null goods
-              then Left errMsg
-              else Right $ limit (maxResults params) (mconcat goods)
+            let errMsg = C8.unlines (map C8.pack bads)
+
+            unless (null bads)
+                (logger errMsg)
+
+            pure $ if null goods
+                    then Left errMsg
+                    else Right $ limit (maxResults params) (mconcat goods)
 
     where
     queryAndUnlockComponent :: Component -> IO (Either String QueryResults)
@@ -96,7 +104,7 @@ runQueryImpl env registry wfr logger collectionName params = do
             handle ioe = do releaseLockIO registry component
                             pure $ Left (show ioe)
 
-        in catchIO job handle
+        in catchAnyDeep job handle
 
         where
         decodeOutput :: ByteString -> IO QueryResults

@@ -39,6 +39,7 @@ executable searchapi3
                        case-insensitive,
                        cereal,
                        containers,
+                       deepseq,
                        directory,
                        http-types,
                        process,

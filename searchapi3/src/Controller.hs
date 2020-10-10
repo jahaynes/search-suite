@@ -92,7 +92,7 @@ app3 service logger request respond =
                 logger $ "Received query: " <> query queryParams
                 result <- runQuery service cn queryParams
                 case result of
-                    Left e  -> error $ show e
+                    Left e  -> respond $ responseBuilder status500 json . fromByteString $ e
                     Right r -> respond . responseBuilder status200 json . fromLazyByteString . encode $ r
 
     doMerge qString =

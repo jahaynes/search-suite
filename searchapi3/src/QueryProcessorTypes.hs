@@ -3,6 +3,7 @@
 
 module QueryProcessorTypes where
 
+import           Control.DeepSeq            (NFData)
 import           Data.Aeson                 (FromJSON, ToJSON)
 import           Data.Text                  (Text)
 import           Data.Vector                (Vector)
@@ -14,14 +15,14 @@ import           GHC.Generics               (Generic)
 data QueryResults =
     QueryResults { num_results :: !Int
                  , results     :: !(Vector QueryResult)
-                 } deriving (Show, Generic, FromJSON, ToJSON)
+                 } deriving (Show, Generic, FromJSON, ToJSON, NFData)
 
 data QueryResult =
     QueryResult { uri        :: !Text
                 , score      :: !Float
                 , term_count :: !Int
                 , snippet    :: !(Maybe Text)
-                } deriving (Show, Generic, FromJSON, ToJSON)
+                } deriving (Show, Generic, FromJSON, ToJSON, NFData)
 
 limit :: Maybe Int -> QueryResults -> QueryResults
 limit  Nothing qr = qr
