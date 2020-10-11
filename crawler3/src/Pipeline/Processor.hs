@@ -11,6 +11,7 @@ import Page.Page              (Page (..))
 import Pipeline.FrontierTypes (Now (..), Result (..))
 import Pipeline.TimedFrontier (TimedFrontier (..))
 import Storage.Store          (Store (..))
+import Storage.WarcFileWriter (WarcFileWriter (..))
 import Url
 
 import Control.Concurrent
@@ -29,13 +30,14 @@ create :: MonadIO m
        -> Store Host m
        -> Fetcher m
        -> SearchApiClient m
+       -> WarcFileWriter
        -> Job
        -> m (Processor m)
-create frontier allowedHosts fetcher searchApiClient job = do
+create frontier allowedHosts fetcher searchApiClient warcFileWriter job = do
 
     let processor = 
-            Processor { p_submit = submit frontier allowedHosts
-                      , p_step   = step frontier fetcher searchApiClient (j_actions job)
+            Processor { p_submit = submitImpl frontier allowedHosts
+                      , p_step   = step frontier fetcher searchApiClient warcFileWriter (j_actions job)
                       }
     let urls = map (fromJust . mkUrl) (j_seedUrls job)
     seed frontier allowedHosts urls
@@ -44,10 +46,10 @@ create frontier allowedHosts fetcher searchApiClient job = do
 seed :: MonadIO m => TimedFrontier m -> Store Host m -> [Url] -> m ()
 seed frontier allowedHosts urls = do
     forM_ urls $ \url -> s_put allowedHosts (getHost url)
-    submit frontier allowedHosts urls
+    submitImpl frontier allowedHosts urls
 
-submit :: MonadIO m => TimedFrontier m -> Store Host m -> [Url] -> m ()
-submit frontier allowedHosts urls = do
+submitImpl :: MonadIO m => TimedFrontier m -> Store Host m -> [Url] -> m ()
+submitImpl frontier allowedHosts urls = do
     allowed <- filterM (s_member allowedHosts . getHost) urls
     unless (null allowed) $ do
         now <- Now <$> liftIO getCurrentTime
@@ -57,9 +59,10 @@ step :: MonadIO m
      => TimedFrontier m
      -> Fetcher m
      -> SearchApiClient m
+     -> WarcFileWriter
      -> [Action]
      -> m (Maybe Page)
-step frontier fetcher searchApiClient actions =
+step frontier fetcher searchApiClient warcFileWriter actions =
 
     let loop = do 
 
@@ -84,3 +87,6 @@ step frontier fetcher searchApiClient actions =
     act page (Action "postTo" strUrl) = 
         let Just url = mkUrl strUrl
         in postToSearchApi searchApiClient url page
+
+    act page (Action "writeWarc" warcFile) = do
+        liftIO $ submit warcFileWriter warcFile page

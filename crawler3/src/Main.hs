@@ -1,5 +1,4 @@
-{-# LANGUAGE BangPatterns,
-             LambdaCase #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Main where
 
@@ -15,6 +14,7 @@ import qualified Pipeline.SqlTimedFrontier as STF
 import qualified Reporter.Reporter         as R
 import qualified Client.SearchApiClient    as C
 import qualified Storage.Store             as S
+import qualified Storage.WarcFileWriter    as W
 
 import           Control.Concurrent.Async
 import           Control.Monad.Extra
@@ -40,38 +40,42 @@ getJobsYaml =
 main :: IO ()
 main = do   
 
-    Jobs [job] <- getJobsYaml >>= readJobs
+    Jobs jobs <- getJobsYaml >>= readJobs
 
-    -- frontier <- STF.create ":memory:" 0.4
-    frontier <- STF.create "./foo.db" 0.4
-    -- frontier <- TF.create 0.4
+    forConcurrently_ jobs $ \job -> do
 
-    Right processor <- runExceptT $ do allowedHosts <- S.create
-                                       fetcher      <- liftIO F.createFetcher
-                                       client       <- liftIO C.create
-                                       P.create frontier allowedHosts fetcher client job
+        initialise job
 
-    reporter <- R.create
-    md5Store <- S.create
+        frontier <- STF.create ":memory:" 0.4
+        --frontier <- STF.create "./foo.db" 0.4
+        -- frontier <- TF.create 0.4
 
-    replicateConcurrently_ 16 (run 0 reporter md5Store processor)
+        Right processor <- runExceptT $ do allowedHosts   <- S.create
+                                           fetcher        <- liftIO F.createFetcher
+                                           client         <- liftIO C.create
+                                           warcFileWriter <- liftIO W.create
+                                           P.create frontier allowedHosts fetcher client warcFileWriter job
 
-    -- run 0 reporter md5Store processor
+        reporter <- R.create
+        md5Store <- S.create
 
-run :: Int
-    -> R.Reporter IO
+        -- TODO investigate this
+        --replicateConcurrently_ 8 (run reporter md5Store processor)
+
+        run reporter md5Store processor
+
+run :: R.Reporter IO
     -> S.Store ByteString (ExceptT Error IO)
     -> P.Processor (ExceptT Error IO)
     -> IO ()
--- run 100        _        _         _ = pure ()
-run !n reporter md5store processor =
+run reporter md5store processor =
 
     runExceptT go >>= \case
 
         Left e -> do R.report reporter e
-                     run (n + 1) reporter md5store processor
+                     run reporter md5store processor
 
-        Right () -> run (n + 1) reporter md5store processor
+        Right () -> run reporter md5store processor
 
     where
     go =

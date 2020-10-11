@@ -1,0 +1,25 @@
+---
+jobs:
+  -
+    actions:
+      -
+        action: writeWarc
+        param: "/home/john/nytimes.warc"
+    seedUrls:
+      - "https://www.nytimes.com/"
+  -
+    actions:
+      -
+        action: writeWarc
+        param: "/home/john/msnbc.warc"
+    seedUrls:
+      - "https://www.msnbc.com/"
+  -
+    actions:
+      -
+        action: writeWarc
+        param: "/home/john/guardian.warc"
+    seedUrls:
+      - "https://www.theguardian.com"
+
+
