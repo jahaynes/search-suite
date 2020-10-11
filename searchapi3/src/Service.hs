@@ -21,6 +21,7 @@ import           WarcFileReader            ( WarcFileReader, createWarcFileReade
 import qualified WarcFileWriter      as Ww ( createWarcFileWriter )
 
 import Data.ByteString (ByteString)
+import Data.Set        (Set)
 
 data System =
     System { registry       :: !Registry
@@ -32,7 +33,8 @@ data System =
            }
 
 data Service =
-    Service { importCollection   :: !(CollectionName -> IO (Either ByteString ()))
+    Service { listCollections    :: !(IO (Set CollectionName))
+            , importCollection   :: !(CollectionName -> IO (Either ByteString ()))
             , indexDocuments     :: !(CollectionName -> [Doc] -> IO (Either String Int))
             , indexLocalWarcFile :: !(CollectionName -> FilePath -> IO (Either ByteString ()))
             , runQuery           :: !(CollectionName -> QueryParams -> IO (Either ByteString QueryResults))
@@ -63,7 +65,8 @@ createService env logger = do
                         , warcFileReader = wfr
                         }
 
-    pure $ Service { importCollection   = Im.importCollection (importer system)
+    pure $ Service { listCollections    = Rg.listCollections reg
+                   , importCollection   = Im.importCollection (importer system)
                    , indexDocuments     = Ix.indexDocuments (indexer system)
                    , indexLocalWarcFile = Ix.indexLocalWarcFile (indexer system)
                    , runQuery           = Qp.runQuery (queryProcessor system)

@@ -11,6 +11,7 @@ import Environment (Environment (..))
 
 import Control.Monad.Fail (MonadFail, fail)
 import Data.Char          (isAlphaNum)
+import Data.Hashable      (Hashable, hashWithSalt)
 import Prelude hiding     (fail)
 
 class HasPath a where
@@ -22,6 +23,9 @@ class NumDocs a where
 newtype CollectionName =
     CollectionName String
         deriving (Eq, Ord, Show)
+
+instance Hashable CollectionName where
+    hashWithSalt salt (CollectionName cn) = hashWithSalt salt cn
 
 getCollectionPath :: Environment -> CollectionName -> FilePath
 getCollectionPath env (CollectionName name) = collectionsDir env <> "/" <> name

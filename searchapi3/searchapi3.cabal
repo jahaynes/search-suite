@@ -41,6 +41,7 @@ executable searchapi3
                        containers,
                        deepseq,
                        directory,
+                       hashable,
                        http-types,
                        process,
                        process-extras,
@@ -49,6 +50,7 @@ executable searchapi3
                        safe-exceptions,
                        split,
                        stm,
+                       stm-containers,
                        tagsoup,
                        temporary,
                        text,
@@ -57,6 +59,7 @@ executable searchapi3
                        vector-builder,
                        vector-split,
                        wai,
+                       wai-cors,
                        wai-middleware-prometheus,
                        warp,
                        WebArchive

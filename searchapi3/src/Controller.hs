@@ -4,18 +4,21 @@ module Controller ( runController ) where
 
 import Api
 import QueryParams         ( QueryParams (..), MergeParams (..), parseQueryParams, parseMergeParams )
-import Service             ( Service (..) )
-import Types               ( parseCollectionName )
+import Service as Serv     ( Service (..) )
+import Types               ( CollectionName (..), parseCollectionName )
 
 import Data.Aeson                              (eitherDecode', encode)
 import Data.ByteString.Char8                   (ByteString, pack)
 import Data.ByteString.Lazy.Char8        as L8 (unpack)
 import Data.CaseInsensitive                    (CI)
 import Data.Binary.Builder                     (fromByteString, fromLazyByteString)
-import Data.Text                         as T  (unpack)
+import qualified Data.Map as M
+import qualified Data.Set as S
+import Data.Text                         as T  (Text, unpack)
 import Network.Wai
 import Network.HTTP.Types
 import Network.Wai.Handler.Warp                (run)
+import Network.Wai.Middleware.Cors
 import Network.Wai.Middleware.Prometheus 
 import Text.Printf                             (printf)
 
@@ -28,6 +31,9 @@ app3 service logger request respond =
 
         ("GET", []) ->
             respond $ responseOk "TODO doco"
+
+        ("GET", ["collections"]) ->
+            listCollections
 
         ("GET", ["query", strCn]) ->
             case parseCollectionName $ T.unpack strCn of
@@ -50,7 +56,7 @@ app3 service logger request respond =
                                    . fromLazyByteString
                                    $ "Invalid collection name"
 
-                Just cn -> do
+                Just cn ->
 
                     eitherDecode' <$> strictRequestBody request >>= \case
 
@@ -85,6 +91,15 @@ app3 service logger request respond =
             respond notFound
 
     where
+    listCollections = do
+        ls <- Serv.listCollections service
+        respond . responseBuilder status200 json
+                . fromLazyByteString
+                . encode
+                . map (\(CollectionName cn) -> M.singleton ("id"::Text) cn)
+                . S.toList
+                $ ls
+
     doQuery cn qString =
         case parseQueryParams qString of
             Nothing          -> error "Could not parse parameters for query!"
@@ -120,8 +135,9 @@ runController :: Service
 runController service logger = do
     logger "http://localhost:8081/"
     run 8081
-        (prometheus def
-            (app3 service logger))
+        $ simpleCors
+            $ prometheus def
+                $ app3 service logger
 
 html :: [(CI ByteString, ByteString)]
 html = [("Content-Type", "text/html")]

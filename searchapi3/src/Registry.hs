@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase,
+             OverloadedStrings #-}
 
 module Registry ( Registry (..)
                 , createRegistry
@@ -8,55 +9,59 @@ import Component
 import Environment (Environment (..))
 import Types
 
-import           Control.Concurrent.STM     (STM, TVar, atomically, modifyTVar', newTVarIO, readTVar, retry, writeTVar)
-import           Control.Monad              (forM_)
-import           Data.ByteString.Char8      (ByteString)
-import           Data.Map                   (Map)
+import           Control.Concurrent.STM   (STM, TVar, atomically, modifyTVar', newTVarIO, readTVar, retry, writeTVar)
+import           Control.Monad            (forM_)
+import           Data.ByteString.Char8    (ByteString)
+import           Data.Map                 (Map)
 import qualified Data.Map as M
-import           Data.Maybe                 (fromMaybe)
-import           Data.Set                   (Set)
+import           Data.Maybe               (fromMaybe)
+import           Data.Set                 (Set)
 import qualified Data.Set as S
-import qualified Data.UUID             as U
-import qualified Data.UUID.V4          as U
-import           Debug.Trace                (trace)
-import           System.Directory           (canonicalizePath, copyFile, createDirectoryIfMissing, listDirectory, removeDirectoryRecursive)
+import qualified Data.UUID as U
+import qualified Data.UUID.V4 as U
+import           Debug.Trace              (trace)
+import qualified StmContainers.Set as STM
+import           System.Directory         (canonicalizePath, copyFile, createDirectoryIfMissing, listDirectory, removeDirectoryRecursive)
 
 {- TODO fix the 'collections' and 'locks' representations
     Collections should be able to run independently
 -}
 data Registry =
-    Registry { registerFromTmp          :: CollectionName -> Component -> IO ()
-             , registerInPlace          :: CollectionName -> Component -> STM ()
-             , releaseLockIO            :: Component -> IO ()   -- TODO can be scoped to CollectionName
-             , takeLock                 :: Component -> STM ()  -- TODO can be scoped to CollectionName
-             , unregister               :: CollectionName -> Component -> STM ()
-             , viewCollectionComponents :: CollectionName -> STM (Set Component)
+    Registry { registerFromTmp          :: !(CollectionName -> Component -> IO ())
+             , registerInPlace          :: !(CollectionName -> Component -> STM ())
+             , releaseLockIO            :: !(Component -> IO ())
+             , takeLock                 :: !(Component -> STM ())
+             , unregister               :: !(CollectionName -> Component -> STM ())
+             , listCollections          :: !(IO (Set CollectionName))
+             , viewCollectionComponents :: !(CollectionName -> STM (Set Component))
 
-             , totalNumComponents       :: IO Int
-             , totalLocksHeld           :: IO Int
+             , totalNumComponents       :: !(IO Int)
+             , totalLocksHeld           :: !(IO Int)
              }
 
 newtype Collections =
     Collections (TVar (Map CollectionName (Set Component)))
 
+-- subdivide locks further?  STMap CollectionName Component?
 newtype Locks =
-    Locks (TVar (Set Component))
+    Locks (STM.Set Component)
 
 createRegistry :: Environment
                -> (ByteString -> IO ())
                -> IO Registry
 createRegistry env logger = do
     collections <- Collections <$> newTVarIO M.empty
-    locks       <- Locks <$> newTVarIO S.empty
+    locks       <- Locks <$> STM.newIO
     pure $ Registry { registerFromTmp          = registerFromTmpImpl env collections
                     , registerInPlace          = registerInPlaceImpl collections
                     , releaseLockIO            = releaseLockIOImpl locks logger
                     , takeLock                 = takeLockImpl locks
                     , unregister               = unregisterImpl collections
+                    , listCollections          = atomically $ listCollectionsImpl collections
                     , viewCollectionComponents = viewCollectionComponentsImpl collections
 
-                    , totalNumComponents       = totalNumComponentsImpl collections
-                    , totalLocksHeld           = totalLocksHeldImpl locks
+                    , totalNumComponents       = atomically $ totalNumComponentsImpl collections
+                    , totalLocksHeld           = atomically $ totalLocksHeldImpl locks
                     }
 
 registerFromTmpImpl :: Environment -> Collections -> CollectionName -> Component -> IO ()
@@ -94,18 +99,18 @@ releaseLockIOImpl :: Locks
                   -> (ByteString -> IO ())
                   -> Component
                   -> IO ()
-releaseLockIOImpl locks logger c = do
-    x <- atomically $ releaseLock locks c
+releaseLockIOImpl locks logger component = do
+    x <- atomically $ releaseLock locks component
     case x of
         Left err -> logger err
         Right _  -> pure ()
 
+-- generify?
 takeLockImpl :: Locks -> Component -> STM ()
-takeLockImpl (Locks locks) component = do
-    locks' <- readTVar locks
-    if S.member component locks'
-        then trace "STM retried" retry
-        else writeTVar locks $! S.insert component locks'
+takeLockImpl (Locks locks) component =
+    STM.lookup component locks >>= \case
+        True  -> trace "STM retried" retry
+        False -> STM.insert component locks
 
 unregisterImpl :: Collections -> CollectionName -> Component -> STM ()
 unregisterImpl (Collections cs) collectionName component =
@@ -118,22 +123,22 @@ unregisterImpl (Collections cs) collectionName component =
                               in if S.null components' then Nothing else Just components'
         f Nothing           = Nothing
 
+listCollectionsImpl :: Collections -> STM (Set CollectionName)
+listCollectionsImpl (Collections cs) = M.keysSet <$> readTVar cs
+
 viewCollectionComponentsImpl :: Collections -> CollectionName -> STM (Set Component)
 viewCollectionComponentsImpl (Collections cs) collectionName =
     fromMaybe S.empty . M.lookup collectionName <$> readTVar cs
 
-totalNumComponentsImpl :: Collections -> IO Int
+totalNumComponentsImpl :: Collections -> STM Int
 totalNumComponentsImpl (Collections cs) =
-    atomically (sum . map S.size . map snd . M.toList <$> readTVar cs)
+    sum . map S.size . map snd . M.toList <$> readTVar cs
 
-totalLocksHeldImpl :: Locks -> IO Int
-totalLocksHeldImpl (Locks locks) =
-    atomically (S.size <$> readTVar locks)
+totalLocksHeldImpl :: Locks -> STM Int
+totalLocksHeldImpl (Locks locks) = STM.size locks
 
 releaseLock :: Locks -> Component -> STM (Either ByteString ())
-releaseLock (Locks locks) component = do
-    locks' <- readTVar locks
-    if S.member component locks'
-        then Right <$> writeTVar locks (S.delete component locks')
-        else pure (Left "WARN! Lock was not held")
-
+releaseLock (Locks locks) component =
+    STM.lookup component locks >>= \case
+        True  -> Right <$> STM.delete component locks
+        False -> pure (Left "WARN! Lock was not held")
