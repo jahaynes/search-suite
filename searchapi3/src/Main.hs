@@ -2,17 +2,16 @@
 
 module Main where
 
-import Controller ( runController )
-
-import Environment ( Environment (..)
-                   , loadEnvironment )
-
-import Service ( Service (..)
-               , createService )
-
-import Types ( CollectionName
-             , Logger (..)
-             , parseCollectionName )
+import Compactor      (createCompactor)
+import Controller     (runController)
+import Environment    (Environment (..), loadEnvironment)
+import Importer       (Importer (importCollection), createImporter)
+import Indexer        (createIndexer)
+import QueryProcessor (createQueryProcessor)
+import Registry       (createRegistry)
+import Types          (CollectionName, Logger (..), parseCollectionName)
+import WarcFileReader (createWarcFileReader)
+import WarcFileWriter (createWarcFileWriter)
 
 import Control.Monad         (filterM)
 import Data.ByteString.Char8 (ByteString, unpack)
@@ -24,13 +23,53 @@ main = do
 
     env <- loadEnvironment
 
-    service <- createService env stdoutLogger
+    let logger = stdoutLogger
+
+    registry <- createRegistry env
+                               (logger RegistryLogger)
+
+    let warcReader = createWarcFileReader 128
+                                          (logger WarcFileReaderLogger)
+
+    let warcWriter = createWarcFileWriter
+
+    let queryProcessor = createQueryProcessor env
+                                              registry
+                                              warcReader
+                                              (logger QueryProcessorLogger)
+
+    let compactor = createCompactor env
+                                    registry
+                                    warcWriter
+                                    (logger CompactorLogger)
+
+    let importer = createImporter env
+                                  registry
+                                  compactor
+
+    let indexer = createIndexer env
+                                warcReader
+                                warcWriter
+                                compactor
+                                registry
 
     collections <- findRegistrableCollections env
 
-    mapM_ (importCollection service) collections
+    if null collections
+        then putStrLn "No existing collections found"
+        else do
+            putStrLn "Found existing collections: "
+            mapM_ (\c -> putStr "  " >> print c) collections
 
-    runController service (stdoutLogger ControllerLogger)
+    mapM_ (importCollection importer) collections
+
+    printf "Environment is: %s\n" (show env)
+
+    runController compactor
+                  indexer
+                  queryProcessor
+                  registry
+                  (stdoutLogger ControllerLogger)
 
 findRegistrableCollections :: Environment -> IO [CollectionName]
 findRegistrableCollections env = do

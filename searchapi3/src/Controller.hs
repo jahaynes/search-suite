@@ -1,31 +1,38 @@
-{-# LANGUAGE LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE LambdaCase,
+             OverloadedStrings #-}
 
 module Controller ( runController ) where
 
 import Api
-import QueryParams         ( QueryParams (..), MergeParams (..), parseQueryParams, parseMergeParams )
-import Service as Serv     ( Service (..) )
-import Types               ( CollectionName (..), parseCollectionName )
+import Compactor      (Compactor (..))
+import Indexer        (Indexer (..))
+import QueryParams    (QueryParams (..), MergeParams (..), parseQueryParams, parseMergeParams)
+import QueryProcessor (QueryProcessor (..))
+import Registry       (Registry (..))
+import Types          (CollectionName (..), parseCollectionName)
 
-import Data.Aeson                              (eitherDecode', encode)
-import Data.ByteString.Char8                   (ByteString, pack)
-import Data.ByteString.Lazy.Char8        as L8 (unpack)
-import Data.CaseInsensitive                    (CI)
-import Data.Binary.Builder                     (fromByteString, fromLazyByteString)
+import           Data.Aeson                        (eitherDecode', encode)
+import           Data.ByteString.Char8             (ByteString, pack)
+import           Data.ByteString.Lazy.Char8 as L8  (unpack)
+import           Data.CaseInsensitive              (CI)
+import           Data.Binary.Builder               (fromByteString, fromLazyByteString)
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Data.Text                         as T  (Text, unpack)
-import Network.Wai
-import Network.HTTP.Types
-import Network.Wai.Handler.Warp                (run)
-import Network.Wai.Middleware.Cors
-import Network.Wai.Middleware.Prometheus 
-import Text.Printf                             (printf)
+import           Data.Text as T                    (Text, unpack)
+import           Network.Wai
+import           Network.HTTP.Types
+import           Network.Wai.Handler.Warp          (run)
+import           Network.Wai.Middleware.Cors
+import           Network.Wai.Middleware.Prometheus
+import           Text.Printf                       (printf)
 
-app3 :: Service
-     -> (ByteString -> IO ())
-     -> Application
-app3 service logger request respond =
+searchApiApp :: Compactor
+             -> Indexer
+             -> QueryProcessor
+             -> Registry
+             -> (ByteString -> IO ())
+             -> Application
+searchApiApp compactor indexer qp registry logger request respond =
 
     case (requestMethod request, pathInfo request) of
 
@@ -33,7 +40,7 @@ app3 service logger request respond =
             respond $ responseOk "TODO doco"
 
         ("GET", ["collections"]) ->
-            listCollections
+            listRegistryCollections
 
         ("GET", ["query", strCn]) ->
             case parseCollectionName $ T.unpack strCn of
@@ -41,11 +48,11 @@ app3 service logger request respond =
                 Just cn -> doQuery cn (queryString request)
 
         ("GET", ["diagnostic", "totalNumComponents"]) -> do
-            num <- totalNumComponents service
+            num <- totalNumComponents registry
             respond . responseBuilder status200 json . fromByteString . pack . show $ num 
 
         ("GET", ["diagnostic", "totalLocksHeld"]) -> do
-            num <- totalLocksHeld service
+            num <- totalLocksHeld registry
             respond . responseBuilder status200 json . fromByteString . pack . show $ num 
 
         ("POST", ["index", strCn]) -> do
@@ -61,12 +68,13 @@ app3 service logger request respond =
                     eitherDecode' <$> strictRequestBody request >>= \case
 
                         Left e -> respond . responseBuilder status400 json
-                                          . fromLazyByteString
-                                          $ "Could not parse request"
+                                          . fromByteString
+                                          . pack
+                                          $ "Could not parse request: " <> (take 20 $ show e) <> "..."
 
-                        Right (IndexRequest docs) -> do
+                        Right indexRequest -> do
 
-                            numIndexed <- indexDocuments service cn docs
+                            numIndexed <- indexDocuments indexer cn (docs indexRequest)
 
                             respond . responseBuilder status200 json
                                     . fromLazyByteString
@@ -79,7 +87,7 @@ app3 service logger request respond =
                 Nothing -> error "bad name"
                 Just cn -> do
                     warcFile <- L8.unpack <$> strictRequestBody request
-                    res <- indexLocalWarcFile service cn warcFile
+                    res <- indexLocalWarcFile indexer cn warcFile
                     respond $ case res of
                         Left er -> responseError er
                         Right _ -> responseOk "Done"
@@ -91,8 +99,8 @@ app3 service logger request respond =
             respond notFound
 
     where
-    listCollections = do
-        ls <- Serv.listCollections service
+    listRegistryCollections = do
+        ls <- listCollections registry
         respond . responseBuilder status200 json
                 . fromLazyByteString
                 . encode
@@ -105,7 +113,7 @@ app3 service logger request respond =
             Nothing          -> error "Could not parse parameters for query!"
             Just queryParams -> do
                 logger $ "Received query: " <> query queryParams
-                result <- runQuery service cn queryParams
+                result <- runQuery qp cn queryParams
                 case result of
                     Left e  -> respond $ responseBuilder status500 json . fromByteString $ e
                     Right r -> respond . responseBuilder status200 json . fromLazyByteString . encode $ r
@@ -117,7 +125,7 @@ app3 service logger request respond =
                 let d = dest mergeParams
                     s = src mergeParams
                 logger . pack $ printf "Received merge order %s <- %s" (show d) (show s)
-                mergeInto service d s
+                mergeInto compactor d s
                 respond $ responseOk "whatever"
 
 responseOk :: ByteString -> Response
@@ -129,15 +137,18 @@ responseError = responseBuilder status500 html . fromByteString
 notFound :: Response
 notFound = responseLBS status404 plain "404 - Not Found"
 
-runController :: Service
+runController :: Compactor
+              -> Indexer
+              -> QueryProcessor
+              -> Registry
               -> (ByteString -> IO ())
               -> IO ()
-runController service logger = do
+runController compactor indexer qp registry logger = do
     logger "http://localhost:8081/"
     run 8081
         $ simpleCors
             $ prometheus def
-                $ app3 service logger
+                $ searchApiApp compactor indexer qp registry logger
 
 html :: [(CI ByteString, ByteString)]
 html = [("Content-Type", "text/html")]

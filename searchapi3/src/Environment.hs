@@ -11,7 +11,7 @@ import Text.Printf        (printf)
 data Environment =
     Environment { collectionsDir :: !FilePath
                 , indexerBinary  :: !FilePath
-                }
+                } deriving Show
 
 loadEnvironment :: IO Environment
 loadEnvironment = Environment <$> env False "COLLECTIONS_DIR"
