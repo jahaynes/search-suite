@@ -55,6 +55,9 @@ searchApiApp compactor indexer qp registry logger request respond =
             num <- totalLocksHeld registry
             respond . responseBuilder status200 json . fromByteString . pack . show $ num 
 
+        {-
+           curl 127.0.0.1:8081/index/foo -d '{"docs":[{"url":"some_url","content":"some_content"}]}'
+        -}
         ("POST", ["index", strCn]) -> do
 
             case parseCollectionName $ T.unpack strCn of
