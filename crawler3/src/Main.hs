@@ -8,6 +8,7 @@ import qualified Network.Fetcher           as F
 
 import           Page.Page
 import           Page.Scrape
+import qualified Pipeline.AllowedUrls      as A
 import qualified Pipeline.Processor        as P
 import qualified Pipeline.TimedFrontier    as TF
 import qualified Pipeline.SqlTimedFrontier as STF
@@ -38,7 +39,7 @@ getJobsYaml =
         _    -> error msg
 
 main :: IO ()
-main = do   
+main = do
 
     Jobs jobs <- getJobsYaml >>= readJobs
 
@@ -50,11 +51,11 @@ main = do
         --frontier <- STF.create "./foo.db" 0.4
         -- frontier <- TF.create 0.4
 
-        Right processor <- runExceptT $ do allowedHosts   <- S.create
+        Right processor <- runExceptT $ do allowedUrls    <- A.create
                                            fetcher        <- liftIO F.createFetcher
                                            client         <- liftIO C.create
                                            warcFileWriter <- liftIO W.create
-                                           P.create frontier allowedHosts fetcher client warcFileWriter job
+                                           P.create frontier allowedUrls fetcher client warcFileWriter job
 
         reporter <- R.create
         md5Store <- S.create

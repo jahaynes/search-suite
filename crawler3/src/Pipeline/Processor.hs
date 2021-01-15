@@ -8,14 +8,14 @@ import Client.SearchApiClient (SearchApiClient (..))
 import Job.YamlJobs           (Action (..), Job (..))
 import Network.Fetcher        (Fetcher (fetch))
 import Page.Page              (Page (..))
+import Pipeline.AllowedUrls   (AllowedUrls (..))
 import Pipeline.FrontierTypes (Now (..), Result (..))
 import Pipeline.TimedFrontier (TimedFrontier (..))
-import Storage.Store          (Store (..))
 import Storage.WarcFileWriter (WarcFileWriter (..))
 import Url
 
 import Control.Concurrent
-import Control.Monad          (filterM, forM_, unless)
+import Control.Monad          (filterM, unless)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Maybe             (fromJust)
 import Data.Time.Clock
@@ -27,30 +27,32 @@ data Processor m =
 
 create :: MonadIO m
        => TimedFrontier m
-       -> Store Host m
+       -> AllowedUrls m
        -> Fetcher m
        -> SearchApiClient m
        -> WarcFileWriter
        -> Job
        -> m (Processor m)
-create frontier allowedHosts fetcher searchApiClient warcFileWriter job = do
+create frontier allowedUrls fetcher searchApiClient warcFileWriter job = do
 
     let processor = 
-            Processor { p_submit = submitImpl frontier allowedHosts
+            Processor { p_submit = submitImpl frontier allowedUrls
                       , p_step   = step frontier fetcher searchApiClient warcFileWriter (j_actions job)
                       }
     let urls = map (fromJust . mkUrl) (j_seedUrls job)
-    seed frontier allowedHosts urls
+    seed frontier allowedUrls urls
     pure processor
 
-seed :: MonadIO m => TimedFrontier m -> Store Host m -> [Url] -> m ()
-seed frontier allowedHosts urls = do
-    forM_ urls $ \url -> s_put allowedHosts (getHost url)
-    submitImpl frontier allowedHosts urls
+seed :: MonadIO m => TimedFrontier m -> AllowedUrls m -> [Url] -> m ()
+seed frontier allowedUrls urls = do
+    mapM_ (allowUrlAndVariants allowedUrls) urls
+    submitImpl frontier allowedUrls urls
 
-submitImpl :: MonadIO m => TimedFrontier m -> Store Host m -> [Url] -> m ()
-submitImpl frontier allowedHosts urls = do
-    allowed <- filterM (s_member allowedHosts . getHost) urls
+submitImpl :: MonadIO m => TimedFrontier m -> AllowedUrls m -> [Url] -> m ()
+submitImpl frontier allowedUrls urls = do
+
+    allowed <- filterM (urlAllowed allowedUrls) urls
+
     unless (null allowed) $ do
         now <- Now <$> liftIO getCurrentTime
         tf_submit frontier now allowed
