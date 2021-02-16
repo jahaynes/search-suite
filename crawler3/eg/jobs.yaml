@@ -14,12 +14,13 @@ jobs:
 
       - "https://www.st-andrews.ac.uk/"
       - "https://www.cam.ac.uk/"
-      - "http://www.ox.ac.uk/"
+      - "https://www.ox.ac.uk/"
       - "https://www.ucl.ac.uk/"
 
       - "https://www.harvard.edu/"
       - "https://www.yale.edu/"
       - "https://www.mit.edu/"
+      - "https://www.princeton.edu/"
 
       - "https://www.kth.se/"
       - "https://www.lu.se/"
