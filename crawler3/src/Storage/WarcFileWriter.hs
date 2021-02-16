@@ -83,6 +83,7 @@ runWorker (Locks locks) (Lanes lanes) = go
 
         let we = WarcEntry (WarcHeader (WarcVersion "1.0")
                                        [ HeaderLine (MandatoryKey WarcRecordId)  (StringValue uuid)
+                                       , HeaderLine (MandatoryKey WarcType)      (StringValue "response")
                                        , HeaderLine (MandatoryKey ContentLength) (IntValue . C8.length . p_body $ page)
                                        , HeaderLine (OptionalKey  WarcTargetURI) (StringValue url)
                                        ])
