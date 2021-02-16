@@ -1,144 +1,68 @@
-{-# LANGUAGE LambdaCase,
-             OverloadedStrings #-}
+{-# LANGUAGE DataKinds,
+             OverloadedStrings,
+             TypeOperators #-}
 
 module Controller ( runController ) where
 
-import Api
-import Compactor      (Compactor (..))
-import Indexer        (Indexer (..))
-import QueryParams    (QueryParams (..), MergeParams (..), parseQueryParams, parseMergeParams)
-import QueryProcessor (QueryProcessor (..))
-import Registry       (Registry (..))
-import Types          (CollectionName (..), parseCollectionName)
+import Api                 (IndexRequest (docs))
+import Compactor           (Compactor (mergeInto))
+import Indexer             (Indexer (indexDocuments, indexLocalWarcFile))
+import QueryParams         (QueryParams (QueryParams))
+import QueryProcessor      (QueryProcessor (runQuery))
+import QueryProcessorTypes (QueryResults)
+import Registry            (Registry (listCollections, totalLocksHeld, totalNumComponents))
+import Types               (CollectionName)
 
-import           Data.Aeson                        (eitherDecode', encode)
-import           Data.ByteString.Char8             (ByteString, pack)
-import           Data.ByteString.Lazy.Char8 as L8  (unpack)
-import           Data.CaseInsensitive              (CI)
-import           Data.Binary.Builder               (fromByteString, fromLazyByteString)
-import qualified Data.Map as M
-import qualified Data.Set as S
-import           Data.Text as T                    (Text, unpack)
-import           Network.Wai
-import           Network.HTTP.Types
-import           Network.Wai.Handler.Warp          (run)
-import           Network.Wai.Middleware.Cors
-import           Network.Wai.Middleware.Prometheus
-import           Text.Printf                       (printf)
+import Control.Monad.IO.Class            (liftIO)
+import Data.ByteString.Char8             (ByteString)
+import Data.Set                          (Set)
+import Data.Text                         (Text)
+import Data.Text.Encoding                (encodeUtf8)
+import Network.Wai.Handler.Warp          (run)
+import Network.Wai.Middleware.Cors       (simpleCors)
+import Network.Wai.Middleware.Prometheus (def, prometheus)
+import Servant
 
-searchApiApp :: Compactor
-             -> Indexer
-             -> QueryProcessor
-             -> Registry
-             -> (ByteString -> IO ())
-             -> Application
-searchApiApp compactor indexer qp registry logger request respond =
+type SearchApi = Get '[JSON] Text
 
-    case (requestMethod request, pathInfo request) of
+            :<|> "collections" :> Get '[JSON] (Set CollectionName)
 
-        ("GET", []) ->
-            respond $ responseOk "TODO doco"
+            :<|> "query" :> Capture "col" CollectionName
+                         :> QueryParam' '[Required] "q" Text
+                         :> QueryParam "n" Int
+                         :> Get '[JSON] (Either String QueryResults)
 
-        ("GET", ["collections"]) ->
-            listRegistryCollections
+            :<|> "index" :> Capture "col" CollectionName
+                         :> ReqBody '[JSON] IndexRequest
+                         :> Post '[JSON] (Either String Int)
 
-        ("GET", ["query", strCn]) ->
-            case parseCollectionName $ T.unpack strCn of
-                Nothing -> error "bad name"
-                Just cn -> doQuery cn (queryString request)
+            :<|> "indexLocal" :> Capture "col" CollectionName
+                              :> ReqBody '[JSON] FilePath
+                              :> Post '[JSON] (Either String ())
 
-        ("GET", ["diagnostic", "totalNumComponents"]) -> do
-            num <- totalNumComponents registry
-            respond . responseBuilder status200 json . fromByteString . pack . show $ num 
+            :<|> "mergeInto" :> QueryParam' '[Required] "dest" CollectionName
+                             :> QueryParam' '[Required] "src" CollectionName
+                             :> Post '[JSON] ()
 
-        ("GET", ["diagnostic", "totalLocksHeld"]) -> do
-            num <- totalLocksHeld registry
-            respond . responseBuilder status200 json . fromByteString . pack . show $ num 
+            :<|> "diagnostic" :> "totalNumComponents" :> Get '[JSON] Int
 
-        {-
-           curl 127.0.0.1:8081/index/foo -d '{"docs":[{"url":"some_url","content":"some_content"}]}'
-        -}
-        ("POST", ["index", strCn]) -> do
+            :<|> "diagnostic" :> "totalLocksHeld" :> Get '[JSON] Int
 
-            case parseCollectionName $ T.unpack strCn of
-
-                Nothing -> respond . responseBuilder status400 json
-                                   . fromLazyByteString
-                                   $ "Invalid collection name"
-
-                Just cn ->
-
-                    eitherDecode' <$> strictRequestBody request >>= \case
-
-                        Left e -> respond . responseBuilder status400 json
-                                          . fromByteString
-                                          . pack
-                                          $ "Could not parse request: " <> (take 20 $ show e) <> "..."
-
-                        Right indexRequest -> do
-
-                            numIndexed <- indexDocuments indexer cn (docs indexRequest)
-
-                            respond . responseBuilder status200 json
-                                    . fromLazyByteString
-                                    . encode
-                                    $ numIndexed
-
-        ("POST", ["indexlocal", strCn]) ->
-
-            case parseCollectionName $ T.unpack strCn of
-                Nothing -> error "bad name"
-                Just cn -> do
-                    warcFile <- L8.unpack <$> strictRequestBody request
-                    res <- indexLocalWarcFile indexer cn warcFile
-                    respond $ case res of
-                        Left er -> responseError er
-                        Right _ -> responseOk "Done"
-
-        ("POST", ["merge"]) ->
-            doMerge (queryString request)
-
-        _ ->
-            respond notFound
-
-    where
-    listRegistryCollections = do
-        ls <- listCollections registry
-        respond . responseBuilder status200 json
-                . fromLazyByteString
-                . encode
-                . map (\(CollectionName cn) -> M.singleton ("id"::Text) cn)
-                . S.toList
-                $ ls
-
-    doQuery cn qString =
-        case parseQueryParams qString of
-            Nothing          -> error "Could not parse parameters for query!"
-            Just queryParams -> do
-                logger $ "Received query: " <> query queryParams
-                result <- runQuery qp cn queryParams
-                case result of
-                    Left e  -> respond $ responseBuilder status500 json . fromByteString $ e
-                    Right r -> respond . responseBuilder status200 json . fromLazyByteString . encode $ r
-
-    doMerge qString =
-        case parseMergeParams qString of
-            Nothing          -> error "Could not parse parameters for merging!"
-            Just mergeParams -> do
-                let d = dest mergeParams
-                    s = src mergeParams
-                logger . pack $ printf "Received merge order %s <- %s" (show d) (show s)
-                mergeInto compactor d s
-                respond $ responseOk "whatever"
-
-responseOk :: ByteString -> Response
-responseOk = responseBuilder status200 html . fromByteString
-
-responseError :: ByteString -> Response
-responseError = responseBuilder status500 html . fromByteString
-
-notFound :: Response
-notFound = responseLBS status404 plain "404 - Not Found"
+server :: Compactor
+       -> Indexer
+       -> QueryProcessor
+       -> Registry
+       -> (ByteString -> IO ())
+       -> ServerT SearchApi IO 
+server compactor indexer qp registry logger
+    = pure "TODO doco"
+ :<|> listCollections registry
+ :<|> (\cn q mn -> runQuery qp cn (QueryParams (encodeUtf8 q) mn))
+ :<|> (\cn ir -> indexDocuments indexer cn (docs ir))
+ :<|> indexLocalWarcFile indexer
+ :<|> mergeInto compactor
+ :<|> totalNumComponents registry
+ :<|> totalLocksHeld registry
 
 runController :: Compactor
               -> Indexer
@@ -146,18 +70,14 @@ runController :: Compactor
               -> Registry
               -> (ByteString -> IO ())
               -> IO ()
-runController compactor indexer qp registry logger = do
-    logger "http://localhost:8081/"
-    run 8081
-        $ simpleCors
-            $ prometheus def
-                $ searchApiApp compactor indexer qp registry logger
+runController compactor indexer qp registry logger =
 
-html :: [(CI ByteString, ByteString)]
-html = [("Content-Type", "text/html")]
+    run 8081 . simpleCors
+             . prometheus def 
+             . serve searchApi 
+             . hoistServer searchApi liftIO 
+             $ server compactor indexer qp registry logger
 
-json :: [(CI ByteString, ByteString)]
-json = [("Content-Type", "application/json")]
-
-plain :: [(CI ByteString, ByteString)]
-plain = [("Content-Type", "text/plain")]
+    where
+    searchApi :: Proxy SearchApi
+    searchApi = Proxy

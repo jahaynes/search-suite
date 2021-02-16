@@ -1,3 +1,5 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 module Types ( CollectionName (..)
              , getCollectionPath
              , parseCollectionName
@@ -9,9 +11,12 @@ module Types ( CollectionName (..)
 
 import Environment (Environment (..))
 
-import Control.Monad.Fail (MonadFail, fail)
+import Control.Monad.Fail (fail)
+import Data.Aeson         (ToJSON)
 import Data.Char          (isAlphaNum)
 import Data.Hashable      (Hashable, hashWithSalt)
+
+import Servant.API (FromHttpApiData)
 import Prelude hiding     (fail)
 
 class HasPath a where
@@ -22,7 +27,7 @@ class NumDocs a where
 
 newtype CollectionName =
     CollectionName String
-        deriving (Eq, Ord, Show)
+        deriving (Eq, Ord, Show, ToJSON, FromHttpApiData)
 
 instance Hashable CollectionName where
     hashWithSalt salt (CollectionName cn) = hashWithSalt salt cn
@@ -30,6 +35,7 @@ instance Hashable CollectionName where
 getCollectionPath :: Environment -> CollectionName -> FilePath
 getCollectionPath env (CollectionName name) = collectionsDir env <> "/" <> name
 
+-- TODO ensure this is used via FromHttpApiData
 parseCollectionName :: MonadFail m => String -> m CollectionName
 parseCollectionName str
     | all (\c -> isAlphaNum c || c == '-') str
