@@ -5,7 +5,7 @@ module Pipeline.AllowedUrls where
 import Storage.Store as S (Store (..), create)
 import Url                (Host (..), Url, getHost)
 
-import Control.Monad.IO.Class     (MonadIO)
+import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Control.Monad.Trans.Except (ExceptT)
 import Data.List
 import Data.List.Split
@@ -28,7 +28,10 @@ create = do
 allowUrlAndVariantsImpl :: Store String (ExceptT e IO)
                         -> Url
                         -> ExceptT e IO ()
-allowUrlAndVariantsImpl store url = S.s_put store (buildVariantRegex url)
+allowUrlAndVariantsImpl store url = do
+    let variants = buildVariantRegex url
+    liftIO . putStrLn $ variants
+    S.s_put store variants
 
 buildVariantRegex :: Url -> String
 buildVariantRegex url = do
@@ -38,25 +41,25 @@ buildVariantRegex url = do
     let host' = let (Host host) = getHost url in replace "." "\\." host
 
     if | "http://www\\." `isPrefixOf` url' ->
-             mconcat [ "^http:\\/\\/(:?[^.]+\\.)*"
+             mconcat [ "^http:\\/\\/(:?[^.]+\\.)"
                      , drop (length "www\\.") host'
                      , "(:?\\/.*)?"
                      ]
 
        | "https://www\\." `isPrefixOf` url' ->
-             mconcat [ "^https:\\/\\/(:?[^.]+\\.)*"
+             mconcat [ "^https:\\/\\/(:?[^.]+\\.)"
                      , drop (length "www\\.") host'
                      , "(:?\\/.*)?"
                      ]
 
        | "http://" `isPrefixOf` url' ->
-             mconcat [ "^http:\\/\\/(:?[^.]+\\.)*"
+             mconcat [ "^http:\\/\\/(:?[^.]+\\.)"
                      , host'
                      , "(:?\\/.*)?"
                      ]
 
        | "https://" `isPrefixOf` url' ->
-             mconcat [ "^https:\\/\\/(:?[^.]+\\.)*"
+             mconcat [ "^https:\\/\\/(:?[^.]+\\.)"
                      , host'
                      , "(:?\\/.*)?"
                      ]
