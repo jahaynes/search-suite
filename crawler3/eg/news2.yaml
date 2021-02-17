@@ -1,0 +1,23 @@
+---
+jobs:
+  -
+    actions:
+      -
+        action: writeWarc
+        param: "news.warc"
+    seedUrls:
+        - "https://www.cnn.com"
+        - "https://www.nytimes.com/"
+        - "https://www.msnbc.com/"
+        - "https://www.theguardian.com"
+        - "https://www.forbes.com/"
+        - "https://www.politico.com/"
+        - "https://www.washingtonpost.com"
+        - "https://www.wsj.com/"
+        - "https://www.cbsnews.com/"
+        - "https://www.vox.com/"
+        - "https://www.huffpost.com/"
+        - "https://www.aljazeera.com/"
+        - "https://apnews.com/"
+        - "https://www.reuters.com/"
+        - "https://thehill.com/"
