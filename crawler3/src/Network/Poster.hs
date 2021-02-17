@@ -30,6 +30,7 @@ postToImpl man dest content = do
     code <- handleAnyDeep (throwE . postError) $ do
 
                 req <- (\r -> r { method          = "POST"
+                                , requestHeaders  = [("Content-Type", "application/json")]
                                 , requestBody     = RequestBodyLBS content
                                 , responseTimeout = responseTimeoutMicro posterTimeoutMicros
                                 } ) <$> requestFromURI (val dest)
