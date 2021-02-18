@@ -61,9 +61,9 @@ main = do
         md5Store <- S.create
 
         -- TODO investigate this
-        --replicateConcurrently_ 8 (run reporter md5Store processor)
+        replicateConcurrently_ 8 (run reporter md5Store processor)
 
-        run reporter md5Store processor
+        -- run reporter md5Store processor
 
 run :: R.Reporter IO
     -> S.Store ByteString (ExceptT Error IO)
