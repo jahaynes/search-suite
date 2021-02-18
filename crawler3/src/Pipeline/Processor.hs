@@ -15,7 +15,7 @@ import Storage.WarcFileWriter (WarcFileWriter (..))
 import Url
 
 import Control.Concurrent
-import Control.Monad          (filterM, unless)
+import Control.Monad          (filterM, unless, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Maybe             (fromJust)
 import Data.Time.Clock
@@ -64,13 +64,20 @@ step :: MonadIO m
      -> WarcFileWriter
      -> [Action]
      -> m (Maybe Page)
-step frontier fetcher searchApiClient warcFileWriter actions =
+step frontier fetcher searchApiClient warcFileWriter actions = do
+
+    myid <- liftIO myThreadId
 
     let loop = do 
 
-            now <- Now <$> liftIO getCurrentTime
+            now@(Now n) <- Now <$> liftIO getCurrentTime
+            nextUrl     <- tf_nextUrl frontier now
+            later       <- liftIO getCurrentTime
+            liftIO $ do
+                let t = diffUTCTime later n
+                when (t > 0.5) $ print (myid, "got url in", t)
 
-            tf_nextUrl frontier now >>= \case
+            case nextUrl of
 
                 Done -> pure Nothing
 
@@ -83,7 +90,7 @@ step frontier fetcher searchApiClient warcFileWriter actions =
                     page <- fetch fetcher url
                     mapM_ (act page) actions
                     pure (Just page)
-    in loop
+    loop
 
     where
     act page (Action "postTo" strUrl) = 

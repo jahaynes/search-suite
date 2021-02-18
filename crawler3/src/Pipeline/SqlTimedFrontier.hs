@@ -8,9 +8,10 @@ import Url
 
 import           Control.Concurrent
 import           Control.Concurrent.STM
-import           Control.Monad                    (forM_, when)
+import           Control.Monad                    (forM_, unless, when)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
 import           Data.Maybe                       (fromJust)
+import qualified Data.Set as S
 import           Data.Time.Clock
 import           Data.Time.Clock.POSIX
 import           Data.UUID                        (UUID, fromText, toText)
@@ -120,6 +121,7 @@ fromEpochMicros = posixSecondsToUTCTime . (1e-6 *) . fromIntegral
 create :: MonadIO m => FilePath -> NominalDiffTime -> IO (TimedFrontier m)
 create fp perHostDelay = do
 
+    -- TODO return a connection lock factory that lends out based on threadid ?
     lock <- newConnectionLock fp
            
     pure $ TimedFrontier { tf_submit  = submitUrlImpl lock
@@ -217,19 +219,23 @@ permitAccessAt c host pushBackTime nextTime =
 submitUrlImpl :: MonadIO m => ConnectionLock -> Now -> [Url] -> m ()
 submitUrlImpl lock (Now now) urls = liftIO $ timeMetric "submitUrl" $ do
 
-    c <- acquire lock
+    let distinctUrls = S.toList $ S.fromList urls
 
-    withTransaction c $
+    unless (null distinctUrls) $ do
 
-        forM_ urls $ \url -> do
+        c <- acquire lock
 
-            execute c sqlSubmitUrl (UrlRow url)
-            changed <- (==1) <$> changes c
-            when changed $ do
-                permitAccessAt c (getHost url) DontPushBackTime now
-                execute c sqlInsertHostUrl (UrlHostRow url (getHost url))
+        withTransaction c $
 
-    release lock c
+            forM_ distinctUrls $ \url -> do
+
+                execute c sqlSubmitUrl (UrlRow url)
+                changed <- (==1) <$> changes c
+                when changed $ do
+                    permitAccessAt c (getHost url) DontPushBackTime now
+                    execute c sqlInsertHostUrl (UrlHostRow url (getHost url))
+
+        release lock c
 
     where
     sqlSubmitUrl :: Query
