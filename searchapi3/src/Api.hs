@@ -5,6 +5,7 @@ module Api where
 
 import Data.Aeson
 import Data.List.Split (splitOn)
+import Data.Swagger    (ToSchema)
 import Data.Text       (Text)
 import GHC.Generics    (Generic)
 
@@ -12,10 +13,14 @@ newtype IndexRequest =
     IndexRequest { docs :: [Doc] }
         deriving (Generic, ToJSON, FromJSON, Show)
 
+instance ToSchema IndexRequest
+
 data Doc = 
     Doc { d_url     :: !Text
         , d_content :: !Text
         } deriving (Generic, Eq, Ord, Show)
+
+instance ToSchema Doc
 
 instance ToJSON Doc where
     toJSON = genericToJSON defaultOptions { fieldLabelModifier = chop

@@ -59,6 +59,7 @@ executable searchapi3
                        tagsoup,
                        temporary,
                        text,
+                       unliftio,
                        uuid,
                        vector,
                        vector-builder,

@@ -1,4 +1,5 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving,
+{-# LANGUAGE DeriveGeneric,
+             GeneralizedNewtypeDeriving,
              OverloadedStrings #-}
 
 module Types ( CollectionName (..)
@@ -16,8 +17,10 @@ import           Control.Monad.Fail (fail)
 import           Data.Aeson         (ToJSON)
 import           Data.Char          (isAlphaNum)
 import           Data.Hashable      (Hashable, hashWithSalt)
+import           Data.Swagger       (ToParamSchema, ToSchema)
 import           Data.Text          (Text)
 import qualified Data.Text as T
+import           GHC.Generics       (Generic)
 import           Servant.API        (FromHttpApiData (..))
 
 import           Prelude hiding     (fail)
@@ -30,7 +33,11 @@ class NumDocs a where
 
 newtype CollectionName =
     CollectionName String
-        deriving (Eq, Ord, Show, ToJSON)
+        deriving (Eq, Ord, Show, Generic, ToJSON)
+
+instance ToParamSchema CollectionName 
+
+instance ToSchema CollectionName
 
 instance FromHttpApiData CollectionName where
     parseUrlPiece   = parseCollectionName'
