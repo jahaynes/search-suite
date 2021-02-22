@@ -54,6 +54,7 @@ compactImpl :: Environment
             -> IO Bool
 compactImpl env registry wfw logger collectionName = do
 
+    -- TODO
     mLocked <- atomically $ largestFibonacciStrategy registry collectionName
 
     case mLocked of
@@ -163,8 +164,9 @@ mergeComponentFiles env wfw indexerPath collectionName x y logger = do
 
                  Right <$> createComponent (numDocs x + numDocs y) dest
 
-        -- TODO catch this again
-        handle ioe = error "Merge failed!" --do logger . C8.pack . show $ ioe
-                        -- pure . Left . C8.pack . show $ ioe
+        handle ioe = do
+            let errMsg = "Merge failed.  Params were " ++ show mergeArgs
+            logger errMsg
+            error errMsg
 
     catchIO job handle
