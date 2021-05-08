@@ -28,7 +28,7 @@ data WarcFileReader =
 
     WarcFileReader { batchedRead :: !(FilePath
                                  ->  (Vector WarcEntry -> IO ())
-                                 ->  IO (Either ByteString ()))
+                                 ->  IO (Either String ()))
 
                    , findWarcEntry :: !(FilePath -> FilePath -> ByteString -> IO (Maybe WarcEntry))
 
@@ -94,7 +94,7 @@ batchedReadImpl :: Int
                 -> (ByteString -> IO ())
                 -> FilePath
                 -> (Vector WarcEntry -> IO ())
-                -> IO (Either ByteString ())
+                -> IO (Either String ())
 batchedReadImpl batchSize logger warcFile action = do
 
     sz <- fromIntegral <$> getFileSize warcFile
@@ -105,8 +105,8 @@ batchedReadImpl batchSize logger warcFile action = do
                  hClose h
                  pure $ Right ()
 
-        handler ioe = do let errMsg = C8.pack $ show ioe
-                         logger errMsg
+        handler ioe = do let errMsg = show ioe
+                         logger $ C8.pack errMsg
                          hClose h
                          pure $ Left errMsg
 

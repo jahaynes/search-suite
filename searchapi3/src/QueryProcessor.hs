@@ -33,7 +33,7 @@ import           Text.HTML.TagSoup
 import           Text.Printf                    (printf)
 
 newtype QueryProcessor =
-    QueryProcessor { runQuery :: CollectionName -> QueryParams -> IO (Either ByteString QueryResults)
+    QueryProcessor { runQuery :: CollectionName -> QueryParams -> IO (Either String QueryResults)
                    }
 
 createQueryProcessor :: Environment
@@ -51,7 +51,7 @@ runQueryImpl :: Environment
              -> (ByteString -> IO ())
              -> CollectionName
              -> QueryParams
-             -> IO (Either ByteString QueryResults)
+             -> IO (Either String QueryResults)
 runQueryImpl env registry wfr logger collectionName@(CollectionName cn) params = do
 
     lockedComponents <- atomically $ do
@@ -61,8 +61,8 @@ runQueryImpl env registry wfr logger collectionName@(CollectionName cn) params =
 
     if null lockedComponents
         then do
-            let errMsg = C8.pack $ printf "No such collection: %s" cn
-            logger errMsg
+            let errMsg = printf "No such collection: %s" cn
+            logger $ C8.pack errMsg
             pure $ Left errMsg
 
         else do
@@ -72,7 +72,7 @@ runQueryImpl env registry wfr logger collectionName@(CollectionName cn) params =
             unless (null bads)
                    (logger errMsg)
             pure $ if null goods
-                    then Left errMsg
+                    then Left $ unlines bads
                     else Right $ limit (maxResults params) (mconcat goods)
 
     where

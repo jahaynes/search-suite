@@ -1,10 +1,11 @@
 {-# LANGUAGE DeriveAnyClass
-           , DeriveGeneric  #-}
+           , DeriveGeneric #-}
 
 module QueryProcessorTypes where
 
 import           Control.DeepSeq            (NFData)
 import           Data.Aeson                 (FromJSON, ToJSON)
+import           Data.Swagger               (ToSchema)
 import           Data.Text                  (Text)
 import           Data.Vector                (Vector)
 import qualified Data.Vector           as V
@@ -23,6 +24,9 @@ data QueryResult =
                 , term_count :: !Int
                 , snippet    :: !(Maybe Text)
                 } deriving (Show, Generic, FromJSON, ToJSON, NFData)
+
+instance ToSchema QueryResult
+instance ToSchema QueryResults
 
 limit :: Maybe Int -> QueryResults -> QueryResults
 limit  Nothing qr = qr

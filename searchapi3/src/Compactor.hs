@@ -21,7 +21,7 @@ import           Types             ( CollectionName
 import           WarcFileWriter ( WarcFileWriter (..) )
 
 import           Control.Concurrent.STM      (atomically)
-import           Control.Exception.Safe      (catchIO)
+import           Control.Exception.Safe      (catchIO)  -- todo remove
 import           Control.Monad               (unless)
 import           Data.ByteString.Char8       (ByteString)
 import qualified Data.ByteString.Char8 as C8
@@ -30,7 +30,7 @@ import qualified Data.UUID             as U
 import qualified Data.UUID.V4          as U
 import           System.Directory            (canonicalizePath, createDirectoryIfMissing, removeDirectoryRecursive)
 import           System.Process              (callProcess)
-
+import           UnliftIO.Exception          (bracket)
 data Compactor =
     Compactor { compact   :: CollectionName -> IO Bool
               , mergeInto :: CollectionName -> CollectionName -> IO ()
@@ -52,44 +52,39 @@ compactImpl :: Environment
             -> (ByteString -> IO ())
             -> CollectionName
             -> IO Bool
-compactImpl env registry wfw logger collectionName = do
+compactImpl env registry wfw logger collectionName =
 
-    mLocked <- atomically $ largestFibonacciStrategy registry collectionName
+     bracket (atomically $ largestFibonacciStrategy registry collectionName)
 
-    case mLocked of
+             (\mLocked -> case mLocked of
+                             Nothing -> pure ()
+                             Just ls -> mapM_ (releaseLockIO registry) ls)
 
-        Nothing -> pure False
+             (\mLocked -> case mLocked of
 
-        Just locked@[x, y] -> 
+                             Nothing -> pure False
 
-            let job = do logger $ "Took locks\n" <> C8.unlines (map (C8.pack . show) locked)
+                             Just locked@[x, y] -> do
 
-                         mergeResult <- mergeComponentFiles env wfw (indexerBinary env) collectionName x y logger
+                                 logger $ "Took locks\n" <> C8.unlines (map (C8.pack . show) locked)
 
-                         case mergeResult of
+                                 mergeResult <- mergeComponentFiles env wfw (indexerBinary env) collectionName x y logger
 
-                             Left errMsg -> do
-                                 logger errMsg
-                                 pure False
+                                 case mergeResult of
 
-                             Right z -> do
+                                     Left errMsg -> do
+                                         logger errMsg
+                                         pure False
 
-                                 atomically $ do
-                                     unregister      registry collectionName x
-                                     unregister      registry collectionName y
-                                     registerInPlace registry collectionName z
+                                     Right z -> do
+                                         atomically $ do
+                                            unregister      registry collectionName x
+                                            unregister      registry collectionName y
+                                            registerInPlace registry collectionName z
 
-                                 mapM_ (releaseLockIO registry) locked
-                                 removeDirectoryRecursive (path x)
-                                 removeDirectoryRecursive (path y)
-                                 pure True
-
-                handle ioe = do
-                    logger (C8.pack $ show ioe)
-                    mapM_ (releaseLockIO registry) locked
-                    pure False
-
-            in catchIO job handle
+                                         removeDirectoryRecursive (path x)
+                                         removeDirectoryRecursive (path y)
+                                         pure True)
 
 -- TODO (critical - old directory can be removed on failure)
     -- Components are left in mem?
@@ -163,8 +158,9 @@ mergeComponentFiles env wfw indexerPath collectionName x y logger = do
 
                  Right <$> createComponent (numDocs x + numDocs y) dest
 
-        -- TODO catch this again
-        handle ioe = error "Merge failed!" --do logger . C8.pack . show $ ioe
-                        -- pure . Left . C8.pack . show $ ioe
+        handle ioe = do
+            let errMsg = "Merge failed.  Params were " ++ show mergeArgs
+            logger $ C8.pack errMsg
+            error errMsg
 
     catchIO job handle

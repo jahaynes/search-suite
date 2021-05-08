@@ -37,7 +37,7 @@ import           System.IO.Temp                   (getCanonicalTemporaryDirector
 
 data Indexer =
     Indexer { indexDocuments      :: CollectionName -> [Doc] -> IO (Either String Int)
-            , indexLocalWarcFile  :: CollectionName -> FilePath -> IO (Either ByteString ())
+            , indexLocalWarcFile  :: CollectionName -> FilePath -> IO (Either String ())
             }
 
 createIndexer :: Environment
@@ -112,7 +112,7 @@ newLocalWarcFileIndex :: Environment
                       -> Registry
                       -> CollectionName
                       -> FilePath
-                      -> IO (Either ByteString ())
+                      -> IO (Either String ())
 newLocalWarcFileIndex env warcFileReader writer compactor registry collectionName warcFile =
 
     batchedRead warcFileReader
