@@ -1,5 +1,7 @@
 resolver: lts-17.10
- 
+
+local-bin-path: ./bin
+
 packages:
 - WebArchive
 - crawler3
