@@ -78,12 +78,9 @@ postEntry man collection entry = do
                                                         ]
 
                     req <- (\r -> r { method          = "POST"
+		                    , requestHeaders  = [("Content-Type", "application/json")]
                                     , requestBody     = RequestBodyLBS payload
                                     , responseTimeout = responseTimeoutNone -- responseTimeoutMicro 10000000
                                     } ) <$> parseRequest (printf "http://127.0.0.1:8081/index/%s" collection)
 
-                    _ <- httpNoBody req man
-
-                    pure ()
-
-
+                    print =<< httpNoBody req man
