@@ -16,7 +16,7 @@ data PushBackTime = PushBackTime
                       deriving Eq
 
 data TimedFrontier m = 
-    TimedFrontier { tf_submit    :: !(Now -> [Url] -> m ())
+    TimedFrontier { tf_submit    :: !(Now -> Maybe Url -> [Url] -> m ())
                   , tf_nextUrl   :: !(Now -> m Result)
                   }
 

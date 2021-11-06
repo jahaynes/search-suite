@@ -21,7 +21,7 @@ import Data.Maybe             (fromJust)
 import Data.Time.Clock
 
 data Processor m =
-    Processor { p_submit :: !([Url] -> m ())
+    Processor { p_submit :: !((Maybe Url) -> [Url] -> m ())
               , p_step   :: !(m (Maybe Page))
               }
 
@@ -46,16 +46,16 @@ create frontier allowedUrls fetcher searchApiClient warcFileWriter job = do
 seed :: MonadIO m => TimedFrontier m -> AllowedUrls m -> [Url] -> m ()
 seed frontier allowedUrls urls = do
     mapM_ (allowUrlAndVariants allowedUrls) urls
-    submitImpl frontier allowedUrls urls
+    submitImpl frontier allowedUrls Nothing urls
 
-submitImpl :: MonadIO m => TimedFrontier m -> AllowedUrls m -> [Url] -> m ()
-submitImpl frontier allowedUrls urls = do
+submitImpl :: MonadIO m => TimedFrontier m -> AllowedUrls m -> Maybe Url -> [Url] -> m ()
+submitImpl frontier allowedUrls fromUrl urls = do
 
     allowed <- filterM (urlAllowed allowedUrls) urls
 
     unless (null allowed) $ do
         now <- Now <$> liftIO getCurrentTime
-        tf_submit frontier now allowed
+        tf_submit frontier now fromUrl allowed
 
 step :: MonadIO m
      => TimedFrontier m

@@ -51,8 +51,8 @@ create perHostDelay = do
                 S.insert url completedUrls
                 MM.insert url (getHost url) hostUrls
 
-    let submitM :: MonadIO m => Now -> [Url] -> m ()
-        submitM now urls = liftIO . atomically $ mapM_ (submit now) urls
+    let submitM :: MonadIO m => Now -> Maybe Url -> [Url] -> m ()
+        submitM now fromUrl urls = liftIO . atomically $ mapM_ (submit now) urls
 
     let unregisterAccess :: Host -> STM ()
         unregisterAccess host = do

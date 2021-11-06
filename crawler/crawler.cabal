@@ -1,5 +1,5 @@
-cabal-version:       2.2
-name:                crawler3
+cabal-version:       2.4
+name:                crawler
 version:             0.1.0.0
 license-file:        LICENSE
 author:              John Haynes
@@ -7,8 +7,7 @@ maintainer:          john.andrew.haynes@gmail.com
 build-type:          Simple
 extra-source-files:  CHANGELOG.md
 
-common deps
-  default-language: Haskell2010
+executable crawler
   build-depends:    aeson,
                     async,
                     base,
@@ -38,46 +37,13 @@ common deps
                     uuid,
                     yaml,
                     WebArchive
-
-library crawler3-internal
-  import:           deps
-  ghc-options:      -Wall -O3
-  exposed-modules:  Client.SearchApiClient,
-                    Client.Types,
-                    Errors.Errors,
-                    Job.YamlJobs,
-                    Metrics,
-                    Network.Fetcher,
-                    Network.Poster,
-                    Page.Scrape,
-                    Page.Page,
-                    Pipeline.AllowedUrls,
-                    Pipeline.FrontierTypes,
-                    Pipeline.Processor,
-                    Pipeline.TimedFrontier,
-                    Pipeline.SqlTimedFrontier,
-                    Reporter.Reporter,
-                    Settings,
-                    Storage.MultiMap,
-                    Storage.Store,
-                    Storage.WarcFileWriter,
-                    Url
-  hs-source-dirs:   src
-  default-language: Haskell2010
-
-executable crawler3
-  import:           deps
   ghc-options:      -Wall -O3 -threaded
   main-is:          Main.hs
   other-modules:    Client.SearchApiClient,
                     Client.Types,
-                    Errors.Errors,
                     Job.YamlJobs,
                     Metrics,
-                    Network.Fetcher,
                     Network.Poster,
-                    Page.Scrape,
-                    Page.Page,
                     Pipeline.AllowedUrls,
                     Pipeline.FrontierTypes,
                     Pipeline.Processor,
@@ -87,18 +53,16 @@ executable crawler3
                     Storage.MultiMap,
                     Storage.Store,
                     Storage.WarcFileWriter,
-                    Settings,
-                    Url
-  build-depends:    crawler3-internal
+                    Settings
+  build-depends:    crawler-lib
   hs-source-dirs:   src
   default-language: Haskell2010
 
-test-suite test-crawler3
-    import:           deps
+test-suite test-crawler
     ghc-options:      -Wall -O3
     type:             exitcode-stdio-1.0
     main-is:          Tests.hs
     other-modules:    Gen.Time
-    build-depends:    crawler3-internal, hedgehog
+    build-depends:    crawler-lib, hedgehog
     hs-source-dirs:   test
     default-language: Haskell2010

@@ -24,9 +24,9 @@ import           Debug.Trace
 newtype UrlRow =
     UrlRow Url
 
-instance ToRow UrlRow where
-  toRow (UrlRow url) =
-      toRow (Only $ show url)
+instance ToField UrlRow where
+    toField (UrlRow url) =
+        toField (show url)
 
 instance FromField UrlRow where
     fromField x = do 
@@ -216,8 +216,8 @@ permitAccessAt c host pushBackTime nextTime =
         \ (host, time) VALUES                   \
         \ (   ?,    ?)                          "
 
-submitUrlImpl :: MonadIO m => ConnectionLock -> Now -> [Url] -> m ()
-submitUrlImpl lock (Now now) urls = liftIO $ timeMetric "submitUrl" $ do
+submitUrlImpl :: MonadIO m => ConnectionLock -> Now -> Maybe Url -> [Url] -> m ()
+submitUrlImpl lock (Now now) fromUrl urls = liftIO $ timeMetric "submitUrl" $ do
 
     let distinctUrls = S.toList $ S.fromList urls
 
@@ -229,7 +229,7 @@ submitUrlImpl lock (Now now) urls = liftIO $ timeMetric "submitUrl" $ do
 
             forM_ distinctUrls $ \url -> do
 
-                execute c sqlSubmitUrl (UrlRow url)
+                execute c sqlSubmitUrl (UrlRow url, UrlRow <$> fromUrl)
                 changed <- (==1) <$> changes c
                 when changed $ do
                     permitAccessAt c (getHost url) DontPushBackTime now
@@ -241,8 +241,8 @@ submitUrlImpl lock (Now now) urls = liftIO $ timeMetric "submitUrl" $ do
     sqlSubmitUrl :: Query
     sqlSubmitUrl =
         " INSERT OR IGNORE INTO completed_urls \
-        \ (url) VALUES                         \
-        \ (  ?)                                "
+        \ (url, fromUrl) VALUES                \
+        \ (  ?,       ?)                       "
 
     sqlInsertHostUrl :: Query
     sqlInsertHostUrl =
@@ -260,10 +260,11 @@ createSqlTables c = do
 
     schemaCompleted :: Query
     schemaCompleted =
-        " CREATE TABLE IF NOT EXISTS          \
-        \   completed_urls                    \
-        \     ( url TEXT PRIMARY KEY NOT NULL \
-        \     )                               "
+        " CREATE TABLE IF NOT EXISTS              \
+        \   completed_urls                        \
+        \     ( url     TEXT PRIMARY KEY NOT NULL \
+        \     , fromUrl TEXT                      \
+        \     )                                   "
 
     schemaHostUrls :: [Query]
     schemaHostUrls =

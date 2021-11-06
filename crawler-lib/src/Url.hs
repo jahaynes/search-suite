@@ -10,11 +10,10 @@ module Url ( Url
            , Host (Host)
            ) where
 
-import Settings
-
-import Data.Text
-import Data.Hashable
-import Network.URI
+import           Data.Text      (Text)
+import qualified Data.Text as T
+import           Data.Hashable
+import           Network.URI
 
 newtype Url =
     Url URI deriving (Eq, Ord)
@@ -36,6 +35,9 @@ instance Hashable Host where
 mkUrl :: String -> Maybe Url
 mkUrl rawUrl = fromUri =<< parseURIReference rawUrl
 
+stripFragments :: Bool -- TODO settings
+stripFragments = True
+
 fromUri :: URI -> Maybe Url
 fromUri uri = do
     _   <- uriAuthority uri
@@ -52,18 +54,31 @@ val :: Url -> URI
 val (Url u) = u
 
 valText :: Url -> Text
-valText (Url u) = pack . show $ u
+valText (Url u) = T.pack . show $ u
 
 derelativise :: Url -> String -> Maybe Url
-derelativise baseUrl partialUrl
+derelativise baseUrl@(Url bu) partialUrl
 
     | isRelativeReference partialUrl = do
+
         ref <- parseRelativeReference partialUrl
-        let path' = case uriPath ref of
-                        ('/':xs) -> '/':xs
-                        xs       -> '/':xs
-        fromUri $ (val baseUrl) { uriPath     = path'
+
+        -- Ensure relative path starts with a '/'
+        let (whole, path') = case uriPath ref of
+                                 ('/':xs) -> (True,  '/':xs)
+                                 xs       -> (False, '/':xs)
+
+        -- Ensure base path does not end with a '/'
+        let base = reverse . dropWhile (=='/') . reverse . uriPath $ bu
+
+        -- Take the combined path or start again from root
+        let path'' = if whole
+                         then path'
+                         else base <> path'
+
+        fromUri $ (val baseUrl) { uriPath     = path''
                                 , uriQuery    = uriQuery ref
                                 , uriFragment = uriFragment ref
                                 }
+
     | otherwise = mkUrl partialUrl

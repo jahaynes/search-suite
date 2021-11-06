@@ -6,7 +6,6 @@ module Network.Fetcher ( Fetcher (..)
 
 import Errors.Errors
 import Page.Page
-import Settings
 import Url
 
 import Control.Exception.Safe     (SomeException, catchAny, catchAnyDeep)
@@ -18,6 +17,9 @@ import Network.HTTP.Client
 import Network.HTTP.Client.TLS
 import Network.HTTP.Types         
 import Safe                       (headMay)
+
+fetchTimeoutMicros :: Int   -- TODO settings
+fetchTimeoutMicros = 10000000
 
 newtype Fetcher m =
     Fetcher { fetch :: Url -> m Page }

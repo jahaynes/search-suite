@@ -17,6 +17,7 @@ import qualified Client.SearchApiClient    as C
 import qualified Storage.Store             as S
 import qualified Storage.WarcFileWriter    as W
 
+import           Control.Concurrent         (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class     (liftIO)
@@ -69,21 +70,32 @@ run :: R.Reporter IO
     -> S.Store ByteString (ExceptT Error IO)
     -> P.Processor (ExceptT Error IO)
     -> IO ()
-run reporter md5store processor =
+run reporter md5store processor = do
 
-    runExceptT go >>= \case
+    (runExceptT $ P.p_step processor) >>= \case
 
         Left e -> do R.report reporter e
                      run reporter md5store processor
 
-        Right () -> run reporter md5store processor
+        Right Nothing -> do putStrLn "Thread sleeping"
+                            threadDelay 1000000
+                            run reporter md5store processor
 
-    where
-    go =
-        whenJustM (P.p_step processor) $ \page ->
+        Right (Just page) -> do
 
-            unlessM (S.s_member md5store $! p_md5 page) $ do
+            eSeen <- runExceptT $ S.s_member md5store (p_md5 page)
 
-                S.s_put md5store (p_md5 page)
-                let urls = scrape page
-                P.p_submit processor urls
+            case eSeen of
+                Left e -> do R.report reporter e
+                             run reporter md5store processor
+                Right seen -> do
+                    unless seen $ do
+                        sr <- runExceptT $ do
+                            S.s_put md5store (p_md5 page)
+                            let urls = scrape page
+                            P.p_submit processor (Just $ p_url page) urls
+                        case sr of
+                            Left e -> do R.report reporter e
+                                         run reporter md5store processor
+                            Right () -> pure ()
+                    run reporter md5store processor
