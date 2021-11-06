@@ -54,33 +54,35 @@ ingest man collection filePath = do
     pure ()
 
 postEntry :: Manager -> String -> WarcEntry -> IO ()
-postEntry man collection entry = do
+postEntry man collection entry =
+    case toDoc entry of
+        Left e    -> putStrLn e
+        Right doc -> do
+            let payload = encode $ IndexRequest [ doc ]
+            req <- (\r -> r { method          = "POST"
+                            , requestHeaders  = [("Content-Type", "application/json")]
+                            , requestBody     = RequestBodyLBS payload
+                            , responseTimeout = responseTimeoutNone -- responseTimeoutMicro 10000000
+                            } ) <$> parseRequest (printf "http://127.0.0.1:8081/index/%s" collection)
+            print =<< httpNoBody req man
 
-    let WarcEntry header (UncompressedBody body) = W.decompress entry
+toDoc :: WarcEntry -> Either String Doc
+toDoc entry@(WarcEntry _ CompressedBody{}) = toDoc $ W.decompress entry
+toDoc (WarcEntry header (UncompressedBody body)) =
+    Doc <$> getTargetUri <*> getBody
 
-    let Just (StringValue uri) = getValue (OptionalKey WarcTargetURI) header
+    where
+    getTargetUri :: Either String Text
+    getTargetUri =
+        case getValue (OptionalKey WarcTargetURI) header of
+            Nothing -> Left "No WARC-Target-URI in entry"
+            Just (StringValue uri) ->
+                case decodeUtf8' uri of
+                    Left _        -> Left "Could not decode WARC-Target-URI in entry"
+                    Right utf8Uri -> Right utf8Uri
 
-    case decodeUtf8' body of
-
-        Left _ -> pure ()
-
-        Right utf8Body -> do
-
-            case decodeUtf8' uri of
-
-                Left _ -> pure ()
-
-                Right utf8Uri -> do
-
-                    let payload = encode $ IndexRequest [ Doc { d_url     = utf8Uri
-                                                              , d_content = utf8Body
-                                                              }
-                                                        ]
-
-                    req <- (\r -> r { method          = "POST"
-		                    , requestHeaders  = [("Content-Type", "application/json")]
-                                    , requestBody     = RequestBodyLBS payload
-                                    , responseTimeout = responseTimeoutNone -- responseTimeoutMicro 10000000
-                                    } ) <$> parseRequest (printf "http://127.0.0.1:8081/index/%s" collection)
-
-                    print =<< httpNoBody req man
+    getBody :: Either String Text
+    getBody =
+        case decodeUtf8' body of
+            Left _         -> Left "Could not decode entry body"
+            Right utf8Body -> Right utf8Body
