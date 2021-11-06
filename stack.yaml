@@ -4,7 +4,8 @@ local-bin-path: ./bin
 
 packages:
 - WebArchive
-- crawler3
+- crawler
+- crawler-lib
 - util/filecrawler
 - searchapi3
 - util/warccrawler
