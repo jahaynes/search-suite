@@ -9,15 +9,15 @@ import           Control.Concurrent.Async           (forConcurrently, mapConcurr
 import           Control.Monad.IO.Class             (liftIO)
 import           Control.Monad.Trans.Resource       (MonadResource, runResourceT)
 import           Data.Aeson                         (encode)
-import           Data.Text as T                     (Text, pack)
-import           Data.Text.Encoding                 (decodeUtf8')
 import qualified Data.ByteString.Char8        as C8
 import qualified Data.ByteString.Lazy.Char8   as L8
 import           Data.Char                          (isAscii, toLower)
 import           Data.Conduit                       ((.|), ($$))
-import           Data.Maybe                         (catMaybes)
 import qualified Data.Conduit.List            as CL
 import           Data.Conduit.Combinators           (sourceDirectoryDeep)
+import           Data.Maybe                         (catMaybes)
+import           Data.Text as T                     (Text, pack)
+import           Data.Text.Encoding                 (decodeUtf8')
 import           Network.HostName                   (getHostName)
 import           Network.HTTP.Types.Header          (hContentType)
 import           Network.HTTP.Client
@@ -60,11 +60,11 @@ processFile http filePath
     plaintextFileTypes = ["hs", "txt", "java"]
 
     richFiletypes :: [String]
-    richFiletypes = [] -- ["pdf", "doc", "docx"]
+    richFiletypes = ["pdf", "doc", "docx", "xls", "xlsx", "odt", "rtf", "epub", "mp3"]
 
 processTika :: Manager -> FilePath -> IO (Maybe (FilePath, Text))
 processTika http filePath = do
-    initialRequest <- parseRequest "http://127.0.0.1:8080/ingestOrGet"
+    initialRequest <- parseRequest "http://127.0.0.1:8080/extract"
     let request = initialRequest { method = "POST"
                                  , requestBody = RequestBodyLBS $ encode (Filepath filePath) 
                                  }
@@ -95,7 +95,7 @@ send http fromHostName colName filePathsAndBodies = liftIO $ do
 
       let ir = IndexRequest [doc]
 
-      L8.putStrLn $ encode ir
+      -- L8.putStrLn $ encode ir
 
       initialRequest <- parseRequest $ printf "http://127.0.0.1:8081/index/%s" colName
       let request = initialRequest { method = "POST"
