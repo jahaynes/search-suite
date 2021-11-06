@@ -7,62 +7,35 @@ maintainer:          john.andrew.haynes@gmail.com
 build-type:          Simple
 extra-source-files:  CHANGELOG.md
 
+common deps
+  build-depends:    base, crawler-lib, stm, time
+
 executable crawler
+  import:           deps
   build-depends:    aeson,
                     async,
-                    base,
                     bytestring,
-                    case-insensitive,
-                    containers,
-                    cryptohash-md5,
                     directory,
                     extra,
-                    hashable,
                     http-client,
-                    http-client-tls,
                     http-types,
-                    list-t,
-                    network-uri,
-                    regex-tdfa,
-                    safe,
                     safe-exceptions,
                     split,
-                    sqlite-simple,
-                    stm,
-                    stm-containers,
-                    tagsoup,
                     text,
-                    time,
                     transformers,
-                    uuid,
-                    yaml,
-                    WebArchive
+                    yaml
   ghc-options:      -Wall -O3 -threaded
   main-is:          Main.hs
-  other-modules:    Client.SearchApiClient,
-                    Client.Types,
-                    Job.YamlJobs,
-                    Metrics,
-                    Network.Poster,
-                    Pipeline.AllowedUrls,
-                    Pipeline.FrontierTypes,
-                    Pipeline.Processor,
-                    Pipeline.TimedFrontier,
-                    Pipeline.SqlTimedFrontier,
-                    Reporter.Reporter,
-                    Storage.MultiMap,
-                    Storage.Store,
-                    Storage.WarcFileWriter,
-                    Settings
-  build-depends:    crawler-lib
+  other-modules:    Reporter.Reporter
   hs-source-dirs:   src
   default-language: Haskell2010
 
 test-suite test-crawler
+    import:           deps
     ghc-options:      -Wall -O3
     type:             exitcode-stdio-1.0
     main-is:          Tests.hs
     other-modules:    Gen.Time
-    build-depends:    crawler-lib, hedgehog
+    build-depends:    hedgehog
     hs-source-dirs:   test
     default-language: Haskell2010
