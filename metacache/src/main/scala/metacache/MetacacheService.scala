@@ -1,7 +1,8 @@
 package metacache
 
 import cats.MonadError
-import cats.syntax.functor._, cats.syntax.flatMap._
+import cats.syntax.flatMap._
+import cats.syntax.functor._
 import com.twitter.finagle.http.{Request, Response, Status}
 import metacache.domain.{ContentAndMetadata, DocFileHash}
 import metacache.operations.FileHash
@@ -9,7 +10,7 @@ import metacache.store.{ContentAndMetadataStore, HashStore}
 
 case class Filepath(value: String)
 
-class MetacacheService[F[_]](parser:                  String => F[Filepath],
+class MetacacheService[F[_]](requestParser:           String => F[Filepath],
                              extractMetadata:         String => F[ContentAndMetadata],
                              contentAndMetadataStore: ContentAndMetadataStore[F],
                              hashStore:               HashStore[F])
@@ -17,18 +18,18 @@ class MetacacheService[F[_]](parser:                  String => F[Filepath],
 
   import MetacacheService._
 
-  def checkFile(req: Request) =
+  def checkFile(req: Request): F[Response] =
     for {
-      filePath        <- parser(req.contentString)
+      filePath        <- requestParser(req.contentString)
       contentMetadata <- contentAndMetadataStore.get(filePath.value)
       fileHash        <- hashStore.get(filePath.value)
     } yield render (contentMetadata, fileHash)
 
-  def ingestOrGet(req: Request) = {
+  def ingestOrGet(req: Request): F[Response] = {
         val job = {
           val fContentMetadata =
             for {
-              filePath        <- parser(req.contentString) // TODO .raiseError(Duration.fromSeconds(2))
+              filePath        <- requestParser(req.contentString) // TODO .raiseError(Duration.fromSeconds(2))
               contentMetadata <- contentAndMetadataStore.get(filePath.value)
             } yield contentMetadata
           fContentMetadata flatMap {
@@ -37,7 +38,7 @@ class MetacacheService[F[_]](parser:                  String => F[Filepath],
                 me.pure(contentMetadata.get.content)
               } else {
                 for {
-                  filePath        <- parser(req.contentString) map { _.value }
+                  filePath        <- requestParser(req.contentString) map { _.value }
                   contentMetadata <- extractMetadata(filePath)
                   _               <- contentAndMetadataStore.put(contentMetadata)
                   fileHash        <- FileHash(filePath)
@@ -50,17 +51,17 @@ class MetacacheService[F[_]](parser:                  String => F[Filepath],
         renderJob(req, job)
       }
 
-  def ingestFile(req: Request) = {
+  def ingestFile(req: Request): F[Response] = {
         val job = {
           val fPresent = for {
-            filePath        <- parser(req.contentString)
+            filePath        <- requestParser(req.contentString)
             contentMetadata <- contentAndMetadataStore.get(filePath.value)
           } yield contentMetadata.isDefined
           fPresent flatMap {
             case true => me.pure("already done")
             case false =>
               for {
-                filePath        <- parser(req.contentString) map {_.value}
+                filePath        <- requestParser(req.contentString) map {_.value}
                 contentMetadata <- extractMetadata(filePath)
                 _               <- contentAndMetadataStore.put(contentMetadata)
                 fileHash        <- FileHash(filePath)
@@ -73,9 +74,6 @@ class MetacacheService[F[_]](parser:                  String => F[Filepath],
 }
 
 object MetacacheService {
-
-  import com.fasterxml.jackson.databind.ObjectMapper
-  import com.fasterxml.jackson.module.scala.DefaultScalaModule
 
   def renderJob[F[_]](req: Request,
                       job: F[String])

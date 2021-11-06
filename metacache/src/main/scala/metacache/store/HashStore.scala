@@ -63,7 +63,7 @@ object HashStore {
 
     val bound = stmt.bind(s"file://$docUri")
     convert(session.executeAsync(bound)) map {
-      getOne(_)
+      getOne
     } map {
       case None => None
       case Some(row) =>

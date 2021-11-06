@@ -1,4 +1,4 @@
-scalaVersion := "2.13.3"
+scalaVersion := "2.13.5"
 
 lazy val root = (project in file(".")).
   settings(
@@ -9,20 +9,20 @@ lazy val root = (project in file(".")).
 
 cancelable in Global := true
 
-val workaround = {
+val workaround: Unit = {
   sys.props += "packaging.type" -> "jar"
   ()
 }
 
 assemblyMergeStrategy in assembly := {
- case PathList("META-INF", xs @ _*) => MergeStrategy.discard
- case x => MergeStrategy.first
+ case PathList("META-INF", _*) => MergeStrategy.discard
+ case _ => MergeStrategy.first
 }
 
-val catsVersion       = "2.2.0"
+val catsVersion       = "2.6.0"
 val circeVersion      = "0.13.0"
 val datastaxVersion   = "4.9.0"
-val finagleVersion    = "20.9.0"
+val finagleVersion    = "21.2.0"
 val tikaVersion       = "1.24.1"
 val lz4Version        = "1.7.1"
 val scalacheckVersion = "1.14.3" 
