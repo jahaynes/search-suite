@@ -44,7 +44,7 @@ main = do
     man <- newManager defaultManagerSettings
     mapM_ (ingest man collection) warcFiles
 
-ingest :: Manager -> String -> FilePath -> IO ()
+ingest :: Manager -> String -> FilePath -> IO ()    -- TODO exceptions/resources
 ingest man collection filePath = do
     h <- openFile filePath ReadMode
     content <- LBS.hGetContents h
