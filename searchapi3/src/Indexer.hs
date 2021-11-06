@@ -16,7 +16,7 @@ import Data.Warc.Value
 import Data.Warc.WarcEntry (WarcEntry (..), decompress)
 
 import Environment         (Environment (..))
-
+import IndexerTypes        (IndexerReply (..))
 import Registry            (Registry (..))
 import Types
 import WarcFileReader      (WarcFileReader (..))
@@ -24,7 +24,7 @@ import WarcFileWriter      (WarcFileWriter (..))
 
 import           Control.Exception.Safe           (catchIO)
 import           Control.Monad                    (void)
-import           Data.Aeson                       (encode)
+import           Data.Aeson                       (decode, encode)
 import           Data.ByteString.Char8            (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as L8
 import           Data.List                        (sort)
@@ -32,6 +32,7 @@ import           Data.Text.Encoding
 import           Data.Vector                      (Vector)
 import qualified Data.Vector                as V
 import           Debug.Trace                      (trace)
+import           System.Exit
 import           System.Process                   (readProcessWithExitCode)
 import           System.IO.Temp                   (getCanonicalTemporaryDirectory, createTempDirectory)
 
@@ -86,23 +87,29 @@ indexDocumentsImpl env writer compactor registry collectionName unsortedDocs = d
 
                 Left e -> pure . Left . show $ e
 
-                Right (code, stdout, stderr) -> do
+                Right (ExitSuccess, stdout, stderr) -> do
 
-                    print code
+                    case decode $ L8.pack stdout of
+                        Nothing -> error "bad output"
+                        Just (IndexerReply docs terms)
+                            | docs == 0 || terms == 0 -> pure . Left $ "No docs or terms: " ++ show ds
+                            | otherwise -> do
 
-                    -- Also write out the warc file and offsets       
-                    let destWarcFile = idxCmpDir <> "/" <> "file.warc"
-                        destOffsets  = idxCmpDir <> "/" <> "file.offs"
-                    writeWarcFile writer destWarcFile destOffsets ds
+                                -- Also write out the warc file and offsets       
+                                let destWarcFile = idxCmpDir <> "/" <> "file.warc"
+                                    destOffsets  = idxCmpDir <> "/" <> "file.offs"
+                                writeWarcFile writer destWarcFile destOffsets ds
 
-                    -- Import the tmp index into collection
-                    component <- createComponent numDocs idxCmpDir
-                    registerFromTmp registry collectionName component
+                                -- Import the tmp index into collection
+                                component <- createComponent numDocs idxCmpDir
+                                registerFromTmp registry collectionName component
 
-                    -- Run the compactor
-                    void $ compact compactor collectionName
+                                -- Run the compactor
+                                void $ compact compactor collectionName
 
-                    pure $ Right numDocs
+                                pure $ Right numDocs
+
+                Right (_, stdout, stderr) -> pure . Left . show $ (stdout, stderr)
 
 -- TODO unnecessary encoding/decoding?
 newLocalWarcFileIndex :: Environment

@@ -1,16 +1,16 @@
 {-# LANGUAGE DeriveAnyClass
-           , DeriveGeneric #-}
+           , DeriveGeneric
+           , OverloadedStrings #-}
 
 module QueryProcessorTypes where
 
 import           Control.DeepSeq            (NFData)
-import           Data.Aeson                 (FromJSON, ToJSON)
-import           Data.Swagger               (ToSchema)
+import           Control.Lens
+import           Data.Aeson                 (FromJSON, ToJSON (..))
+import           Data.Swagger               (ToSchema (..), defaultSchemaOptions, description, example, genericDeclareNamedSchema, schema)
 import           Data.Text                  (Text)
 import           Data.Vector                (Vector)
 import qualified Data.Vector           as V
-import           VectorBuilder.Builder
-import           VectorBuilder.Vector
 import           GHC.Generics               (Generic)
 
 data QueryResults =
@@ -22,11 +22,37 @@ data QueryResult =
     QueryResult { uri        :: !Text
                 , score      :: !Float
                 , term_count :: !Int
-                , snippet    :: !(Maybe Text)
+                , snippet    :: !(Maybe Text)   -- TODO too soon for snippet
                 } deriving (Show, Generic, FromJSON, ToJSON, NFData)
 
-instance ToSchema QueryResult
-instance ToSchema QueryResults
+instance ToSchema QueryResult where
+    declareNamedSchema proxy = genericDeclareNamedSchema defaultSchemaOptions proxy
+        & mapped.schema.description ?~ "Scored query results"
+        & mapped.schema.example     ?~ toJSON exampleQueryResult1
+
+exampleQueryResult1 =
+    QueryResult { uri        = "http://foo.bar"
+                , score      = 0.5
+                , term_count = 3
+                , snippet    = Just "Many lols to be had"
+                }
+
+exampleQueryResult2 =
+    QueryResult { uri        = "http://www.baz.com"
+                , score      = 0.5
+                , term_count = 3
+                , snippet    = Just "dozens of newspaper articles talking about AI-generated text"
+                }
+
+instance ToSchema QueryResults where
+    declareNamedSchema proxy = genericDeclareNamedSchema defaultSchemaOptions proxy
+        & mapped.schema.description ?~ "Scored query results"
+        & mapped.schema.example     ?~ toJSON exampleQueryResults
+
+exampleQueryResults =
+    QueryResults { num_results = 2
+                 , results = V.fromList [exampleQueryResult1, exampleQueryResult2]
+                 }
 
 limit :: Maybe Int -> QueryResults -> QueryResults
 limit  Nothing qr = qr
@@ -37,24 +63,3 @@ limit (Just n) qr =
                           , results     = V.drop dropAmount (results qr)
                           }
         else qr
-
-instance Semigroup QueryResults where
-    QueryResults n1 r1 <> QueryResults n2 r2 = QueryResults (n1 + n2) (interleaveByScore r1 r2)
-
--- Assumes increasing score ordering
-interleaveByScore :: Vector QueryResult -> Vector QueryResult -> Vector QueryResult
-interleaveByScore v1 v2 = build (builder v1 v2)
-    where
-    builder a b | null a = vector b
-                | null b = vector a
-                | otherwise =
-                    let x = V.head a
-                        y = V.head b
-                    in if score x < score y
-                          then singleton x <> builder (V.tail a) b
-                          else singleton y <> builder a (V.tail b)
-
-instance Monoid QueryResults where
-    mempty = QueryResults { num_results = 0
-                          , results     = mempty
-                          }

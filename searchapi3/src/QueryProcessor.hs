@@ -23,10 +23,14 @@ import           Data.Aeson                     (eitherDecodeStrict')
 import           Data.ByteString                (ByteString)
 import qualified Data.ByteString.Char8    as C8 (pack, unlines, unpack)
 import           Data.Either                    (partitionEithers)
-import qualified Data.Vector              as V
+import           Data.List                      (sortOn)
+import qualified Data.Map.Strict                (Map)
+import qualified Data.Map.Strict as M
+import           Data.Ord                       (comparing)
 import           Data.Set                       (toList)
 import           Data.Text                      (Text)
 import           Data.Text.Encoding
+import qualified Data.Vector              as V
 import           GHC.IO.Exception               (ExitCode (..))
 import           System.Process.ByteString      (readProcessWithExitCode)
 import           Text.HTML.TagSoup
@@ -71,11 +75,29 @@ runQueryImpl env registry wfr logger collectionName@(CollectionName cn) params =
             let errMsg = C8.unlines (map C8.pack bads)
             unless (null bads)
                    (logger errMsg)
+
             pure $ if null goods
                     then Left $ unlines bads
-                    else Right $ limit (maxResults params) (mconcat goods)
+                    else Right $ limit (maxResults params) (mergeQueryResults goods)
 
     where
+    mergeQueryResults :: [QueryResults] -> QueryResults
+    mergeQueryResults goods = do
+
+        let qrs = concatMap (V.toList . results) goods
+
+        -- TODO snippet should not exist at this stage here
+        -- TODO better merge strat?
+        let m = M.fromListWith (\qra qrb -> qra) . map (\(QueryResult u s t n) -> (u, (s, t, n))) $ qrs
+
+        QueryResults { num_results = M.size m
+                     , results     = V.fromList
+                                   . sortOn (negate . score)
+                                   . map (\(u, (s, t, n)) -> QueryResult u s t n)
+                                   . M.toList
+                                   $ m
+                     }
+
     queryAndUnlockComponent :: Component -> IO (Either String QueryResults)
     queryAndUnlockComponent component =
 

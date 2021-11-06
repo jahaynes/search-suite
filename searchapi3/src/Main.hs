@@ -2,16 +2,17 @@
 
 module Main where
 
-import Compactor      (createCompactor)
-import Controller     (runController)
-import Environment    (Environment (..), loadEnvironment)
-import Importer       (Importer (importCollection), createImporter)
-import Indexer        (createIndexer)
-import QueryProcessor (createQueryProcessor)
-import Registry       (createRegistry)
-import Types          (CollectionName, Logger (..), parseCollectionName)
-import WarcFileReader (createWarcFileReader)
-import WarcFileWriter (createWarcFileWriter)
+import Compactor       (createCompactor)
+import Controllers.Controller      (runController)
+import Environment     (Environment (..), loadEnvironment)
+import Importer        (Importer (importCollection), createImporter)
+import Indexer         (createIndexer)
+import Network.Fetcher (createFetcher)
+import QueryProcessor  (createQueryProcessor)
+import Registry        (createRegistry)
+import Types           (CollectionName, Logger (..), parseCollectionName)
+import WarcFileReader  (createWarcFileReader)
+import WarcFileWriter  (createWarcFileWriter)
 
 import Control.Monad         (filterM)
 import Data.ByteString.Char8 (ByteString, unpack)
@@ -53,6 +54,8 @@ main = do
                                 compactor
                                 registry
 
+    fetcher <- createFetcher
+
     collections <- findRegistrableCollections env
 
     if null collections
@@ -66,7 +69,9 @@ main = do
     printf "Environment is: %s\n" (show env)
 
     runController compactor
+                  env
                   indexer
+                  fetcher
                   queryProcessor
                   registry
                   (stdoutLogger ControllerLogger)
