@@ -47,8 +47,17 @@ fn main() {
     "dump"       => dump(&args[2]),
 
     "index_json" => { let input_docs = docs_from_stdin();
-                      index(&args[2], input_docs);
+
+                      let result: IndexResult;
+
+                      if !input_docs.is_empty() {
+                        result = index(&args[2], input_docs);
+                      } else {
+                        result = IndexResult { num_docs: 0, num_terms: 0 };
+                      }
                       // verify(&args[2]);
+                      let serialized = serde_json::to_string(&result).unwrap();
+                      println!("{}", serialized);
                     },
 
     "merge"     => { let dest          = &args[2];

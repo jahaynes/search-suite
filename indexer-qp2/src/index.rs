@@ -4,9 +4,15 @@ use terms::*;
 use types::*;
 use write_to_buf::WriteToBuf;
 
+use serde::Serialize;
 use std::collections::HashMap;
 
 struct Inverted(Vec<(Term, Vec<(DocId, TermFreq)>)>);
+
+#[derive(Serialize)]
+pub struct IndexResult { pub num_docs:  usize
+                       , pub num_terms: u32
+                       }
 
 pub struct Index<'a> { pub total_doc_len: u64 
                      , pub term_offsets:  &'a TermOffsets
@@ -17,7 +23,7 @@ pub struct Index<'a> { pub total_doc_len: u64
                      }
 
 pub fn index(idx_dir: &String,
-             mut mem_docs: Vec<Doc>) {
+             mut mem_docs: Vec<Doc>) -> IndexResult {
 
     let total_doc_len =
             mem_docs.iter()
@@ -54,6 +60,10 @@ pub fn index(idx_dir: &String,
         };
 
         write_files(idx_dir, idx);
+        IndexResult { num_docs: num_docs, num_terms: num_terms }
+
+    } else {
+        IndexResult { num_docs: 0, num_terms: 0 }
     }
 }
 
