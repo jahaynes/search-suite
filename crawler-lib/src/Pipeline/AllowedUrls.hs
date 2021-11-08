@@ -53,13 +53,13 @@ buildVariantRegex url = do
                      ]
 
        | "http://" `isPrefixOf` url' ->
-             mconcat [ "^http:\\/\\/(:?[^.]+\\.)"
+             mconcat [ "^http:\\/\\/(:?[^.]+\\.)?"
                      , host'
                      , "(:?\\/.*)?"
                      ]
 
        | "https://" `isPrefixOf` url' ->
-             mconcat [ "^https:\\/\\/(:?[^.]+\\.)"
+             mconcat [ "^https:\\/\\/(:?[^.]+\\.)?"
                      , host'
                      , "(:?\\/.*)?"
                      ]
