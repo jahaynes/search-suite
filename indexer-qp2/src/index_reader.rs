@@ -223,7 +223,7 @@ pub fn with_vec_align<A,V>(file_name: &str,
         let mmap = Mmap::map(&file).expect(&format!("failed to map u32/u64 file: {}", file_name));
         let (prefix, data, suffix) = mmap.align_to::<V>();
         debug_assert!(prefix.is_empty());
-        debug_assert!(suffix.is_empty(), format!("non-empty suffix on: {}", file_name));
+        debug_assert!(suffix.is_empty(), "non-empty suffix on: {}", file_name);
         x = f(data);
     };
     x

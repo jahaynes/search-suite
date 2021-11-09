@@ -1,3 +1,3 @@
 pub trait WriteToBuf {
-    fn write_to_buf(&self, &mut Vec<u8>) -> usize;
+    fn write_to_buf(&self, _: &mut Vec<u8>) -> usize;
 }
