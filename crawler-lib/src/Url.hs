@@ -56,12 +56,12 @@ val (Url u) = u
 valText :: Url -> Text
 valText (Url u) = T.pack . show $ u
 
-derelativise :: Url -> String -> Maybe Url
-derelativise baseUrl@(Url bu) partialUrl
+derelativise :: Maybe Url -> Url -> String -> Maybe Url
+derelativise mBaseHref baseUrl@(Url bu) relativeOrAbsoluteUrl
 
-    | isRelativeReference partialUrl = do
+    | isRelativeReference relativeOrAbsoluteUrl = do
 
-        ref <- parseRelativeReference partialUrl
+        ref <- parseRelativeReference relativeOrAbsoluteUrl
 
         -- Ensure relative path starts with a '/'
         let (whole, path') = case uriPath ref of
@@ -69,7 +69,9 @@ derelativise baseUrl@(Url bu) partialUrl
                                  xs       -> (False, '/':xs)
 
         -- Ensure base path does not end with a '/'
-        let base = reverse . dropWhile (=='/') . reverse . uriPath $ bu
+        let base = case mBaseHref of
+                       Nothing             -> reverse . dropWhile (=='/') . reverse $ uriPath bu
+                       Just (Url baseHref) -> reverse . dropWhile (=='/') . reverse $ uriPath baseHref
 
         -- Take the combined path or start again from root
         let path'' = if whole
@@ -81,4 +83,4 @@ derelativise baseUrl@(Url bu) partialUrl
                                 , uriFragment = uriFragment ref
                                 }
 
-    | otherwise = mkUrl partialUrl
+    | otherwise = mkUrl relativeOrAbsoluteUrl
