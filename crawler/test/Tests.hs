@@ -24,14 +24,23 @@ main = defaultMain [
             , ("testNextUrl"        , testNextUrl)
             , ("testMultiMap"       , testMultiMap)
             , ("testRelativeUrls"   , testRelativeUrls)
+            , ("testBaseHrefs"      , testBaseHrefs)
             ]
        ]
 
 testRelativeUrls :: Property
 testRelativeUrls = property $
-    let Just base = mkUrl "http://lambda-the-ultimate.org/node/user"
+    let Just base = mkUrl "http://lambda-the-ultimate.org"
+        rest      =       "node/user"
+        Just url  = derelativise Nothing base rest
+    in show url === "http://lambda-the-ultimate.org/node/user"
+
+testBaseHrefs :: Property
+testBaseHrefs = property $
+    let mBaseHref = mkUrl "http://lambda-the-ultimate.org/"
+        Just base = mkUrl "http://lambda-the-ultimate.org/node/user"
         rest      =       "archive/2020/05/04"
-        Just url  = derelativise base rest
+        Just url  = derelativise mBaseHref base rest
     in show url === "http://lambda-the-ultimate.org/archive/2020/05/04"
 
 testMultiMap :: Property
