@@ -79,4 +79,4 @@ urlAllowedImpl store url = do
 
     patterns <- s_toList store
 
-    pure $ any (\p -> url' =~ p) patterns
+    pure $ any (url' =~) patterns

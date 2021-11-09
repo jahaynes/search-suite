@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Pipeline.Processor ( Processor (..)
                           , create
                           ) where
@@ -21,7 +19,7 @@ import Data.Maybe             (fromJust)
 import Data.Time.Clock
 
 data Processor m =
-    Processor { p_submit :: !((Maybe Url) -> [Url] -> m ())
+    Processor { p_submit :: !(Maybe Url -> [Url] -> m ())
               , p_step   :: !(m (Maybe Page))
               }
 
@@ -97,5 +95,5 @@ step frontier fetcher searchApiClient warcFileWriter actions = do
         let Just url = mkUrl strUrl
         in postToSearchApi searchApiClient url page
 
-    act page (Action "writeWarc" warcFile) = do
+    act page (Action "writeWarc" warcFile) =
         liftIO $ submit warcFileWriter warcFile page

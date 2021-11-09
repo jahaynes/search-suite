@@ -28,9 +28,8 @@ import qualified StmContainers.Set as S
 import           ListT
 
 -- TODO assumes uncompressed input
-data WarcFileWriter = 
-    WarcFileWriter { submit            :: !(FilePath -> Page -> IO ())
-                   }
+newtype WarcFileWriter = 
+    WarcFileWriter { submit :: FilePath -> Page -> IO () }
 
 newtype Lanes =
     Lanes (Map FilePath (TBQueue Page))
@@ -52,7 +51,7 @@ create = do
                           }
 
 submitImpl :: Lanes -> FilePath -> Page -> IO ()
-submitImpl (Lanes lanes) filePath page = do
+submitImpl (Lanes lanes) filePath page =
     atomically $
         M.lookup filePath lanes >>= \case
             Just lane -> Q.writeTBQueue lane page
@@ -92,7 +91,7 @@ runWorker (Locks locks) (Lanes lanes) = go
         C8.appendFile filePath (toByteString we)
 
         -- unlock the queue
-        atomically $ do
+        atomically $
             S.lookup filePath locks >>= \case
                 True  -> S.delete filePath locks
                 False -> trace "Warning, releasing non-existant lock" $ pure ()
