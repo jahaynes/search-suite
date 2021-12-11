@@ -30,6 +30,7 @@ instance ToSchema QueryResult where
         & mapped.schema.description ?~ "Scored query results"
         & mapped.schema.example     ?~ toJSON exampleQueryResult1
 
+exampleQueryResult1 :: QueryResult
 exampleQueryResult1 =
     QueryResult { uri        = "http://foo.bar"
                 , score      = 0.5
@@ -37,6 +38,7 @@ exampleQueryResult1 =
                 , snippet    = Just "Many lols to be had"
                 }
 
+exampleQueryResult2 :: QueryResult
 exampleQueryResult2 =
     QueryResult { uri        = "http://www.baz.com"
                 , score      = 0.5
@@ -49,6 +51,7 @@ instance ToSchema QueryResults where
         & mapped.schema.description ?~ "Scored query results"
         & mapped.schema.example     ?~ toJSON exampleQueryResults
 
+exampleQueryResults :: QueryResults
 exampleQueryResults =
     QueryResults { num_results = 2
                  , results = V.fromList [exampleQueryResult1, exampleQueryResult2]

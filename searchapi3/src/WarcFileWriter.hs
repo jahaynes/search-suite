@@ -21,7 +21,6 @@ import           Control.Monad.Trans.Resource
 import qualified Data.ByteString              as BS
 import qualified Data.ByteString.Char8        as C8
 import qualified Data.ByteString.Lazy         as LBS
-import qualified Data.ByteString.Lazy.Char8   as L8
 import           Data.Either                         (rights)
 import           Data.Text.Encoding
 import           Data.Word                           (Word64)
@@ -41,7 +40,7 @@ createWarcFileWriter =
 -- TODO compress?
 -- TODO exceptions
 writeWarcFileImpl :: FilePath -> FilePath -> [Doc] -> IO ()
-writeWarcFileImpl destWarcFile destOffsets docs = runResourceT $ do
+writeWarcFileImpl destWarcFile destOffsets ds = runResourceT $ do
 
         (releaseOffsets, handleOffsets) <- allocate
             (openBinaryFile destOffsets WriteMode)
@@ -51,7 +50,7 @@ writeWarcFileImpl destWarcFile destOffsets docs = runResourceT $ do
             (openBinaryFile destWarcFile WriteMode)
             hClose
 
-        liftIO $ forM_ (map fromDoc docs) $ \we -> do
+        liftIO $ forM_ (map fromDoc ds) $ \we -> do
 
             -- Record in file.offs the warc entry's position 
             pos :: Word64 <- fromIntegral <$> hTell handleDest

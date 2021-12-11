@@ -20,8 +20,6 @@ instance ToSchema IndexRequest where
         & mapped.schema.description ?~ "A list of indexable documents"
         & mapped.schema.example     ?~ toJSON exampleDocs
 
-exampleDocs = [exampleDoc1, exampleDoc2]
-
 data Doc = 
     Doc { d_url     :: !Text
         , d_content :: !Text
@@ -32,8 +30,13 @@ instance ToSchema Doc where
         & mapped.schema.description ?~ "An indexable document"
         & mapped.schema.example     ?~ toJSON exampleDoc1
 
+exampleDocs :: [Doc]
+exampleDocs = [exampleDoc1, exampleDoc2]
+
+exampleDoc1 :: Doc
 exampleDoc1 = Doc "http://foo.bar" "some content"
 
+exampleDoc2 :: Doc
 exampleDoc2 = Doc "http://www.baz.com" "some more content"
 
 instance ToJSON Doc where

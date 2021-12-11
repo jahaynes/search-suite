@@ -24,9 +24,7 @@ import           Data.ByteString                (ByteString)
 import qualified Data.ByteString.Char8    as C8 (pack, unlines, unpack)
 import           Data.Either                    (partitionEithers)
 import           Data.List                      (sortOn)
-import qualified Data.Map.Strict                (Map)
 import qualified Data.Map.Strict as M
-import           Data.Ord                       (comparing)
 import           Data.Set                       (toList)
 import           Data.Text                      (Text)
 import           Data.Text.Encoding
@@ -88,7 +86,9 @@ runQueryImpl env registry wfr logger collectionName@(CollectionName cn) params =
 
         -- TODO snippet should not exist at this stage here
         -- TODO better merge strat?
-        let m = M.fromListWith (\qra qrb -> qra) . map (\(QueryResult u s t n) -> (u, (s, t, n))) $ qrs
+        let m = M.fromListWith (\qra _qrb -> qra)
+              . map (\(QueryResult u s t n) -> (u, (s, t, n)))
+              $ qrs
 
         QueryResults { num_results = M.size m
                      , results     = V.fromList
@@ -177,6 +177,6 @@ runQueryImpl env registry wfr logger collectionName@(CollectionName cn) params =
 
             case desc of
                 []    -> Just "No description"
-                (x:_) -> case decodeUtf8' x of 
+                (x:_) -> case decodeUtf8' x of
                              Left l ->  Nothing
                              Right r -> Just r

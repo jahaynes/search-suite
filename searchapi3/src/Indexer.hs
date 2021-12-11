@@ -25,7 +25,6 @@ import WarcFileWriter      (WarcFileWriter (..))
 import           Control.Exception.Safe           (catchIO)
 import           Control.Monad                    (void)
 import           Data.Aeson                       (decode, encode)
-import           Data.ByteString.Char8            (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as L8
 import           Data.List                        (sort)
 import           Data.Text.Encoding
@@ -64,9 +63,9 @@ indexDocumentsImpl env writer compactor registry collectionName unsortedDocs = d
 
     let ds = sort unsortedDocs
 
-    let numDocs = length ds
+    let nDocs = length ds
 
-    if numDocs == 0
+    if nDocs == 0
 
         then pure $ Right 0
 
@@ -87,12 +86,12 @@ indexDocumentsImpl env writer compactor registry collectionName unsortedDocs = d
 
                 Left e -> pure . Left . show $ e
 
-                Right (ExitSuccess, stdout, stderr) -> do
+                Right (ExitSuccess, stdout, _stderr) -> do
 
                     case decode $ L8.pack stdout of
                         Nothing -> error "bad output"
-                        Just (IndexerReply docs terms)
-                            | docs == 0 || terms == 0 -> pure . Left $ "No docs or terms: " ++ show ds
+                        Just (IndexerReply docs' terms)
+                            | docs' == 0 || terms == 0 -> pure . Left $ "No docs or terms: " ++ show ds
                             | otherwise -> do
 
                                 -- Also write out the warc file and offsets       
@@ -101,13 +100,13 @@ indexDocumentsImpl env writer compactor registry collectionName unsortedDocs = d
                                 writeWarcFile writer destWarcFile destOffsets ds
 
                                 -- Import the tmp index into collection
-                                component <- createComponent numDocs idxCmpDir
+                                component <- createComponent nDocs idxCmpDir
                                 registerFromTmp registry collectionName component
 
                                 -- Run the compactor
                                 void $ compact compactor collectionName
 
-                                pure $ Right numDocs
+                                pure $ Right nDocs
 
                 Right (_, stdout, stderr) -> pure . Left . show $ (stdout, stderr)
 
@@ -128,11 +127,11 @@ newLocalWarcFileIndex env warcFileReader writer compactor registry collectionNam
 
     where
     newIndexify :: Vector WarcEntry -> IO ()
-    newIndexify docs = do
+    newIndexify ds = do
 
-        let docs' = V.mapMaybe toDoc docs
+        let ds' = V.mapMaybe toDoc ds
 
-        V.mapM_ (\d -> indexDocumentsImpl env writer compactor registry collectionName [d]) docs' 
+        V.mapM_ (\d -> indexDocumentsImpl env writer compactor registry collectionName [d]) ds' 
 
         where
         toDoc :: WarcEntry -> Maybe Doc

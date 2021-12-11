@@ -9,7 +9,6 @@ import Errors.Errors       (Error)
 import Indexer             (Indexer (indexDocuments, indexLocalWarcFile))
 import Network.Fetcher     (Fetcher (fetch))
 import Page.Page
-import Registry            (Registry)
 import Types               (CollectionName)
 import Url                 (mkUrl, valText)
 
@@ -57,6 +56,7 @@ fetchUrlLines fetcher indexer col strUrlLines = do
     forM_ chunks $ \chunk -> do
 
         results <- mapConcurrently fetchUrlLine chunk
+        -- TODO log instead
         mapM_ print results
 
     pure $ Right ()
@@ -64,6 +64,7 @@ fetchUrlLines fetcher indexer col strUrlLines = do
     where
     trim = reverse . dropWhile isSpace . reverse . dropWhile isSpace
 
+    fetchUrlLine :: String -> IO (Either String ())
     fetchUrlLine strUrl =
         case mkUrl strUrl of
             Nothing  -> pure $ Left "Could not parse url"

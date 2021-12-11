@@ -9,7 +9,7 @@ import Component
 import Environment (Environment (..))
 import Types
 
-import           Control.Concurrent.STM   (STM, TVar, atomically, modifyTVar', newTVarIO, readTVar, retry, writeTVar)
+import           Control.Concurrent.STM   (STM, TVar, atomically, modifyTVar', newTVarIO, readTVar, retry)
 import           Control.Monad            (forM_)
 import           Data.ByteString.Char8    (ByteString)
 import           Data.Map                 (Map)

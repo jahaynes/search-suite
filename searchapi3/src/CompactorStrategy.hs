@@ -1,31 +1,14 @@
 module CompactorStrategy where
 
-import           Component     ( Component
-                               , createComponent )
-
-
+import           Component     ( Component )
 import           Registry      ( Registry (..) )
+import           Types         ( CollectionName, numDocs )
 
-import           Types         ( CollectionName
-                               , getCollectionPath
-                               , numDocs
-                               , path )
-
-import           WarcFileWriter ( WarcFileWriter (..) )
-
-import           Control.Concurrent.STM      (STM, atomically)
-import           Control.Exception.Safe      (catchIO)
-import           Control.Monad               (unless)
-import           Data.ByteString.Char8       (ByteString)
-import qualified Data.ByteString.Char8 as C8
+import           Control.Concurrent.STM      (STM)
 import           Data.IntSet                 (IntSet)
 import qualified Data.IntSet           as IS
 import           Data.List                   (groupBy)
 import qualified Data.Set              as S
-import qualified Data.UUID             as U
-import qualified Data.UUID.V4          as U
-import           System.Directory            (canonicalizePath, createDirectoryIfMissing, removeDirectoryRecursive)
-import           System.Process              (callProcess)
 
 fibSet :: IntSet
 fibSet = IS.fromAscList $! take 100 fibs

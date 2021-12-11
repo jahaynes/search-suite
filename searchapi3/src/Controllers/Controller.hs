@@ -53,7 +53,7 @@ runController :: Compactor
               -> Registry
               -> (ByteString -> IO ())
               -> IO ()
-runController compactor env indexer fetcher qp registry logger =
+runController compactor env indexer fetcher qp registry _logger =
 
     run 8081 . simpleCors
              . prometheus def 

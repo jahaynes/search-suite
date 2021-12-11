@@ -2,27 +2,27 @@
 
 module WarcFileReader  where
 
-import           Data.Warc.Parse                  (fromByteStringRemainder {- :: L.ByteString -> Either ByteString (Int, WarcEntry, L.ByteString) -} )
-import           Data.Warc.WarcEntry              (WarcEntry (..))
+import           Data.Warc.Parse                   (fromByteStringRemainder {- :: L.ByteString -> Either ByteString (Int, WarcEntry, L.ByteString) -} )
+import           Data.Warc.WarcEntry               (WarcEntry (..))
 import           Data.Warc.Value
 import           Data.Warc.Header
 import           Data.Warc.Key
 
 
-import           Control.Exception.Safe           (catchIO)
-import           Data.ByteString            (ByteString)
+import           Control.Exception.Safe            (catchIO)
+import           Data.ByteString                   (ByteString)
 import qualified Data.ByteString            as BS
 import qualified Data.ByteString.Char8      as C8
 import qualified Data.ByteString.Lazy       as LBS
 import qualified Data.ByteString.Lazy.Char8 as L8
-import           Data.Int                         (Int64)
-import           Data.Serialize
-import           Data.Word                        (Word64)
-import           Data.Vector                      (Vector)
+import           Data.Int                          (Int64)
+import           Data.Serialize hiding (flush)
+import           Data.Word                         (Word64)
+import           Data.Vector                       (Vector)
 import qualified Data.Vector                as V
-import           System.Directory                 (getFileSize)
+import           System.Directory                  (getFileSize)
 import           System.IO
-import           Text.Printf                      (printf)
+import           Text.Printf                       (printf)
 
 data WarcFileReader =
 
