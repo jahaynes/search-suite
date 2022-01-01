@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass,
              DeriveGeneric,
-             OverloadedStrings #-}
+             OverloadedStrings,
+             LambdaCase #-}
 
 module Main where
 
@@ -40,9 +41,14 @@ instance ToJSON Doc where
 
 main :: IO ()
 main = do
-    (collection:warcFiles) <- getArgs
-    man <- newManager defaultManagerSettings
-    mapM_ (ingest man collection) warcFiles
+
+    getArgs >>= \case
+
+        (collection:warcFiles) -> do
+            man <- newManager defaultManagerSettings
+            mapM_ (ingest man collection) warcFiles
+
+        _ -> error "Usage: ./warcCrawler collection warcFile1 warcFile2 ..."
 
 ingest :: Manager -> String -> FilePath -> IO ()    -- TODO exceptions/resources
 ingest man collection filePath = do
@@ -80,6 +86,7 @@ toDoc (WarcEntry header (UncompressedBody body)) =
                 case decodeUtf8' uri of
                     Left _        -> Left "Could not decode WARC-Target-URI in entry"
                     Right utf8Uri -> Right utf8Uri
+            _ -> error $ "Unexpected value type in WARC-Target-URI!"
 
     getBody :: Either String Text
     getBody =
