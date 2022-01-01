@@ -3,8 +3,8 @@
 module Environment ( Environment (..)
                    , loadEnvironment ) where
 
-import Control.Monad      (unless, when)
-import System.Directory   (doesFileExist)
+import Control.Monad      (unless)
+import System.Directory   (createDirectoryIfMissing, doesFileExist)
 import System.Environment (lookupEnv)
 import Text.Printf        (printf)
 
@@ -14,23 +14,26 @@ data Environment =
                 } deriving Show
 
 loadEnvironment :: IO Environment
-loadEnvironment = Environment <$> env False "COLLECTIONS_DIR"
-                              <*> env True  "INDEXER_BINARY"
+loadEnvironment = do
 
-env :: Bool -> String -> IO FilePath
-env mustExist var =
+    colnsDir <- lookupEnv "COLLECTIONS_DIR" >>= \case
+        Just colnsDir -> pure colnsDir
+        Nothing -> do
+            putStrLn "COLLECTIONS_DIR undefined, defaulting to 'collections'"
+            pure "collections"
 
-    lookupEnv var >>= \case
+    createDirectoryIfMissing True colnsDir
 
-        Nothing -> error $ printf "FATAL: %s not set." var
+    idxbin <- lookupEnv "INDEXER_BINARY" >>= \case
+        Just idxbin -> pure idxbin
+        Nothing -> do
+            putStrLn "INDEXER_BINARY undefined, defaulting to 'bin/indexer-qp2'"
+            pure "bin/indexer-qp2"
 
-        Just [] -> error $ printf "FATAL: %s empty." var
+    exists <- doesFileExist idxbin
+    unless exists $
+        error $ printf "FATAL: %s does not exist\n" idxbin
 
-        Just target -> do when mustExist (checkExists target)
-                          pure target
-
-    where
-    checkExists idxbin = do
-        exists <- doesFileExist idxbin
-        unless exists $
-            error $ printf "FATAL: %s does not exist - %s" var idxbin
+    pure Environment { collectionsDir = colnsDir
+                     , indexerBinary  = idxbin
+                     }
