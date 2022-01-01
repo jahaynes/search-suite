@@ -15,10 +15,10 @@ import Registry            ( Registry (..) )
 import Types
 import WarcFileReader
 
-import           Control.Concurrent.Async       (async, wait)
+import           Control.Concurrent.Async       (mapConcurrently)
 import           Control.Concurrent.STM         (atomically)
 import           Control.Exception.Safe         (catchAnyDeep)
-import           Control.Monad                  (forM, unless)
+import           Control.Monad                  (unless)
 import           Data.Aeson                     (eitherDecodeStrict')
 import           Data.ByteString                (ByteString)
 import qualified Data.ByteString.Char8    as C8 (pack, unlines, unpack)
@@ -68,8 +68,7 @@ runQueryImpl env registry wfr logger collectionName@(CollectionName cn) params =
             pure $ Left errMsg
 
         else do
-            as <- forM lockedComponents $ async . queryAndUnlockComponent
-            (bads, goods) <- partitionEithers <$> mapM wait as
+            (bads, goods) <- partitionEithers <$> mapConcurrently queryAndUnlockComponent lockedComponents
             let errMsg = C8.unlines (map C8.pack bads)
             unless (null bads)
                    (logger errMsg)
