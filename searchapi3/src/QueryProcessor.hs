@@ -1,5 +1,4 @@
-{-# LANGUAGE LambdaCase
-           , OverloadedStrings
+{-# LANGUAGE OverloadedStrings
            , ScopedTypeVariables #-}
 
 module QueryProcessor ( QueryProcessor (..)

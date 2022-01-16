@@ -21,20 +21,14 @@ import           Control.Monad                (forM_)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Resource
 import           Data.Binary                  (decode, encode)
-import           Data.ByteString              (ByteString)
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
-import           Data.Either                  (rights)
 import           Data.Text                    (Text)
-import qualified Data.Text.IO as T
 import           Data.Text.Encoding
-import qualified Data.Vector as V
 import           Data.Word                    (Word64)
 import           GHC.Generics                 (Generic)
 import           System.IO
 import           Text.HTML.TagSoup hiding (parseTags)
 import           Text.HTML.TagSoup.Fast
-import           Text.Printf              (printf)
 
 data Snippets =
     Snippets { generateSnippets :: !(FilePath -> IO ())
@@ -234,7 +228,7 @@ summarise    (WarcEntry _ (UncompressedBody body)) =
 
     let desc = map snd
              . concatMap (\(TagOpen "meta" attrs) -> filter (\(k,_) -> k == "content" ) attrs)
-             . filter (\(TagOpen "meta" attrs) -> any (==("name", "description")) attrs)
+             . filter (\(TagOpen "meta" attrs) -> ("name", "description") `elem` attrs)
              . filter (isTagOpenName "meta")
              . takeWhile (not . isTagOpenName "body")
              . parseTags

@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds,
-             OverloadedStrings,
              TypeOperators #-}
 
 module Controllers.Query where
@@ -20,5 +19,5 @@ type QueryApi = "query" :> Capture "col" CollectionName
 
 queryServer :: QueryProcessor
             -> ServerT QueryApi IO
-queryServer qp
-    = (\cn q mn -> runQuery qp cn (QueryParams (encodeUtf8 q) mn))
+queryServer qp cn q mn =
+    runQuery qp cn (QueryParams (encodeUtf8 q) mn)

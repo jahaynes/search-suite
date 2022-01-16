@@ -7,7 +7,7 @@ binarySearchM :: Ord a => Int
                        -> (Int -> IO (a, b))
                        -> IO (Maybe (a, b))
 binarySearchM lo hi target predM = do --TODO TEST boundaries!
-    let i = lo + (div (hi - lo) 2)
+    let i = lo + div (hi - lo) 2
     (probe, dat) <- predM i
     if probe == target
         then pure $ Just (probe, dat)

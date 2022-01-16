@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds,
-             OverloadedStrings,
              TypeOperators #-}
 
 module Controllers.Diagnostic where
