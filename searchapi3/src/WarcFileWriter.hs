@@ -12,7 +12,7 @@ import           Data.Warc.Header
 import           Data.Warc.Key
 import           Data.Warc.Value
 import           Data.Warc.Parse
-import           Data.Serialize
+import           Data.Serialize (encode)
 import           Types
 
 import           Control.Monad                       (forM_)
@@ -76,10 +76,10 @@ fromDoc (Doc url content) =
 interleaveWarcFilesSortedImpl :: Component -> Component -> FilePath -> IO ()
 interleaveWarcFilesSortedImpl x y dest = do
 
-    let sourceWarcX  = path x <> "/" <> "file.warc"
-        sourceWarcY  = path y <> "/" <> "file.warc"
-        destWarcFile = dest   <> "/" <> "file.warc"
-        destOffsets  = dest   <> "/" <> "file.offs"
+    let sourceWarcX  = path x <> "/file.warc"
+        sourceWarcY  = path y <> "/file.warc"
+        destWarcFile = dest   <> "/file.warc"
+        destOffsets  = dest   <> "/file.offs"
 
     runResourceT $ do
 
