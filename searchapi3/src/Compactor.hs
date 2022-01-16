@@ -13,6 +13,8 @@ import           Environment       ( Environment (indexerBinary) )
 
 import           Registry          ( Registry (..) )
 
+import           Snippets          ( Snippets (..) )
+
 import           Types             ( CollectionName
                                    , getCollectionPath
                                    , numDocs
@@ -39,20 +41,22 @@ data Compactor =
 createCompactor :: Environment
                 -> Registry
                 -> WarcFileWriter
+                -> Snippets
                 -> (ByteString -> IO ())
                 -> Compactor
-createCompactor env registry wfw logger =
-    Compactor { compact   = compactImpl   env registry wfw logger
-              , mergeInto = mergeIntoImpl env registry wfw logger
+createCompactor env registry wfw snippets logger =
+    Compactor { compact   = compactImpl   env registry wfw snippets logger
+              , mergeInto = mergeIntoImpl env registry wfw snippets logger
               }
 
 compactImpl :: Environment
             -> Registry
             -> WarcFileWriter
+            -> Snippets
             -> (ByteString -> IO ())
             -> CollectionName
             -> IO Bool
-compactImpl env registry wfw logger collectionName =
+compactImpl env registry wfw snippets logger collectionName =
 
      bracket (atomically $ largestFibonacciStrategy registry collectionName)
 
@@ -68,7 +72,7 @@ compactImpl env registry wfw logger collectionName =
 
                                  logger $ "Took locks\n" <> C8.unlines (map (C8.pack . show) locked)
 
-                                 mergeResult <- mergeComponentFiles env wfw (indexerBinary env) collectionName x y logger
+                                 mergeResult <- mergeComponentFiles env wfw snippets (indexerBinary env) collectionName x y logger
 
                                  case mergeResult of
 
@@ -92,11 +96,12 @@ compactImpl env registry wfw logger collectionName =
 mergeIntoImpl :: Environment
               -> Registry
               -> WarcFileWriter
+              -> Snippets
               -> (ByteString -> IO ())
               -> CollectionName
               -> CollectionName
               -> IO ()
-mergeIntoImpl env reg wfw logger dest src = do
+mergeIntoImpl env reg wfw snippets logger dest src = do
 
     -- Check it has at least one component
     components <- atomically $ viewCollectionComponents reg src
@@ -125,13 +130,14 @@ mergeIntoImpl env reg wfw logger dest src = do
                 registerFromTmp reg dest component
 
                 -- Compact
-                _ <- compactImpl env reg wfw logger dest
+                _ <- compactImpl env reg wfw snippets logger dest
 
                 -- Keep going
                 loop
 
 mergeComponentFiles :: Environment
                     -> WarcFileWriter
+                    -> Snippets
                     -> FilePath
                     -> CollectionName
                     -> Component
@@ -139,7 +145,7 @@ mergeComponentFiles :: Environment
                     -> (ByteString -> IO ())
                     -> IO (Either ByteString Component)
 
-mergeComponentFiles env wfw indexerPath collectionName x y logger = do
+mergeComponentFiles env wfw snippets indexerPath collectionName x y logger = do
 
     let cn = getCollectionPath env collectionName
     createDirectoryIfMissing True cn
@@ -155,6 +161,8 @@ mergeComponentFiles env wfw indexerPath collectionName x y logger = do
         job = do callProcess indexerPath mergeArgs
 
                  interleaveWarcFiles wfw x y dest
+
+                 mergeSnippets snippets (path x) (path y) dest
 
                  Right <$> createComponent (numDocs x + numDocs y) dest
 

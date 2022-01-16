@@ -31,7 +31,9 @@ executable searchapi3
                        QueryProcessor,
                        QueryProcessorTypes,
                        Registry,
+                       Snippets,
                        Types,
+                       Util.BinarySearch,
                        WarcFileReader,
                        WarcFileWriter
 
@@ -46,7 +48,9 @@ executable searchapi3
                        crawler-lib,
                        deepseq,
                        directory,
+                       fast-tagsoup,
                        hashable,
+                       heaps,
                        http-types,
                        lens,
                        process,
@@ -54,6 +58,7 @@ executable searchapi3
                        resourcet,
                        safe,
                        safe-exceptions,
+                       serialise,
                        servant,
                        servant-server,
                        servant-swagger,

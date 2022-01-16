@@ -2,17 +2,18 @@
 
 module Main where
 
-import Compactor       (createCompactor)
-import Controllers.Controller      (runController)
-import Environment     (Environment (..), loadEnvironment)
-import Importer        (Importer (importCollection), createImporter)
-import Indexer         (createIndexer)
-import Network.Fetcher (createFetcher)
-import QueryProcessor  (createQueryProcessor)
-import Registry        (createRegistry)
-import Types           (CollectionName, Logger (..), parseCollectionName)
-import WarcFileReader  (createWarcFileReader)
-import WarcFileWriter  (createWarcFileWriter)
+import Compactor              (createCompactor)
+import Controllers.Controller (runController)
+import Environment            (Environment (..), loadEnvironment)
+import Importer               (Importer (importCollection), createImporter)
+import Indexer                (createIndexer)
+import Network.Fetcher        (createFetcher)
+import QueryProcessor         (createQueryProcessor)
+import Registry               (createRegistry)
+import Snippets               (createSnippets)
+import Types                  (CollectionName, Logger (..), parseCollectionName)
+import WarcFileReader         (createWarcFileReader)
+import WarcFileWriter         (createWarcFileWriter)
 
 import Control.Monad         (filterM)
 import Data.ByteString.Char8 (ByteString, unpack)
@@ -34,14 +35,17 @@ main = do
 
     let warcWriter = createWarcFileWriter
 
+    let snippets = createSnippets warcReader
+
     let queryProcessor = createQueryProcessor env
                                               registry
-                                              warcReader
+                                              snippets
                                               (logger QueryProcessorLogger)
 
     let compactor = createCompactor env
                                     registry
                                     warcWriter
+                                    snippets
                                     (logger CompactorLogger)
 
     let importer = createImporter env
@@ -51,6 +55,7 @@ main = do
     let indexer = createIndexer env
                                 warcReader
                                 warcWriter
+                                snippets
                                 compactor
                                 registry
 
