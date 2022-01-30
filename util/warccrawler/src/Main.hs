@@ -1,7 +1,8 @@
 {-# LANGUAGE DeriveAnyClass,
              DeriveGeneric,
              OverloadedStrings,
-             LambdaCase #-}
+             LambdaCase,
+             ScopedTypeVariables #-}
 
 module Main where
 
@@ -13,10 +14,14 @@ import           Data.Warc.Value
 import           Data.Warc.WarcEntry         (WarcEntry (..))
 import qualified Data.Warc.WarcEntry as W
 
+import           Control.DeepSeq             (deepseq)
+import           Control.Monad               (forM_)
 import           Data.Aeson
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Either                 (rights)
-import           Data.List.Split             (splitOn)
+import           Data.List                   (groupBy)
+import           Data.List.Split             (chunksOf, splitOn)
+import           Data.Ord                    -- (comparing)
 import           Data.Text                   (Text)
 import           Data.Text.Encoding          (decodeUtf8')
 import           GHC.Generics                (Generic)
@@ -55,10 +60,27 @@ ingest :: Manager -> String -> FilePath -> IO ()    -- TODO exceptions/resources
 ingest man collection filePath = do
     h <- openFile filePath ReadMode
     content <- LBS.hGetContents h
-    let entries = rights (fromByteString content)
-    mapM_ (postEntry man collection) entries
+
+    let entries :: [WarcEntry] = rights (fromByteString content)   
+    
+    let grouped :: [[WarcEntry]] = chunksOf (4 * 10) entries
+
+    forM_ grouped $ \group ->
+        deepseq (group :: [WarcEntry]) $ do
+            
+            let xs :: [(Int, WarcEntry)] = zip [0..] group
+
+            let ys :: [[(Int, WarcEntry)]] = groupBy (\a b -> fst a `mod` 4 == fst b `mod` 4) xs
+
+            let zs = map (map (\(a,b) -> (a,"we"))) ys
+
+            error $ show zs
+
+
     hClose h
     pure ()
+
+-- postEntry man collection c
 
 postEntry :: Manager -> String -> WarcEntry -> IO ()
 postEntry man collection entry =

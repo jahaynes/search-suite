@@ -12,8 +12,10 @@ executable warccrawler
   main-is:             Main.hs
   ghc-options:         -Wall -O3
   build-depends:       aeson,
+                       async,
                        base,
                        bytestring,
+                       deepseq,
                        http-client,
                        http-types,
                        safe-exceptions,
