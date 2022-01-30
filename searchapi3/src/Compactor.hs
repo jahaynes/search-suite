@@ -4,7 +4,7 @@ module Compactor ( Compactor (..)
                  , createCompactor
                  ) where
 
-import           CompactorStrategy ( largestFibonacciStrategy )
+import           CompactorStrategy ( hybridStrategy )
 
 import           Component         ( Component
                                    , createComponent )
@@ -22,7 +22,7 @@ import           Types             ( CollectionName
 
 import           WarcFileWriter ( WarcFileWriter (..) )
 
-import           Control.Concurrent.STM      (atomically)
+import           Control.Concurrent.STM      (STM, atomically)
 import           Control.Exception.Safe      (catchIO)  -- todo remove
 import           Control.Monad               (unless)
 import           Data.ByteString.Char8       (ByteString)
@@ -49,6 +49,18 @@ createCompactor env registry wfw snippets logger =
               , mergeInto = mergeIntoImpl env registry wfw snippets logger
               }
 
+chooseAndLockComponents :: Registry
+                        -> CollectionName
+                        -> STM (Maybe (Component, Component))
+chooseAndLockComponents registry collectionName = do
+    componentSet <- viewCollectionComponents registry collectionName
+    case hybridStrategy componentSet of
+        Nothing -> pure Nothing
+        Just (_reason, x, y) -> do
+            takeLock registry x
+            takeLock registry y
+            pure $ Just (x, y)
+
 compactImpl :: Environment
             -> Registry
             -> WarcFileWriter
@@ -58,19 +70,19 @@ compactImpl :: Environment
             -> IO Bool
 compactImpl env registry wfw snippets logger collectionName =
 
-     bracket (atomically $ largestFibonacciStrategy registry collectionName)
+     bracket (atomically $ chooseAndLockComponents registry collectionName)
 
              (\mLocked -> case mLocked of
                              Nothing -> pure ()
-                             Just ls -> mapM_ (releaseLockIO registry) ls)
+                             Just (x, y) -> mapM_ (releaseLockIO registry) [x, y])
 
              (\mLocked -> case mLocked of
 
                              Nothing -> pure False
 
-                             Just locked@[x, y] -> do
+                             Just (x, y) -> do
 
-                                 logger $ "Took locks\n" <> C8.unlines (map (C8.pack . show) locked)
+                                 logger $ "Took locks: \n" <> (C8.pack $ show (x, y))
 
                                  mergeResult <- mergeComponentFiles env wfw snippets (indexerBinary env) collectionName x y logger
 
