@@ -1,4 +1,4 @@
-module CompactorStrategy ( hybridStrategy ) where
+module CompactorStrategy ( fibSet, hybridStrategy ) where
 
 import           Component     ( Component )
 import           Types         ( numDocs )
@@ -11,7 +11,7 @@ import           Data.Set                    (Set)
 import qualified Data.Set              as S
 
 fibSet :: IntSet
-fibSet = IS.fromAscList $! take 100 fibs
+fibSet = IS.fromAscList $! take 100 (tail fibs)
     where
     fibs = 0 : 1 : zipWith (+) fibs (tail fibs)
 

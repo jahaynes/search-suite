@@ -1,4 +1,4 @@
-module Component ( Component
+module Component ( Component (..)
                  , createComponent ) where
 
 import Types
