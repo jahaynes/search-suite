@@ -27,8 +27,7 @@ import           Data.Text.Encoding
 import           Data.Word                    (Word64)
 import           GHC.Generics                 (Generic)
 import           System.IO
-import           Text.HTML.TagSoup hiding (parseTags)
-import           Text.HTML.TagSoup.Fast
+import           Text.HTML.TagSoup
 
 data Snippets =
     Snippets { generateSnippets :: !(FilePath -> IO ())
