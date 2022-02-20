@@ -7,13 +7,13 @@ license-file:        LICENSE
 author:              John Haynes
 extra-source-files:  CHANGELOG.md
 
-executable searchapi3
+common deps
+  build-depends:       aeson, async, base, binary, bytestring, crawler-lib, WebArchive, cereal, containers, deepseq, directory, hashable, heaps, fast-tagsoup, lens, process, process-extras, resourcet, safe-exceptions, serialise, servant, servant-server, servant-swagger, servant-swagger-ui, split, stm, stm-containers, swagger2, tagsoup, temporary, text, transformers, unliftio, uuid, vector, wai-cors, wai-middleware-prometheus, warp
 
-  main-is:             Main.hs
-
-  ghc-options:         -Wall -O3 -threaded
-
-  other-modules:       Api,
+library
+  import:              deps
+  ghc-options:         -Wall -O3
+  exposed-modules:     Api,
                        Compactor,
                        CompactorStrategy,
                        Component,
@@ -36,49 +36,46 @@ executable searchapi3
                        Util.BinarySearch,
                        WarcFileReader,
                        WarcFileWriter
-
-  build-depends:       async,
-                       aeson,
-                       base,
-                       binary,
-                       bytestring,
-                       case-insensitive,
-                       cereal,
-                       containers,
-                       crawler-lib,
-                       deepseq,
-                       directory,
-                       fast-tagsoup,
-                       hashable,
-                       heaps,
-                       http-types,
-                       lens,
-                       process,
-                       process-extras,
-                       resourcet,
-                       safe,
-                       safe-exceptions,
-                       serialise,
-                       servant,
-                       servant-server,
-                       servant-swagger,
-                       servant-swagger-ui,
-                       split,
-                       stm,
-                       stm-containers,
-                       swagger2,
-                       tagsoup,
-                       temporary,
-                       text,
-                       transformers,
-                       unliftio,
-                       uuid,
-                       vector,
-                       wai-cors,
-                       wai-middleware-prometheus,
-                       warp,
-                       WebArchive
-
   hs-source-dirs:      src
-
   default-language:    Haskell2010
+
+executable searchapi3
+    import:           deps
+    ghc-options:      -Wall -O3
+    build-depends:    searchapi3
+    other-modules:    Api,
+                      Compactor,
+                      CompactorStrategy,
+                      Component,
+                      Controllers.Collections
+                      Controllers.Controller,
+                      Controllers.Diagnostic,
+                      Controllers.Indexation,
+                      Controllers.Query,
+                      Environment,
+                      Importer,
+                      ImporterTypes,
+                      Indexer,
+                      IndexerTypes,
+                      QueryParams,
+                      QueryProcessor,
+                      QueryProcessorTypes,
+                      Registry,
+                      Snippets,
+                      Types,
+                      Util.BinarySearch,
+                      WarcFileReader,
+                      WarcFileWriter
+    main-is:          Main.hs
+    hs-source-dirs:   src
+    default-language: Haskell2010
+
+test-suite test-searchapi3
+    import: deps
+    build-depends:    searchapi3
+    ghc-options:      -Wall -O3
+    type:             exitcode-stdio-1.0
+    main-is:          Tests.hs
+    build-depends:    base, hedgehog
+    hs-source-dirs:   test
+    default-language: Haskell2010
