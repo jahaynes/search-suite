@@ -19,7 +19,6 @@ import qualified Data.UUID.V4                as U
 import           Database.SQLite.Simple
 import           Database.SQLite.Simple.FromField
 import           Database.SQLite.Simple.ToField
-import           Debug.Trace
 
 newtype UrlRow =
     UrlRow Url
@@ -97,7 +96,7 @@ acquire (ConnectionLock tv) = do
     atomically $ do
         v <- readTVar tv
         case v of
-            Left _ -> {- trace "STM retrying..." -} retry
+            Left _ -> retry
             Right conn -> do
                 writeTVar tv (Left threadId)
                 pure conn
@@ -145,7 +144,7 @@ nextUrl perHostDelay lock now@(Now n) = liftIO $ timeMetric "nextUrl" $ do
 
         case mUrlTime of
             
-            Nothing -> trace "DONE DONE DONE" (pure Done)
+            Nothing -> pure Done
 
             Just (UrlTimeRow url time) -> do
 

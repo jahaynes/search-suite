@@ -13,7 +13,6 @@ import           Control.Monad                 (when, unless)
 import           Control.Monad.IO.Class        (MonadIO, liftIO)
 import qualified Data.Map.Strict         as M
 import           Data.Time.Clock
-import           Debug.Trace
 import qualified ListT                   as L
 import qualified StmContainers.Multimap  as MM
 import qualified StmContainers.Set       as S
@@ -70,7 +69,7 @@ create perHostDelay = do
                 -- No per-host delays: take any host
                 Nothing ->
                     L.head (MM.listT hostUrls) >>= \case
-                        Nothing        -> trace "DONE DONE DONE" (pure Done)
+                        Nothing        -> pure Done
                         Just (host, _) -> getUrls host
 
                 -- Host can be done soonest.  No earler than time though.
