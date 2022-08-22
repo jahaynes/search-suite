@@ -1,4 +1,4 @@
-resolver: lts-17.10
+resolver: lts-18.28
 
 local-bin-path: ./bin
 
@@ -11,7 +11,8 @@ packages:
 - util/warccrawler
 
 extra-deps:
- - wai-middleware-prometheus-1.0.0.1@sha256:dad84de519f8602884a54645a6c4d2ef20125e2745c99cad8add65e2bda26b7c,1316
+- stm-containers-1.2@sha256:a887f2e7692b7cf20e0b081e2d66e21076e2bd4b57016ec59c484edfa2d29397,3244
+- stm-hamt-1.2.0.8@sha256:479907a31ed74ecb29ad1a95138632c065b3fef0736234514e0d912975a79fc5,3978
 
 ghc-options:
  "$locals": -fwrite-ide-info
