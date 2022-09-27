@@ -71,7 +71,7 @@ fetchUrlLines fetcher indexer col strUrlLines = do
             Just url -> do
                 page <- runExceptT $ fetch fetcher url
                 case page of
-                    Left l  -> pure $ Left "Failed to fetch page"
+                    Left l  -> pure . Left $ "Failed to fetch page: " <> show l
                     Right r -> do
                         let txtUrl = valText $ p_url r
                             Right body = decodeUtf8' $ p_body r

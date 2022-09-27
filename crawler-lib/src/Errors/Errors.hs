@@ -23,6 +23,8 @@ data Error = FetchError { fe_url           :: !Url
                            , ee_simpleMessage :: !String
                            }
 
+               deriving Show
+
 instance ToJSON Error where
 
     toJSON (FetchError url msg code ex) =
