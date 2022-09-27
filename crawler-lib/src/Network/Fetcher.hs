@@ -13,6 +13,7 @@ import Control.Monad.IO.Class     (liftIO)
 import Control.Monad.Trans.Except (ExceptT (ExceptT), throwE)
 import Crypto.Hash.MD5
 import Data.ByteString.Char8      (ByteString, unpack)
+import Network.Connection         (TLSSettings (..))
 import Network.HTTP.Client        
 import Network.HTTP.Client.TLS
 import Network.HTTP.Types         
@@ -24,12 +25,21 @@ fetchTimeoutMicros = 10000000
 newtype Fetcher m =
     Fetcher { fetch :: Url -> m Page }
 
-createFetcher :: IO (Fetcher (ExceptT Error IO))
-createFetcher = do
+createFetcher :: Maybe (ByteString, Int) -> IO (Fetcher (ExceptT Error IO))
+createFetcher mProxy =
 
-    let settings = tlsManagerSettings { managerResponseTimeout = responseTimeoutMicro fetchTimeoutMicros }
+    let proxiedSettings =
+            case mProxy of
+                Nothing             -> tlsManagerSettings { managerResponseTimeout = responseTimeoutMicro fetchTimeoutMicros }
+                Just (pAddr, pPort) -> makeInsecureProxiedSettings pAddr pPort
 
-    Fetcher . fetchImpl <$> newManager settings
+    in Fetcher . fetchImpl <$> newManager proxiedSettings
+
+    where
+    makeInsecureProxiedSettings :: ByteString -> Int -> ManagerSettings
+    makeInsecureProxiedSettings pAddr pPort =
+        let tlsSettings = TLSSettingsSimple True undefined undefined
+        in managerSetProxy (useProxy $ Proxy pAddr pPort) (mkManagerSettings tlsSettings Nothing) { managerResponseTimeout = responseTimeoutMicro fetchTimeoutMicros }
 
 fetchImpl :: Manager -> Url -> ExceptT Error IO Page
 fetchImpl man url = do

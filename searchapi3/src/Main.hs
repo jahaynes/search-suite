@@ -59,7 +59,7 @@ main = do
                                 compactor
                                 registry
 
-    fetcher <- createFetcher
+    fetcher <- createFetcher (proxySetting env)
 
     collections <- findRegistrableCollections env
 

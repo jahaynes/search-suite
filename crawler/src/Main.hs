@@ -53,7 +53,7 @@ main = do
         -- frontier <- TF.create 0.4
 
         Right processor <- runExceptT $ do allowedUrls    <- A.create
-                                           fetcher        <- liftIO F.createFetcher
+                                           fetcher        <- liftIO $ F.createFetcher Nothing -- TODO accept proxy settings
                                            client         <- liftIO C.create
                                            warcFileWriter <- liftIO W.create
                                            P.create frontier allowedUrls fetcher client warcFileWriter job

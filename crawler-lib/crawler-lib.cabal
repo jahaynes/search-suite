@@ -14,6 +14,7 @@ library
                     bytestring,
                     case-insensitive,
                     containers,
+                    connection,
                     cryptohash-md5,
                     directory,
                     extra,
