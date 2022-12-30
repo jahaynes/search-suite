@@ -15,6 +15,8 @@ import Url                 (mkUrl, valText)
 import Control.Concurrent.Async          (mapConcurrently)
 import Control.Monad                     (forM_)
 import Control.Monad.Trans.Except        (ExceptT, runExceptT)
+import Data.Aeson                        (encode)
+import Data.ByteString.Lazy.Char8        (unpack)
 import Data.Char                         (isSpace)
 import Data.List.Split                   (chunksOf)
 import Data.Text.Encoding                (decodeUtf8')
@@ -71,7 +73,7 @@ fetchUrlLines fetcher indexer col strUrlLines = do
             Just url -> do
                 page <- runExceptT $ fetch fetcher url
                 case page of
-                    Left l  -> pure . Left $ "Failed to fetch page: " <> show l
+                    Left l  -> pure (Left $ "Failed to fetch page: " ++ (take 300 . unpack $ encode l))
                     Right r -> do
                         let txtUrl = valText $ p_url r
                             Right body = decodeUtf8' $ p_body r
