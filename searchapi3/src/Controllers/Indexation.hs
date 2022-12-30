@@ -22,9 +22,9 @@ import Data.List.Split                   (chunksOf)
 import Data.Text.Encoding                (decodeUtf8')
 import Servant
 
-type IndexationApi = "index" :> Capture "col" CollectionName
-                             :> ReqBody '[JSON] IndexRequest
-                             :> Post '[JSON] (Either String Int)
+type IndexationApi = "indexDoc" :> Capture "col" CollectionName
+                                :> ReqBody '[JSON] IndexRequest
+                                :> Post '[JSON] (Either String Int)
 
                 :<|> "indexPage" :> Capture "col" CollectionName
                                  :> ReqBody '[PlainText] String

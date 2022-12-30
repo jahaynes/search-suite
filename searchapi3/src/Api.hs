@@ -18,7 +18,7 @@ newtype IndexRequest =
 instance ToSchema IndexRequest where
     declareNamedSchema proxy = genericDeclareNamedSchema defaultSchemaOptions proxy
         & mapped.schema.description ?~ "A list of indexable documents"
-        & mapped.schema.example     ?~ toJSON exampleDocs
+        & mapped.schema.example     ?~ toJSON (IndexRequest exampleDocs)
 
 data Doc = 
     Doc { d_url     :: !Text
