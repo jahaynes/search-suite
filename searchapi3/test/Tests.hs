@@ -24,13 +24,9 @@ import           Control.Concurrent.STM    (atomically)
 import           Data.ByteString.Char8     (ByteString)
 import qualified Data.IntSet           as IS
 import qualified Data.Set as S
-import           Debug.Trace (trace)
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-
-import           Data.Vector.Unboxed (Vector, (!))
-import qualified Data.Vector.Unboxed as VU
 
 main :: IO Bool
 main = do
@@ -42,8 +38,8 @@ testEnv :: Monad m => StateT [Group] m Environment
 testEnv = do
     let idxPath = "../bin/indexer-qp2"
         colPath = "../collections-test"
-        env     = Environment colPath idxPath
-        test1   = ("indexerPath",    property (assert $ indexerBinary env  == idxPath))
+        env     = Environment colPath idxPath Nothing
+        test1   = ("indexerPath",    property (assert $ indexerBinary env == idxPath))
         test2   = ("collectionsDir", property (assert $ collectionsDir env == colPath))
     modify' ((++) [Group "Environment tests" [test1, test2]])
     pure env
@@ -89,18 +85,14 @@ testedQueryProcessor env registry snippets logger = do
     -- TODO tests
     pure queryProcessor
 
-fibs :: Vector Int
-fibs = VU.fromList $ take 100 (tail fibs)
-    where
-    fibs = 0 : 1 : zipWith (+) fibs (tail fibs)
-
 willReturnToFib :: Property
 willReturnToFib = property $ do
     nfc                <- forAll nonFibComponent
     numOtherComponents <- forAll (Gen.int $ Range.constant 0 10)
-    fcs                <- forAll (replicateM numOtherComponents fibComponent)
+    fcs                <- forAll (replicateM numOtherComponents component)
     go 0 (S.fromList (nfc:fcs))
     where
+    go :: Monad m => Int -> S.Set Component -> PropertyT m ()
     go 1000  _ = error "Too many iterations!"
     go    n cs
         | all (\c -> cmp_size c `IS.member` fibSet) cs = pure ()
@@ -113,10 +105,9 @@ willReturnToFib = property $ do
                         cs' = S.insert (Component (sa + sb) (show n)) . S.delete a . S.delete b $ cs
                     in go (n+1) cs'
 
-    fibComponent :: Gen Component
-    fibComponent = do
+    component :: Gen Component
+    component = do
         i <- Gen.int $ Range.constant 0 10
-        let f = fibs ! i
         pure $ Component i (show i)
 
     nonFibComponent :: Gen Component
@@ -210,11 +201,3 @@ testSimpleQueries env registry indexer queryProcessor = do
         -- Cleanup
         atomically $ mapM_ (unregister registry cn) =<< viewCollectionComponents registry cn
         removeDirectoryRecursive (collectionsDir env <> "/" <> colName)
-
-_prop_reverse :: Property
-_prop_reverse =
-  property $ do
-    xs <- forAll $ Gen.list (Range.linear 0 100) Gen.alpha
-    reverse (reverse xs) === xs
-
------------------------------------
