@@ -37,8 +37,8 @@ import           System.Process                   (readProcessWithExitCode)
 import           System.IO.Temp                   (getCanonicalTemporaryDirectory, createTempDirectory)
 
 data Indexer =
-    Indexer { indexDocuments      :: CollectionName -> [Doc] -> IO (Either String Int)
-            , indexLocalWarcFile  :: CollectionName -> FilePath -> IO (Either String ())
+    Indexer { indexDocuments      :: !(CollectionName -> [Doc] -> IO (Either String Int))
+            , indexLocalWarcFile  :: !(CollectionName -> FilePath -> IO (Either String ()))
             }
 
 createIndexer :: Environment
