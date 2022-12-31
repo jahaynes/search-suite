@@ -124,11 +124,12 @@ fn final_merge(idx_name_dest:   &str,
         };
 
     // If any zeroes in side B, don't merge, just copy side A
-    let sz_b = fs::metadata(&term_offs_b_path).unwrap().len()
-             * fs::metadata(    &terms_b_path).unwrap().len()
-             * fs::metadata(    &posts_b_path).unwrap().len();
+    // Was checking with a mul here, but overflowed!
+    let any_zeros = 0 == fs::metadata(&term_offs_b_path).unwrap().len()
+                 || 0 == fs::metadata(    &terms_b_path).unwrap().len()
+                 || 0 == fs::metadata(    &posts_b_path).unwrap().len();
 
-    if sz_b == 0 {
+    if any_zeros {
 
         for file in &[ "docOffsets"
                      , "docs"
