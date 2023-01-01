@@ -8,12 +8,12 @@ pub fn dump(index_path: &str) {
     println!("Dumping: {}", index_path);
     with_index_read(index_path, &|ir| {
 
-        let IndexRead{ term_offsets
+        let IndexRead{ total_doc_len: _
+                     , term_offsets
                      , terms
                      , postings
                      , doc_offsets: _
-                     , docs: _
-                     , total_doc_len: _ } = ir;
+                     , docs: _ } = ir;
 
         dump_terms(term_offsets,
                    terms,

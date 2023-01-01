@@ -25,6 +25,8 @@ import           System.Directory         (canonicalizePath, copyFile, createDir
 
 {- TODO fix the 'collections' and 'locks' representations
     Collections should be able to run independently
+
+    TODO use withLock and exception handling, rather than take/release?
 -}
 data Registry =
     Registry { registerFromTmp          :: !(CollectionName -> Component -> IO ())

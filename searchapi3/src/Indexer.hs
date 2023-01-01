@@ -23,7 +23,6 @@ import Types
 import WarcFileReader      (WarcFileReader (..))
 import WarcFileWriter      (WarcFileWriter (..))
 
-import           Control.Exception.Safe           (catchIO)
 import           Control.Monad                    (void)
 import           Data.Aeson                       (decode, encode)
 import qualified Data.ByteString.Lazy.Char8 as L8
@@ -35,6 +34,7 @@ import           Debug.Trace                      (trace)
 import           System.Exit
 import           System.Process                   (readProcessWithExitCode)
 import           System.IO.Temp                   (getCanonicalTemporaryDirectory, createTempDirectory)
+import           UnliftIO.Exception               (catchIO)
 
 data Indexer =
     Indexer { indexDocuments      :: !(CollectionName -> [Doc] -> IO (Either String Int))
@@ -82,6 +82,7 @@ indexDocumentsImpl env writer snippets compactor registry collectionName unsorte
                 args  = ["index_json", idxCmpDir]
                 stdin = encode (IndexRequest ds)
 
+            -- TODO - can this be done without the inefficient unpack & passing [Char] as stdin
             eOut <- catchIO (Right <$> readProcessWithExitCode bin args (L8.unpack stdin))
                             (\ex -> pure . Left . show $ ex)
 

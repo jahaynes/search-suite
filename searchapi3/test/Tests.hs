@@ -17,11 +17,11 @@ import Types                  (CollectionName (..), numDocs)
 import WarcFileReader         (WarcFileReader, createWarcFileReader)
 import WarcFileWriter         (WarcFileWriter, createWarcFileWriter)
 
-import           Control.Monad (replicateM)
+import           Control.Monad               (replicateM, unless)
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.State (StateT, execStateT, modify')
-import           Control.Concurrent.STM    (atomically)
-import           Data.ByteString.Char8     (ByteString)
+import           Control.Monad.Trans.State   (StateT, execStateT, modify')
+import           Control.Concurrent.STM      (atomically)
+import           Data.ByteString.Char8       (ByteString)
 import qualified Data.IntSet           as IS
 import qualified Data.Set as S
 import           Hedgehog
@@ -177,11 +177,20 @@ testAddTwoDocs env registry indexer = do
     let colName = "index-2-docs"
     let cn = CollectionName colName
     liftIO $ do
+
         -- Add two docs
-        Right 1 <- indexDocuments indexer cn [Doc "foo-1" "bar-1"]
-        1       <- sum . map numDocs . S.toList <$> atomically (viewCollectionComponents registry cn)
-        Right 1 <- indexDocuments indexer cn [Doc "foo-2" "bar-2"]
-        2       <- sum . map numDocs . S.toList <$> atomically (viewCollectionComponents registry cn)
+        indexDocuments indexer cn [Doc "foo-1" "bar-1"] >>= \r ->
+            assertR "Indexed 1 document" id 1 r
+
+        sum . map numDocs . S.toList <$> atomically (viewCollectionComponents registry cn) >>= \r ->
+            assertR "Expected 1 doc in total" id 1 (Right r)
+
+        indexDocuments indexer cn [Doc "foo-2" "bar-2"] >>= \r ->
+            assertR "Indexed 1 document" id 1 r
+
+        sum . map numDocs . S.toList <$> atomically (viewCollectionComponents registry cn) >>= \r ->
+            assertR "Expected 2 docs in total" id 2 (Right r)
+
         -- Cleanup
         atomically $ mapM_ (unregister registry cn) =<< viewCollectionComponents registry cn
         removeDirectoryRecursive (collectionsDir env <> "/" <> colName)
@@ -189,15 +198,41 @@ testAddTwoDocs env registry indexer = do
 testSimpleQueries :: MonadIO m => Environment -> Registry -> Indexer -> QueryProcessor -> m ()
 testSimpleQueries env registry indexer queryProcessor = do
     let colName = "simple-queries"
-    let cn = CollectionName colName
+        cn = CollectionName colName
     liftIO $ do
+
         -- Test simple queries
-        Right 2 <- indexDocuments indexer cn [ Doc "doc-1" "words in first doc"
-                                             , Doc "doc-2" "words in second doc" ]
-        Right (QueryResults 0 []) <- runQuery queryProcessor cn $ QueryParams { query = "missing", maxResults = Nothing }
-        Right (QueryResults 1  _) <- runQuery queryProcessor cn $ QueryParams { query = "first", maxResults = Nothing }
-        Right (QueryResults 1  _) <- runQuery queryProcessor cn $ QueryParams { query = "second", maxResults = Nothing }
-        Right (QueryResults 2  _) <- runQuery queryProcessor cn $ QueryParams { query = "words", maxResults = Nothing }
+        indexDocuments indexer cn [ Doc "doc-1" "words in first doc"
+                                  , Doc "doc-2" "words in second doc" ] >>= \r ->
+            assertR "Indexed 2 documents" id 2 r
+
+        runQuery queryProcessor cn (QueryParams { query = "missing", maxResults = Nothing }) >>= \r -> do
+            assertR "Expected 0 results" num_results 0 r
+            assertR "Expected 0 results" (null . results) True r
+
+        runQuery queryProcessor cn (QueryParams { query = "first", maxResults = Nothing }) >>= \r ->
+            assertR "Expected 1 result" num_results 1 r
+
+        runQuery queryProcessor cn (QueryParams { query = "second", maxResults = Nothing }) >>= \r ->
+            assertR "Expected 1 result" num_results 1 r
+
+        runQuery queryProcessor cn (QueryParams { query = "words", maxResults = Nothing }) >>= \r ->
+            assertR "Expected 2 results" num_results 2 r
+
         -- Cleanup
         atomically $ mapM_ (unregister registry cn) =<< viewCollectionComponents registry cn
         removeDirectoryRecursive (collectionsDir env <> "/" <> colName)
+
+assertR :: (Applicative f, Eq a, Show a) => String
+                                         -> (b -> a)
+                                         -> a 
+                                         -> Either String b -> f ()
+assertR   _ _ _ (Left l)  = error l
+assertR msg f y (Right x) =
+    let y' = f x in
+    unless (y' == y) . error $ unlines [ "\nExpected:"
+                                       , "  " ++ show y
+                                       , "Actual:"
+                                       , "  " ++ show y'
+                                       , "in:"
+                                       , "  " ++ msg ]

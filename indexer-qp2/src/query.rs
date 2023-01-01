@@ -84,13 +84,13 @@ fn run_query(out_scored:   &mut Vec<Scored>,
     }
 }
 
-use std::collections::HashMap;
-
 // TODO be able to score here while still streaming
 // So as to decide whether to include low-term-matched docs
 fn scored_iterator<'a>(ir:           &'a IndexRead,
                        terms:        &'a Vec<TermEntry>,
                        query_params: &'a QueryParams) -> impl Iterator <Item=Scored> + 'a {
+
+    use std::collections::HashMap;
 
     let num_query_terms = query_params.query_terms.len();
 

@@ -71,7 +71,7 @@ pub fn find_docid(DocOffsetsRead(offs): &DocOffsetsRead,
 fn get_total_doc_len(file_name: &str) -> u64 {
     let mut contents = String::new();
     read_complete_file(&mut contents,
-                       &format!("{}/totalDocLength", file_name)).unwrap();
+                       &format!("{}/totalDocLength", file_name)).expect(&format!("Could not open {}", file_name));
     contents.parse::<u64>().unwrap()
   }
 
@@ -129,8 +129,6 @@ pub fn read_term_at(TermsRead(terms): &TermsRead,
     let term = from_utf8(&term_buf).unwrap().to_string();
     Term(term)
 }
-
-
 
 pub fn read_term_entry_at(TermsRead(terms): &TermsRead,
                           offset: usize) -> TermEntry {
@@ -217,7 +215,7 @@ pub fn with_docs_mut<A>(idx_name: &str,
 
 pub fn with_vec_align<A,V>(file_name: &str,
                            f:         &dyn Fn(&[V]) -> A) -> A {
-    let file = File::open(file_name).unwrap();
+    let file = File::open(file_name).expect(&format!("Could not open {}", file_name));
     let x: A;
     unsafe {
         let mmap = Mmap::map(&file).expect(&format!("failed to map u32/u64 file: {}", file_name));
@@ -231,7 +229,7 @@ pub fn with_vec_align<A,V>(file_name: &str,
 
 pub fn with_vec_align_mut<A,V>(file_name: &str,
                                f:         &mut dyn FnMut(&[V]) -> A) -> A {
-    let file = File::open(file_name).unwrap();
+    let file = File::open(file_name).expect(&format!("Could not open {}", file_name));
     let x: A;
     unsafe {
         let mmap = Mmap::map(&file).expect("failed to map u32/u64 file");
@@ -245,7 +243,7 @@ pub fn with_vec_align_mut<A,V>(file_name: &str,
 
 pub fn with_vec<A>(file_name: &str,
                    f:         &dyn Fn(&[u8]) -> A) -> A {
-    let file = File::open(file_name).unwrap();
+    let file = File::open(file_name).expect(&format!("Could not open {}", file_name));
     let x: A;
     unsafe {
         let data = Mmap::map(&file).expect("failed to map u8 file");
@@ -256,7 +254,7 @@ pub fn with_vec<A>(file_name: &str,
 
 fn with_vec_mut<A>(file_name: &str,
                    f:         &mut dyn FnMut(&[u8]) -> A) -> A {
-    let file = File::open(file_name).unwrap();
+    let file = File::open(file_name).expect(&format!("Could not open {}", file_name));
     let x: A;
     unsafe {
         let data = Mmap::map(&file).expect("failed to map u8 file");
@@ -267,7 +265,7 @@ fn with_vec_mut<A>(file_name: &str,
 
 pub fn with_mut_vec<A, V>(file_name: &str,
                           f:         &dyn Fn(&mut [V]) -> A) -> A {
-    let file = OpenOptions::new().read(true).write(true).open(file_name).unwrap();
+    let file = OpenOptions::new().read(true).write(true).open(file_name).expect(&format!("Could not open {}", file_name));
     let x: A;
     unsafe {
         let mut mmap = MmapMut::map_mut(&file).expect("failed to map terms file");
