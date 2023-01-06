@@ -249,7 +249,7 @@ pub fn dualing_docids_correctly_ordered() {
                  ,  "six", "apple", "banana" ] {
 
         let urls = single_term_query(&idx_dir_1_2, term);
-        assert!(urls.len() == 2, format!("MISSING RESULTS for {}", term));
+        assert!(urls.len() == 2, "MISSING RESULTS for {}", term);
         assert!(urls.contains(&Url(format!("http://{}-a",term))));
         assert!(urls.contains(&Url(format!("http://{}-b",term))));
     }
