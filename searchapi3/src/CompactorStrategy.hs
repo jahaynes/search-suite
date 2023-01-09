@@ -1,4 +1,4 @@
-module CompactorStrategy ( fibSet, hybridStrategy ) where
+module CompactorStrategy ( fibSet, hybridStrategy, largestFibonacciStrategy, pairs ) where
 
 import           Component     ( Component )
 import           Types         ( numDocs )
@@ -21,7 +21,7 @@ hybridStrategy componentSet =
     let components = sortBy (comparing numDocs) $ S.toList componentSet
         nonFibComponents = filter (not . isFib) components
     in if null nonFibComponents
-        then largestFibonacciStrategy' components
+        then largestFibonacciStrategy components
         else nonFibonacciStrategy components nonFibComponents
 
     where
@@ -63,19 +63,17 @@ incrementalGapFill components maxNonFib gap =
            else let (p, q) = maximumBy (comparing (\(a,b) -> numDocs a + numDocs b)) candidatePairs
                 in Just ("incrementalGapFill", p, q)
 
-largestFibonacciStrategy' :: [Component] -> (Maybe (String, Component, Component))
-largestFibonacciStrategy' components = do
-    let candidates = map (\(a,b) -> [a,b])
-                   . sortBy (flip $ comparing (\(a, b) -> numDocs a + numDocs b))
-                   . filter (\(a, b) -> (numDocs b + numDocs a) `IS.member` fibSet)
-                   $ pairs components  -- groupby was wrong here.
+largestFibonacciStrategy :: [Component] -> (Maybe (String, Component, Component))
+largestFibonacciStrategy components = do
+    let candidates = map (\(a,b,_) -> [a,b])
+                   . sortBy (flip $ comparing (\(_, _, ns) -> ns))
+                   . filter (\(_, _, ns) -> ns `IS.member` fibSet)
+                   . map (\(a, b) -> (a, b, numDocs a + numDocs b))
+                   $ pairs components
     case candidates of
         ([x,y]:_) -> Just ("fib", x, y)
         _         -> Nothing
 
 pairs :: [a] -> [(a, a)]
-pairs     [] = []
-pairs (x:xs) = go [] x xs
-    where
-    go acc _     [] = reverse acc
-    go acc p (y:ys) = go ((p,y):acc) y ys
+pairs (x:y:zs) = (x,y) : pairs zs
+pairs        _ = []

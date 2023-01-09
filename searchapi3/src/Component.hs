@@ -1,15 +1,21 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module Component ( Component (..)
                  , createComponent ) where
 
 import Types
 
+import Control.DeepSeq  (NFData)
 import Data.Hashable    (Hashable, hashWithSalt)
+import GHC.Generics     (Generic)
 import System.Directory (canonicalizePath)
 
 data Component =
     Component { cmp_size     :: !Int
               , cmp_filePath :: !FilePath
-              } deriving (Ord, Show)
+              } deriving (Ord, Show, Generic)
+
+instance NFData Component
 
 instance HasPath Component where
     path = cmp_filePath
