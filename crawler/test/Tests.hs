@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import           Pipeline.FrontierTypes
-import           Pipeline.TimedFrontier
+import qualified Pipeline.TimedFrontier as TimedFrontier
 import qualified Storage.MultiMap      as MM
 import           Url
 
@@ -102,13 +102,13 @@ testGetMicrosToWait = property $ do
 testTriggerRace :: Property
 testTriggerRace = property $ do
 
-    Now now <- now
+    Now now <- getNow
     let later = addUTCTime 1 now
 
     let Just url1 = mkUrl "https://www.url-one.com"
         Just url2 = mkUrl "https://www.url-two.com"
 
-    frontier <- liftIO $ create 1
+    frontier <- liftIO $ TimedFrontier.create 1
 
     tf_submit frontier (Now later) Nothing [url1]
     tf_submit frontier (Now later) Nothing [url2]
@@ -118,7 +118,7 @@ testTriggerRace = property $ do
 testNextUrl :: Property
 testNextUrl = property $ do
 
-    Now time0_0 <- now
+    Now time0_0 <- getNow
     let time0_1  = addUTCTime 0.1 time0_0
  
         time1_0  = addUTCTime 1   time0_0
@@ -130,7 +130,7 @@ testNextUrl = property $ do
         Just url2 = mkUrl "https://www.diff-host.com/2"
         Just url3 = mkUrl "https://www.diff-host.com/3"
 
-    frontier <- liftIO $ create 1
+    frontier <- liftIO $ TimedFrontier.create 1
 
     -- Empty, therefore Done
     (=== Done) =<< tf_nextUrl frontier (Now time0_0)
@@ -150,16 +150,16 @@ testNextUrl = property $ do
     tf_submit frontier (Now time1_0) Nothing [url3]
 
     -- Should return url2
-    (=== Url url3) =<< tf_nextUrl frontier (Now time1_0)
+    (=== Url url2) =<< tf_nextUrl frontier (Now time1_0)
 
     --Too soon to return url2.  Wait 0.9 seconds.
     (=== WaitMicros 900000) =<< tf_nextUrl frontier (Now time1_1)
 
-    -- Should return url2
-    (=== Url url2) =<< tf_nextUrl frontier (Now time2_0)
+    -- Should return url3
+    (=== Url url3) =<< tf_nextUrl frontier (Now time2_0)
 
-now :: PropertyT IO Now
-now = Now <$> liftIO getCurrentTime
+getNow :: PropertyT IO Now
+getNow = Now <$> liftIO getCurrentTime
 
 atomicallyIO :: STM a -> PropertyT IO a
 atomicallyIO = liftIO . atomically
