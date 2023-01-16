@@ -6,7 +6,7 @@ module Compactor ( Compactor (..)
 
 import           CompactorStrategy ( hybridStrategy )
 
-import           Component         ( Component (cmp_size)
+import           Component         ( Component (..)
                                    , createComponent )
 
 import           Environment       ( Environment (indexerBinary) )
@@ -82,7 +82,7 @@ compactImpl env registry wfw snippets logger collectionName@(CollectionName cn) 
 
                              Just (x, y) -> do
 
-                                 logger $ "Took locks: \n" <> (C8.pack $ show (x, y))
+                                 logger $ "Took locks: " <> C8.pack (show (cmp_filePath x)) <> " " <> C8.pack (show (cmp_filePath y))
 
                                  mergeResult <- mergeComponentFiles env wfw snippets (indexerBinary env) collectionName x y logger
 
