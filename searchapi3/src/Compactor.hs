@@ -6,7 +6,7 @@ module Compactor ( Compactor (..)
 
 import           CompactorStrategy ( hybridStrategy )
 
-import           Component         ( Component
+import           Component         ( Component (cmp_size)
                                    , createComponent )
 
 import           Environment       ( Environment (indexerBinary) )
@@ -15,7 +15,7 @@ import           Registry          ( Registry (..) )
 
 import           Snippets          ( Snippets (..) )
 
-import           Types             ( CollectionName
+import           Types             ( CollectionName (..)
                                    , getCollectionPath
                                    , numDocs
                                    , path )
@@ -68,7 +68,7 @@ compactImpl :: Environment
             -> (ByteString -> IO ())
             -> CollectionName
             -> IO Bool
-compactImpl env registry wfw snippets logger collectionName =
+compactImpl env registry wfw snippets logger collectionName@(CollectionName cn) =
 
      bracket (atomically $ chooseAndLockComponents registry collectionName)
 
@@ -93,13 +93,14 @@ compactImpl env registry wfw snippets logger collectionName =
                                          pure False
 
                                      Right z -> do
-                                         atomically $ do
-                                            unregister      registry collectionName x
-                                            unregister      registry collectionName y
-                                            registerInPlace registry collectionName z
-
+                                         componentSet <- atomically $ do
+                                             unregister      registry collectionName x
+                                             unregister      registry collectionName y
+                                             registerInPlace registry collectionName z
+                                             viewCollectionComponents registry collectionName
                                          removeDirectoryRecursive (path x)
                                          removeDirectoryRecursive (path y)
+                                         logger $ C8.pack cn <> " components: " <> C8.pack (show (map cmp_size $ S.toList componentSet))
                                          pure True)
 
 -- TODO (critical - old directory can be removed on failure)
