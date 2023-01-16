@@ -5,7 +5,7 @@ module Main where
 
 import Types
 
-import           Control.Concurrent.Async           (forConcurrently, mapConcurrently)
+import           Control.Concurrent.Async           (forConcurrently_, mapConcurrently)
 import           Control.Monad.IO.Class             (liftIO)
 import           Control.Monad.Trans.Resource       (MonadResource, runResourceT)
 import           Data.Aeson                         (encode)
@@ -87,7 +87,7 @@ processPlainText filePath = do
 send :: MonadResource m => Manager -> String -> String -> [(FilePath, Text)] -> m ()
 send http fromHostName colName filePathsAndBodies = liftIO $ do
 
-  _ <- forConcurrently filePathsAndBodies $ \(filePath, body) -> do
+  forConcurrently_ filePathsAndBodies $ \(filePath, body) -> do
 
       let doc = Doc { url     = T.pack $ mconcat ["file://", fromHostName, filePath]
                     , content = body
@@ -95,14 +95,9 @@ send http fromHostName colName filePathsAndBodies = liftIO $ do
 
       let ir = IndexRequest [doc]
 
-      -- L8.putStrLn $ encode ir
-
       initialRequest <- parseRequest $ printf "http://127.0.0.1:8081/indexDoc/%s" colName
       let request = initialRequest { method = "POST"
                                    , requestHeaders = (hContentType, "application/json") : requestHeaders initialRequest
                                    , requestBody = RequestBodyLBS $ encode ir }
       resp <- httpLbs request http
-      putStrLn "sent!"
-      print resp
-
-  pure ()
+      putStrLn $ show (statusCode $ responseStatus resp) ++ ": " ++ filePath
