@@ -75,5 +75,5 @@ largestFibonacciStrategy components = do
         _         -> Nothing
 
 pairs :: [a] -> [(a, a)]
-pairs (x:y:zs) = (x,y) : pairs zs
+pairs (x:y:zs) = (x,y) : pairs (y:zs)
 pairs        _ = []
