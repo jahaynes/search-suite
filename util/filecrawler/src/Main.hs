@@ -8,13 +8,14 @@ import Types
 import           Control.Concurrent.Async           (forConcurrently_, mapConcurrently)
 import           Control.Monad.IO.Class             (liftIO)
 import           Control.Monad.Trans.Resource       (MonadResource, runResourceT)
-import           Data.Aeson                         (encode)
+import           Data.Aeson                         (decode, encode)
 import qualified Data.ByteString.Char8        as C8
 import qualified Data.ByteString.Lazy.Char8   as L8
 import           Data.Char                          (isAscii, toLower)
 import           Data.Conduit                       ((.|), ($$))
 import qualified Data.Conduit.List            as CL
 import           Data.Conduit.Combinators           (sourceDirectoryDeep)
+import           Data.List                          (isPrefixOf)
 import           Data.Maybe                         (catMaybes)
 import           Data.Text as T                     (Text, pack)
 import           Data.Text.Encoding                 (decodeUtf8')
@@ -28,17 +29,28 @@ import           Text.Printf                        (printf)
 main :: IO ()
 main = do
 
-    hostname <- getHostName
-    http <- newManager defaultManagerSettings
+    hostname   <- getHostName
+    http       <- newManager defaultManagerSettings
+    -- To prevent gathering from the same directory the indexer is trying to write
+    noIndexDir <- fetchCollectionDir http
 
     [colName, startPath] <- getArgs
     let followSymlinks = False
     runResourceT $ sourceDirectoryDeep followSymlinks startPath
+                .| CL.filter (\p -> not (noIndexDir `isPrefixOf` p))
                 .| CL.chunksOf 20
                 .| CL.mapM (liftIO . mapConcurrently (processFile http))
                 .| CL.map catMaybes
                 .| CL.map (map (\(fp, _content) -> (replaceNonAscii fp, _content)))
                 $$ CL.mapM_ (send http hostname colName)
+
+fetchCollectionDir :: Manager -> IO FilePath
+fetchCollectionDir http = do
+    request  <- parseRequest "http://127.0.0.1:8081/collection-dir"
+    response <- httpLbs request http
+    case statusCode (responseStatus response) of
+        200 -> let Just x = decode (responseBody response) in pure x
+        _   -> error $ show response
 
 replaceNonAscii :: FilePath -> FilePath
 replaceNonAscii = map go

@@ -12,7 +12,7 @@ import Types       (CollectionName (..))
 import Control.Concurrent.STM (atomically)
 import Data.Set               (Set)
 import Servant
-import System.Directory       (removeDirectoryRecursive)
+import System.Directory       (makeAbsolute, removeDirectoryRecursive)
 
 type CollectionsApi = "collection" :> Get '[JSON] (Set CollectionName)
 
@@ -23,6 +23,7 @@ type CollectionsApi = "collection" :> Get '[JSON] (Set CollectionName)
                                   :> QueryParam' '[Required] "src" CollectionName
                                   :> Post '[JSON] ()
 
+                 :<|> "collection-dir" :> Get '[JSON] FilePath
 
 collectionsServer :: Compactor
                   -> Environment
@@ -32,6 +33,7 @@ collectionsServer compactor env registry
     = listCollections registry
  :<|> deleteCollection env registry
  :<|> mergeInto compactor
+ :<|> getCollectionDir env
 
 deleteCollection :: Environment
                  -> Registry
@@ -51,3 +53,9 @@ deleteCollection env registry collectionName@(CollectionName cn) = do
 
     mapM_ (releaseLockIO registry) cs
 
+getCollectionDir :: Environment -> IO FilePath
+getCollectionDir env =
+    fix <$> (makeAbsolute $ collectionsDir env)
+    where
+    fix path | null path || last path /= '/' = path ++ "/"
+             | otherwise                     = path
