@@ -221,6 +221,9 @@ reader hOff hDat = do
                 x <- deserialise <$> LBS.hGet hDat (fromIntegral $ off2 - lastOff)
                 pure $ Just (off2, x)
 
+-- TODO - these summaries are only for HTML
+-- should be contextual
+-- e.g. show public classes for Java?
 summarise :: WarcEntry -> Text
 summarise we@(WarcEntry _ (CompressedBody body)) = summarise $ decompress we
 summarise    (WarcEntry _ (UncompressedBody body)) =
@@ -232,6 +235,8 @@ summarise    (WarcEntry _ (UncompressedBody body)) =
              . takeWhile (not . isTagOpenName "body")
              . parseTags
              $ body
+    -- TODO failing to get meta description, start reading from first body/div/p?
+    -- Also read title from meta?  If not then use first H?, or filename?
 
     in case desc of
         []    -> "No meta description available"
