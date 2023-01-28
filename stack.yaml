@@ -6,8 +6,9 @@ packages:
 - WebArchive
 - crawler
 - crawler-lib
-- util/filecrawler
 - searchapi3
+- util/filecrawler
+- util/filewatcher
 - util/warccrawler
 
 ghc-options:
@@ -18,6 +19,9 @@ ghc-options:
 
 # Extra package databases containing global packages
 # extra-package-dbs: []
+
+extra-deps:
+- fsnotify-0.4.1.0@sha256:44540beabea36aeeef930aa4d5f28091d431904bc9923b6ac4d358831c651235,2854
 
 # Control whether we use the GHC we find on the path
 # system-ghc: true
