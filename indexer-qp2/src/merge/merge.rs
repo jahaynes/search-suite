@@ -1,4 +1,4 @@
-
+use deletions::*;
 use doc::*;
 use merge::common_urls::*;
 use merge::common_docids::*;
@@ -88,6 +88,12 @@ pub fn merge(idx_name_dest: &str,
                 idx_name_b,
                 docid_remapping,
                 docid_deduping);
+
+    // Write out empty deletions file
+    with_doc_offsets(idx_name_dest, &|DocOffsetsRead(doc_offs)|
+        write_empty_deletions_file(doc_offs.len(),
+                                   File::create(format!("{}/{}", idx_name_dest, "docDeletions")).unwrap())
+    );
 }
 
 fn final_merge(idx_name_dest:   &str,
@@ -131,7 +137,9 @@ fn final_merge(idx_name_dest:   &str,
 
     if any_zeros {
 
-        for file in &[ "docOffsets"
+        // TODO - check all relevant files are copied over
+        for file in &[ "docDeletions" // deletions carried over. probably OK right?
+                     , "docOffsets"
                      , "docs"
                      , "postings"
                      , "termOffsets"
@@ -430,9 +438,11 @@ fn combine_docs(idx_name_dest:   &str,
         // Iterate-merge over (offsa/offsremapa) & offsb
         // to produce final docs and docOffsets
         with_named_doc_offsets(&doc_offsets_a_path, &|offs_a|
-        with_named_docs(       &docs_a_path,        &|docs_a| 
+        with_named_docs(       &docs_a_path,        &|docs_a|
+        with_doc_deletions(    idx_name_a,          &|deletions_a|
         with_doc_offsets(      idx_name_b,          &|offs_b|
-        with_docs(             idx_name_b,          &|docs_b| {
+        with_docs(             idx_name_b,          &|docs_b|
+        with_doc_deletions(    idx_name_b,          &|deletions_b| {
 
             match docid_deduping {
 
@@ -440,32 +450,48 @@ fn combine_docs(idx_name_dest:   &str,
                 None => simple_merge(idx_name_dest,
                                      &offs_a,
                                      &docs_a,
+                                     &deletions_a,
                                      &offs_b,
-                                     &docs_b),
+                                     &docs_b,
+                                     &deletions_b),
 
                 // Merge (possibly remapped) A and B (excluding duplicates from B)
                 Some(docid_deduping) => dedupe_merge(idx_name_dest,
                                                      &offs_a,
                                                      &docs_a,
+                                                     &deletions_a,
                                                      &offs_b,
                                                      &docs_b,
+                                                     &deletions_b,
                                                      docid_deduping)
             }
-        }))));
+        }))))));
 }
 
 // Merge (possibly remapped) A and B as is.
-fn simple_merge(idx_name_dest:          &str,
-                DocOffsetsRead(offs_a): &DocOffsetsRead,
-                docs_a:                 &DocsRead,
-                DocOffsetsRead(offs_b): &DocOffsetsRead,
-                docs_b:                 &DocsRead) {
+fn simple_merge(idx_name_dest:            &str,
+                DocOffsetsRead(offs_a):   &DocOffsetsRead,
+                docs_a:                   &DocsRead,
+                DocDeletionsRead(dels_a): &DocDeletionsRead,
+                DocOffsetsRead(offs_b):   &DocOffsetsRead,
+                docs_b:                   &DocsRead,
+                DocDeletionsRead(dels_b): &DocDeletionsRead) {
 
+    // TODO: If no deletions, use a faster iterator instead
     let iter_a =
-            offs_a.iter().map(|off_a| read_doc_at(&docs_a, *off_a as usize));
+            offs_a.iter()
+                  .enumerate()
+                  .map(|(n, off_a)| (n as u32, read_doc_at(&docs_a, *off_a as usize)))
+                  .filter(|(n, _)| !is_deleted2(dels_a, *n))
+                  .map(|(_, doc_a)| doc_a);
 
+    // TODO: If no deletions, use a faster iterator instead
     let iter_b =
-            offs_b.iter().map(|off_b| read_doc_at(&docs_b, *off_b as usize));
+            offs_b.iter()
+                  .enumerate()
+                  .map(|(n, off_b)| (n as u32, read_doc_at(&docs_b, *off_b as usize)))
+                  .filter(|(n, _)| !is_deleted2(dels_b, *n))
+                  .map(|(_, doc_b)| doc_b);
 
     let merged =
             iter_a.merge_by(iter_b, |doc_a, doc_b| {
@@ -493,29 +519,39 @@ fn simple_merge(idx_name_dest:          &str,
 }
 
 // Merge (possibly remapped) A and B (excluding duplicates from B)
-fn dedupe_merge(idx_name_dest:          &str,
-                DocOffsetsRead(offs_a): &DocOffsetsRead,
-                docs_a:                 &DocsRead,
-                DocOffsetsRead(offs_b): &DocOffsetsRead,
-                docs_b:                 &DocsRead,
-                dupe_docids_b_path:     &str) {
+fn dedupe_merge(idx_name_dest:            &str,
+                DocOffsetsRead(offs_a):   &DocOffsetsRead,
+                docs_a:                   &DocsRead,
+                DocDeletionsRead(dels_a): &DocDeletionsRead,
+                DocOffsetsRead(offs_b):   &DocOffsetsRead,
+                docs_b:                   &DocsRead,
+                DocDeletionsRead(dels_b): &DocDeletionsRead,
+                dupe_docids_b_path:       &str) {
 
     with_vec_align(dupe_docids_b_path,
                    &|dupe_b: &[u32]| {
 
+        // TODO: If no deletions, use a faster iterator instead
         let iter_a =
-            offs_a.iter()
-                  .map(|off_a| read_doc_at(&docs_a, *off_a as usize));
-        
+                offs_a.iter()
+                      .enumerate()
+                      .map(|(n, off_a)| (n as u32, read_doc_at(&docs_a, *off_a as usize)))
+                      .filter(|(n, _)| !is_deleted2(dels_a, *n))
+                      .map(|(_, doc_a)| doc_a);
+
+        // TODO: If no deletions, use a faster iterator instead
         let iter_b =
             offs_b.iter()
-                  .map(|off_b| read_doc_at(&docs_b, *off_b as usize))
+                  .enumerate()
+                  .map(|(n, off_b)| (n as u32, read_doc_at(&docs_b, *off_b as usize)))
+                  .filter(|(n, _)| !is_deleted2(dels_b, *n))
+                  .map(|(_, doc_b)| doc_b)
                   .filter(|doc_b| {
                     let DocId(di_b) = doc_b.doc_id;
-                    match dupe_b.binary_search(&di_b) {
+                      match dupe_b.binary_search(&di_b) {
                         Ok(_) => false,
                         Err(_) => true
-                    }});
+                      }});
 
         let merged =
             iter_a.merge_by(iter_b, |doc_a, doc_b| {

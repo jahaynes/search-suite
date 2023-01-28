@@ -4,7 +4,7 @@ use std::ops::AddAssign;
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Url(pub String);
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub struct DocId(pub u32);
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -28,6 +28,8 @@ pub struct DocsRead<'a>(pub &'a [u8]);
 
 pub struct DocOffsets(pub Vec<u64>);
 pub struct DocOffsetsRead<'a>(pub &'a[u64]);
+
+pub struct DocDeletionsRead<'a>(pub &'a[u8]);
 
 #[derive(Serialize)]
 pub struct NumDocs {

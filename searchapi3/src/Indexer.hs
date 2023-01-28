@@ -23,10 +23,15 @@ import Types
 import WarcFileReader      (WarcFileReader (..))
 import WarcFileWriter      (WarcFileWriter (..))
 
-import           Control.Monad                    (void)
+import           Control.Concurrent.STM           (atomically)
+import           Control.Monad                    (forM, void)
 import           Data.Aeson                       (decode, encode)
 import qualified Data.ByteString.Lazy.Char8 as L8
+import           Data.Either                      (lefts, rights)
 import           Data.List                        (sort)
+import           Data.Map
+import qualified Data.Map                   as M
+import qualified Data.Set                   as S
 import           Data.Text.Encoding
 import           Data.Vector                      (Vector)
 import qualified Data.Vector                as V
@@ -34,11 +39,13 @@ import           Debug.Trace                      (trace)
 import           System.Exit
 import           System.Process                   (readProcessWithExitCode)
 import           System.IO.Temp                   (getCanonicalTemporaryDirectory, createTempDirectory)
-import           UnliftIO.Exception               (catchIO)
+import           UnliftIO.Exception               (catchIO, finally)
 
 data Indexer =
     Indexer { indexDocuments      :: !(CollectionName -> [Doc] -> IO (Either String Int))
             , indexLocalWarcFile  :: !(CollectionName -> FilePath -> IO (Either String ()))
+            , deleteDocument      :: !(CollectionName -> String -> IO (Either String ()))
+            , isDocDeleted        :: !(CollectionName -> String -> IO (Either String (Map String Int)))
             }
 
 createIndexer :: Environment
@@ -51,6 +58,8 @@ createIndexer :: Environment
 createIndexer env wfr writer snippets cpc reg =
     Indexer { indexDocuments      = indexDocumentsImpl env writer snippets cpc reg
             , indexLocalWarcFile  = newLocalWarcFileIndex env wfr writer snippets cpc reg
+            , deleteDocument      = deleteDocumentImpl env reg
+            , isDocDeleted        = isDocDeletedImpl env reg
             }
 
 -- TODO exceptions
@@ -160,3 +169,60 @@ newLocalWarcFileIndex env warcFileReader writer snippets compactor registry coll
                          Right x -> Just x
 
             pure $ Doc uri' body'
+
+{- Instead of a complicated locking mechanism,
+   this just takes write locks one-by-one and send delete everywhere -}
+deleteDocumentImpl :: Environment
+                   -> Registry
+                   -> CollectionName
+                   -> String
+                   -> IO (Either String ())
+deleteDocumentImpl env reg collectionName docUrl = do
+    let bin = indexerBinary env
+    components <- S.toList <$> (atomically $ viewCollectionComponents reg collectionName)
+    putStrLn $ "Deleting doc: " <> docUrl
+    results <- forM components $ \cmp ->
+        finally (isDeletedJob bin cmp)
+                (releaseLockIO reg cmp)
+
+    mapM_ print results
+
+    pure $ case lefts results of
+               [] -> Right ()
+               ls -> Left $ unlines ls
+
+        where
+        isDeletedJob :: FilePath -> Component -> IO (Either String (ExitCode, String, String))
+        isDeletedJob bin cmp = do
+            atomically $ takeLock reg cmp
+            let args = ["delete_doc", cmp_filePath cmp, docUrl]
+            catchIO (Right <$> readProcessWithExitCode bin args [])
+                    (\ex -> pure . Left . show $ ex)
+
+isDocDeletedImpl :: Environment
+                 -> Registry
+                 -> CollectionName
+                 -> String
+                 -> IO (Either String (Map String Int))
+isDocDeletedImpl env reg collectionName docUrl = do
+    let bin = indexerBinary env
+    components <- S.toList <$> (atomically $ viewCollectionComponents reg collectionName)
+    results <- forM components $ \cmp ->
+        finally (deleteJob bin cmp)
+                (releaseLockIO reg cmp)
+
+    pure $
+        case lefts results of
+            [] -> Right . M.fromListWith (+) . zip (rights results) $ repeat 1
+            ls -> Left $ unlines ls
+
+        where
+        deleteJob :: FilePath -> Component -> IO (Either String String)
+        deleteJob bin cmp = do
+            atomically $ takeLock reg cmp
+            let args = ["is_deleted", cmp_filePath cmp, docUrl]
+            r <- catchIO (Right <$> readProcessWithExitCode bin args [])
+                         (\ex -> pure . Left . show $ ex)
+            pure $ case r of
+                       Left l -> Left l
+                       Right (ExitSuccess, str, "") -> Right str

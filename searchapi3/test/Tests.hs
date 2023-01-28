@@ -23,6 +23,7 @@ import           Control.Monad.Trans.State   (StateT, execStateT, modify')
 import           Control.Concurrent.STM      (atomically)
 import           Data.ByteString.Char8       (ByteString)
 import qualified Data.IntSet           as IS
+import qualified Data.Map as M
 import qualified Data.Set as S
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
@@ -171,6 +172,10 @@ buildAndRunTests = do
     (env, registry, indexer, queryProcessor) <- buildTestedEnvironment
     testAddTwoDocs env registry indexer
     testSimpleQueries env registry indexer queryProcessor
+    testDocumentDeletion env registry indexer queryProcessor
+    testMultiIndexDeletion env registry indexer
+    testDeletionAndMerge env registry indexer
+    testDeleteAndReAdd indexer queryProcessor
 
 testAddTwoDocs :: MonadIO m => Environment -> Registry -> Indexer -> m ()
 testAddTwoDocs env registry indexer = do
@@ -222,6 +227,170 @@ testSimpleQueries env registry indexer queryProcessor = do
         -- Cleanup
         atomically $ mapM_ (unregister registry cn) =<< viewCollectionComponents registry cn
         removeDirectoryRecursive (collectionsDir env <> "/" <> colName)
+
+testDocumentDeletion :: MonadIO m => Environment -> Registry -> Indexer -> QueryProcessor -> m ()
+testDocumentDeletion env registry indexer queryProcessor = do
+    let colName = "doc-deletion"
+        cn = CollectionName colName
+    liftIO $ do
+
+        -- Make three documents
+        indexDocuments indexer cn [ Doc "doc-1" "words in first doc"
+                                  , Doc "doc-2" "words in second doc"
+                                  , Doc "doc-3" "this is doc 3" ] >>= \r ->
+            assertR "Indexed 3 documents" id 3 r
+
+        -- Ensure query returns all three
+        runQuery queryProcessor cn (QueryParams { query = "doc", maxResults = Nothing }) >>= \r ->
+            assertR "Return 3 documents" num_results 3 r
+
+        -- Ensure document 'is present'
+        isDocDeleted indexer cn "doc-2" >>= \r ->
+            assertR "doc-2 is present" id (M.singleton "PRESENT" 1) r
+
+        -- Delete a document
+        deleteDocument indexer cn "doc-2" >>= \r ->
+            assertR "Document deleted" id () r
+
+        -- Ensure the document 'is deleted'
+        isDocDeleted indexer cn "doc-2" >>= \r ->
+            assertR "doc-2 is deleted" id (M.singleton "DELETED" 1) r
+
+        -- Ensure document is not returned in query
+        runQuery queryProcessor cn (QueryParams { query = "second", maxResults = Nothing }) >>= \r -> do
+            assertR "Must not return doc-2 anymore" num_results 0 r
+            assertR "Must not return doc-2 anymore" (null . results) True r
+
+        -- Ensure query returns only 2 docs
+        runQuery queryProcessor cn (QueryParams { query = "doc", maxResults = Nothing }) >>= \r ->
+            assertR "Return 2 documents" num_results 2 r
+
+        -- Cleanup
+        atomically $ mapM_ (unregister registry cn) =<< viewCollectionComponents registry cn
+        removeDirectoryRecursive (collectionsDir env <> "/" <> colName)
+
+testMultiIndexDeletion :: MonadIO m => Environment -> Registry -> Indexer -> m ()
+testMultiIndexDeletion env registry indexer = do
+    let colName = "multi-index-doc-deletion"
+        cn = CollectionName colName
+    liftIO $ do
+
+        let doc1 = Doc "doc-1" "words in first doc"
+            doc2 = Doc "doc-2" "words in second doc"
+            doc3 = Doc "doc-3" "this is doc 3"
+
+        -- Index three documents
+        indexDocuments indexer cn [doc1, doc2, doc3] >>= \r ->
+            assertR "Indexed 3 documents" id 3 r
+
+        -- The three docs should comprise one index
+        countCollectionsIO registry cn >>= \n ->
+            assertR "One index" id 1 n
+
+        -- Index an already indexed document
+        indexDocuments indexer cn [doc1] >>= \r ->
+            assertR "Indexed 1 document" id 1 r
+
+        -- The fourth doc should comprise an extra index
+        countCollectionsIO registry cn >>= \n ->
+            assertR "Two indices" id 2 n
+
+        -- Ensure document 'is present' in both indexes
+        isDocDeleted indexer cn "doc-1" >>= \r ->
+            assertR "doc-1 is present" id (M.singleton "PRESENT" 2) r
+
+        -- Delete a document
+        deleteDocument indexer cn "doc-1" >>= \r ->
+            assertR "Document deleted" id () r
+
+        -- Ensure the document 'is deleted' in both indexes
+        isDocDeleted indexer cn "doc-1" >>= \r ->
+            assertR "doc-1 is deleted" id (M.singleton "DELETED" 2) r
+
+        -- Cleanup
+        atomically $ mapM_ (unregister registry cn) =<< viewCollectionComponents registry cn
+        removeDirectoryRecursive (collectionsDir env <> "/" <> colName)
+
+-- TODO delete then re-add?
+
+testDeletionAndMerge :: MonadIO m => Environment -> Registry -> Indexer -> m ()
+testDeletionAndMerge env registry indexer = do
+    let colName = "doc-deletion-then-merge"
+        cn = CollectionName colName
+    liftIO $ do
+
+        let doc1 = Doc "doc-1" "words in first doc"
+            doc2 = Doc "doc-2" "words in second doc"
+            doc3 = Doc "doc-3" "this is doc 3"
+
+        -- Index two documents
+        indexDocuments indexer cn [doc1, doc2] >>= \r ->
+            assertR "Indexed 2 documents" id 2 r
+
+        -- The two docs should comprise one index
+        countCollectionsIO registry cn >>= \n ->
+            assertR "One index" id 1 n
+
+        -- Delete a document
+        deleteDocument indexer cn "doc-1" >>= \r ->
+            assertR "Document deleted" id () r
+
+        -- Ensure the document 'is deleted'
+        isDocDeleted indexer cn "doc-1" >>= \r ->
+            assertR "doc-1 is deleted" id (M.singleton "DELETED" 1) r
+
+        -- Index a third document
+        indexDocuments indexer cn [doc3] >>= \r ->
+            assertR "Indexed 1 document" id 1 r
+
+        -- The third doc should cause a merge (into 1 index)
+        countCollectionsIO registry cn >>= \n ->
+            assertR "One index" id 1 n
+
+        -- Ensure the document 'is missing'
+        isDocDeleted indexer cn "doc-1" >>= \r ->
+            assertR "doc-1 is missing" id (M.singleton "MISSING" 1) r
+
+        -- Cleanup
+        atomically $ mapM_ (unregister registry cn) =<< viewCollectionComponents registry cn
+        removeDirectoryRecursive (collectionsDir env <> "/" <> colName)
+
+testDeleteAndReAdd :: MonadIO m => Indexer -> QueryProcessor -> m ()
+testDeleteAndReAdd indexer queryProcessor =
+    let colName = "doc-delete-and-readd"
+        cn      = CollectionName colName
+        doc1    = Doc "doc-1" "words in first doc"
+        doc2    = Doc "doc-2" "words in second doc"
+        doc3    = Doc "doc-3" "this is doc 3"
+
+    in liftIO $ do
+
+        -- Index three documents
+        indexDocuments indexer cn [doc1, doc2, doc3] >>= \r ->
+            assertR "Indexed 3 documents" id 3 r
+
+        -- Delete doc-2
+        deleteDocument indexer cn "doc-2" >>= \r ->
+            assertR "Document deleted" id () r
+
+        -- Ensure doc-2 'is deleted'
+        isDocDeleted indexer cn "doc-2" >>= \r ->
+            assertR "doc-2 is deleted" id (M.singleton "DELETED" 1) r
+
+        -- It should return no results
+        runQuery queryProcessor cn (QueryParams { query = "second", maxResults = Nothing }) >>= \r ->
+            assertR "Expected 0 results" num_results 0 r
+
+        -- Index doc-2 again
+        indexDocuments indexer cn [doc2] >>= \r ->
+            assertR "Indexed 1 documents" id 1 r
+
+        -- It should return a result
+        runQuery queryProcessor cn (QueryParams { query = "second", maxResults = Nothing }) >>= \r ->
+            assertR "Expected 1 results" num_results 1 r
+
+countCollectionsIO :: Registry -> CollectionName -> IO (Either String Int)
+countCollectionsIO reg cn = atomically (Right . S.size <$> viewCollectionComponents reg cn)
 
 assertR :: (Applicative f, Eq a, Show a) => String
                                          -> (b -> a)

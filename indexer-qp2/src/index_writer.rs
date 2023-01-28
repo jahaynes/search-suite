@@ -1,3 +1,4 @@
+use deletions::*;
 use index::*;
 use terms::*;
 use types::*;
@@ -55,5 +56,10 @@ pub fn write_files(idx_dir: &String,
         let Docs(Escaped(d)) = idx.docs;
         docs_file.write_all(&d).unwrap();
         docs_file.flush().unwrap();
+    }
+
+    {
+        let DocOffsets(doc_offsets) = idx.doc_offsets;
+        write_empty_deletions_file(doc_offsets.len(), File::create(format!("{}/{}", idx_dir, "docDeletions")).unwrap());
     }
 }
