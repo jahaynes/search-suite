@@ -7,6 +7,7 @@ use types::*;
 
 use itertools::*;
 use serde::Serialize;   
+use std::collections::HashSet;
 
 #[derive(Debug, Serialize)]
 pub struct QueryResult { pub num_results: usize
@@ -98,7 +99,7 @@ fn scored_iterator<'a>(ir:           &'a IndexRead,
             terms.iter().map(|t| (&t.term, t.doc_freq)).collect();
 
     terms.iter()
-         .map(|t| postings_list_for_term(ir.postings, t))
+         .map(|t| postings_list_for_term(ir, t))
          .kmerge_by(|a,b| a.doc_id <= b.doc_id) 
          .coalesce(|a,b| {
              // TODO can neaten
@@ -120,11 +121,52 @@ fn scored_iterator<'a>(ir:           &'a IndexRead,
          .map(move |xs| rank_result(ir, &doc_freqs, xs))
 }
 
-fn postings_list_for_term<'a>(PostingsRead(posts): &'a PostingsRead,
-                              term:                &'a TermEntry) -> impl Iterator <Item=TermPost<'a>> + 'a {
+fn postings_list_for_term<'a>(ir:   &'a IndexRead,
+                              term: &'a TermEntry) -> impl Iterator <Item=TermPost<'a>> + 'a {
+
+    let deletions_vec = unpack_bits(ir);
+
+    let deletion_set = docids_for_bits(ir, deletions_vec);
+
     let start =         term.offset   as usize;
     let end   = start + term.doc_freq as usize;
-    (start..end).map(move |i| TermPost { doc_id:     posts[2 * i]
-                                       , term_freqs: vec!((&term.term, posts[2 * i + 1]))
-                                       })
+    let PostingsRead(posts) = ir.postings;
+    (start..end)
+        .map(move |i| TermPost { doc_id:     posts[2 * i]
+                               , term_freqs: vec!((&term.term, posts[2 * i + 1]))
+                               })
+        .filter(move |term_post| ! (deletion_set.contains(&DocId(term_post.doc_id))) )
+}
+
+// Convert the deletions bitset back into positions
+fn unpack_bits(ir: &IndexRead) -> Vec<usize> {
+    let mut deletions_vec = Vec::new();
+    let DocDeletionsRead(deletions) = ir.doc_deletions;
+    let mut bit = 0;
+    for &deletion in deletions.iter() {
+        if deletion != 0 {
+            for b in 0..7 {
+                let mask = 1 << b;
+                if mask & deletion != 0 {
+                    deletions_vec.push(bit + b);
+                }
+            }
+        }
+        bit += 8;
+    }
+    deletions_vec
+}
+
+// Given a vector of nth documents to delete, lookup and return their DocIds
+fn docids_for_bits( ir:            &IndexRead
+                  , deletions_vec: Vec<usize>) -> HashSet<DocId> {
+
+    let mut deletion_set = HashSet::new();
+    let DocOffsetsRead(doc_offs) = ir.doc_offsets;
+    for del in deletions_vec {
+        let doc_offset = doc_offs[del] as usize;
+        let deleted_doc_id = read_doc_at(ir.docs, doc_offset).doc_id;
+        deletion_set.insert(deleted_doc_id);
+    }
+    deletion_set
 }

@@ -16,25 +16,60 @@ pub struct IndexRead<'a>{ pub total_doc_len: u64
                         , pub postings:      &'a PostingsRead<'a>
                         , pub doc_offsets:   &'a DocOffsetsRead<'a>
                         , pub docs:          &'a DocsRead<'a>
+                        , pub doc_deletions: &'a DocDeletionsRead<'a>
                         }
 
 pub fn with_index_read<A>(file_name: &str,
                           f:         &dyn Fn(IndexRead) -> A) -> A {
     let total_doc_len = get_total_doc_len(file_name);
-    with_term_offsets(file_name, &|term_offsets_read| 
-    with_terms       (file_name, &|terms_read| 
-    with_postings    (file_name, &|postings_read|
-    with_doc_offsets (file_name, &|doc_offsets_read|
-    with_docs        (file_name, &|docs_read| {
+    with_term_offsets  (file_name, &|term_offsets_read|
+    with_terms         (file_name, &|terms_read|
+    with_postings      (file_name, &|postings_read|
+    with_doc_offsets   (file_name, &|doc_offsets_read|
+    with_docs          (file_name, &|docs_read|
+    with_doc_deletions (file_name, &|doc_deletions_read| {
         let ir = IndexRead { total_doc_len: total_doc_len 
                            , term_offsets:  &term_offsets_read
                            , terms:         &terms_read
                            , postings:      &postings_read
                            , doc_offsets:   &doc_offsets_read
                            , docs:          &docs_read
+                           , doc_deletions: &doc_deletions_read
                            };
         f(ir)
-    })))))
+    }))))))
+}
+
+/* Linear search through (unordered) docs */
+// Is it actuall the case we don't have ordered docs?
+// Candidate for bloom filters (if nothing better found?)
+pub fn doc_url_exists(file_name: &str,
+                      url: &Url) -> bool {
+    match if_doc_exists(file_name, url, &|_, _,_| ()) {
+        Some(()) => true,
+        None     => false
+    }
+}
+
+/* Linear search through (unordered) docs */
+// Is it actuall the case we don't have ordered docs?
+// Candidate for bloom filters (if nothing better found?)
+pub fn if_doc_exists<A>(file_name: &str,
+                        url: &Url,
+                        f: &dyn Fn(u32, u64, &DocEntry) -> A) -> Option<A> {
+    with_doc_offsets (file_name, &|doc_offsets_read|
+    with_docs        (file_name, &|docs_read| {
+        let DocOffsetsRead(doc_offsets) = doc_offsets_read;
+        let mut doc_off_num = 0;
+        for &off in doc_offsets {
+            let doc_entry = read_doc_at(&docs_read, off as usize);
+            if url == &doc_entry.url {
+                return Some(f(doc_off_num, off, &doc_entry));
+            }
+            doc_off_num += 1;
+        }
+        return None;
+    }))
 }
 
 /* Binary search for a term */
@@ -211,6 +246,12 @@ pub fn with_docs_mut<A>(idx_name: &str,
                         f:        &mut dyn FnMut(DocsRead) -> A) -> A {
     with_vec_mut(&format!("{}/docs", idx_name),
                  &mut|t| f(DocsRead(t)))
+}
+
+pub fn with_doc_deletions<A>(idx_name: &str,
+                             f:        &dyn Fn(DocDeletionsRead) -> A) -> A {
+    with_vec(&format!("{}/docDeletions", idx_name),
+    &|t| f(DocDeletionsRead(t)))
 }
 
 pub fn with_vec_align<A,V>(file_name: &str,

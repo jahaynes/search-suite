@@ -3,11 +3,13 @@ extern crate flate2;
 extern crate intmap;
 extern crate itertools;
 extern crate memmap;
+extern crate num;
 extern crate rand;
 extern crate serde;
 extern crate uuid;
 
 mod bytes;
+mod deletions;
 mod doc;
 mod dump;
 mod index;
@@ -28,6 +30,7 @@ mod byte_tests;
 #[cfg(test)]
 mod system_tests;
 
+use deletions::*;
 use dump::*;
 use index::*;
 use index_reader::*;
@@ -79,6 +82,25 @@ fn main() {
                           let serialized = serde_json::to_string(&results).unwrap();
                           println!("{}", serialized);
                     })},
+
+    "delete_doc" => { let idx_name   = &args[2];
+                      let str_url    = &args[3];
+                      delete_document(idx_name, &Url(String::from(str_url)));
+                    },
+
+    "is_deleted" => { let idx_dir = &args[2];
+                      let str_url = &args[3];
+                      let url     = Url(String::from(str_url));
+                      let deleted = is_deleted(idx_dir, &url);
+                      print!("{}", deleted);
+                    },
+
+    "doc_url_exists" => { let idx_name   = &args[2];
+                          let str_url    = &args[3];
+                          let exists     = doc_url_exists(idx_name, &Url(String::from(str_url)));
+                          let serialized = serde_json::to_string(&exists).unwrap();
+                          println!("{}", serialized);
+                        },
 
     "verify"     => verify(&args[2]),
 

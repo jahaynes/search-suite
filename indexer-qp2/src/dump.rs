@@ -13,7 +13,8 @@ pub fn dump(index_path: &str) {
                      , terms
                      , postings
                      , doc_offsets: _
-                     , docs: _ } = ir;
+                     , docs: _
+                     , doc_deletions: _ } = ir;
 
         dump_terms(term_offsets,
                    terms,

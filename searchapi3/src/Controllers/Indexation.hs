@@ -6,7 +6,7 @@ module Controllers.Indexation where
 
 import Api                 (Doc (Doc), IndexRequest (docs))
 import Errors.Errors       (Error)
-import Indexer             (Indexer (indexDocuments, indexLocalWarcFile))
+import Indexer             (Indexer (..))
 import Network.Fetcher     (Fetcher (fetch))
 import Page.Page
 import Types               (CollectionName)
@@ -19,6 +19,7 @@ import Data.Aeson                        (encode)
 import Data.ByteString.Lazy.Char8        (unpack)
 import Data.Char                         (isSpace)
 import Data.List.Split                   (chunksOf)
+import Data.Map                          (Map)
 import Data.Text.Encoding                (decodeUtf8')
 import Servant
 
@@ -34,6 +35,14 @@ type IndexationApi = "indexDoc" :> Capture "col" CollectionName
                                   :> ReqBody '[PlainText] String
                                   :> Post '[JSON] (Either String ())
 
+                :<|> "deleteDoc" :> Capture "col" CollectionName
+                                 :> ReqBody '[PlainText] String
+                                 :> Delete '[JSON] (Either String ())
+
+                :<|> "isDocDeleted" :> Capture "col" CollectionName
+                                    :> ReqBody '[PlainText] String
+                                    :> Post '[JSON] (Either String (Map String Int))
+
 indexationApi :: Proxy IndexationApi
 indexationApi = Proxy
 
@@ -44,6 +53,8 @@ indexationServer fetcher indexer
     = (\cn ir -> indexDocuments indexer cn (docs ir))
  :<|> fetchUrlLines fetcher indexer
  :<|> indexLocalWarcFile indexer
+ :<|> deleteDocument indexer
+ :<|> isDocDeleted indexer
 
 -- TODO message
 fetchUrlLines :: Fetcher (ExceptT Error IO)
