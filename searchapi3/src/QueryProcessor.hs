@@ -10,7 +10,7 @@ import Environment         ( Environment (..) )
 import QueryParams         ( QueryParams (..) )
 import QueryProcessorTypes ( QueryResults (..), QueryResult (..) )
 import Registry            ( Registry (..) )
-import Snippets            ( Snippets (lookupSnippet), Snippet (..) )
+import Metadata            ( Metadata (..), MetadataApi (..) )
 import Types
 
 import           Control.Concurrent.Async       (forConcurrently)
@@ -39,11 +39,11 @@ newtype QueryProcessor =
 
 createQueryProcessor :: Environment
                      -> Registry
-                     -> Snippets
+                     -> MetadataApi
                      -> (ByteString -> IO ())
                      -> QueryProcessor
-createQueryProcessor env reg snippets lg =
-    QueryProcessor { runQuery = runQueryImpl env reg snippets lg
+createQueryProcessor env reg metadataApi lg =
+    QueryProcessor { runQuery = runQueryImpl env reg metadataApi lg
                    }
 
 data ComponentResult = 
@@ -57,12 +57,12 @@ instance Ord ComponentResult where
 
 runQueryImpl :: Environment
              -> Registry
-             -> Snippets
+             -> MetadataApi
              -> (ByteString -> IO ())
              -> CollectionName
              -> QueryParams
              -> IO (Either String QueryResults)
-runQueryImpl env registry snippets logger collectionName@(CollectionName cn) params = do
+runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) params = do
 
     -- Take locks
     lockedComponents <- atomically $ do
@@ -92,7 +92,7 @@ runQueryImpl env registry snippets logger collectionName@(CollectionName cn) par
 
                                  let merged = mergeQueryResults (maxResults params) goods
 
-                                 Right <$> attachSnippets merged
+                                 Right <$> attachMetadata merged
 
             -- Release locks
             mapM_ (releaseLockIO registry) lockedComponents
@@ -100,11 +100,11 @@ runQueryImpl env registry snippets logger collectionName@(CollectionName cn) par
             pure result
 
     where
-    attachSnippets :: V.Vector (Component, QueryResult) -> IO QueryResults
-    attachSnippets vcqrs = do
+    attachMetadata :: V.Vector (Component, QueryResult) -> IO QueryResults
+    attachMetadata vcqrs = do
         xs <- V.forM vcqrs $ \(cmp, qr) -> do
-            sn <- fmap sn_snippet <$> lookupSnippet snippets (path cmp) (uri qr)
-            pure $ qr { snippet = sn }
+            mmetadata <- lookupMetadata metadataApi (path cmp) (uri qr)
+            pure $ qr { metadata = M.delete "uri" . unMetadata <$> mmetadata }
         pure $ QueryResults (V.length xs) xs
 
     mergeQueryResults :: Maybe Int -> [(Component, QueryResults)] -> V.Vector (Component, QueryResult)
@@ -166,7 +166,6 @@ runQueryImpl env registry snippets logger collectionName@(CollectionName cn) par
 
                      case exitcode of
 
-                         -- Snippets was here!
                          ExitSuccess -> Right <$> decodeOutput stdout
 
                          _  -> do print $ "stdout was: " <> stdout

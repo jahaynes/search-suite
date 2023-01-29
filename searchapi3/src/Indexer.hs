@@ -18,7 +18,7 @@ import Data.Warc.WarcEntry (WarcEntry (..), decompress)
 import Environment         (Environment (..))
 import IndexerTypes        (IndexerReply (..))
 import Registry            (Registry (..))
-import Snippets            (Snippets (generateSnippets))
+import Metadata            (MetadataApi (generateMetadata))
 import Types
 import WarcFileReader      (WarcFileReader (..))
 import WarcFileWriter      (WarcFileWriter (..))
@@ -51,13 +51,13 @@ data Indexer =
 createIndexer :: Environment
               -> WarcFileReader
               -> WarcFileWriter
-              -> Snippets
+              -> MetadataApi
               -> Compactor
               -> Registry
               -> Indexer
-createIndexer env wfr writer snippets cpc reg =
-    Indexer { indexDocuments      = indexDocumentsImpl env writer snippets cpc reg
-            , indexLocalWarcFile  = newLocalWarcFileIndex env wfr writer snippets cpc reg
+createIndexer env wfr writer metadataApi cpc reg =
+    Indexer { indexDocuments      = indexDocumentsImpl env writer metadataApi cpc reg
+            , indexLocalWarcFile  = newLocalWarcFileIndex env wfr writer metadataApi cpc reg
             , deleteDocument      = deleteDocumentImpl env reg
             , isDocDeleted        = isDocDeletedImpl env reg
             }
@@ -65,13 +65,13 @@ createIndexer env wfr writer snippets cpc reg =
 -- TODO exceptions
 indexDocumentsImpl :: Environment
                    -> WarcFileWriter
-                   -> Snippets
+                   -> MetadataApi
                    -> Compactor
                    -> Registry
                    -> CollectionName
                    -> [Doc]
                    -> IO (Either String Int)
-indexDocumentsImpl env writer snippets compactor registry collectionName unsortedDocs = do
+indexDocumentsImpl env writer metadataApi compactor registry collectionName unsortedDocs = do
 
     let ds = sort unsortedDocs
 
@@ -112,8 +112,8 @@ indexDocumentsImpl env writer snippets compactor registry collectionName unsorte
                                     destOffsets  = idxCmpDir <> "/" <> "file.offs"
                                 writeWarcFile writer destWarcFile destOffsets ds
 
-                                -- TODO Write out snippets
-                                generateSnippets snippets idxCmpDir
+                                -- Extract / write out metadata
+                                generateMetadata metadataApi idxCmpDir
 
                                 -- Import the tmp index into collection
                                 component <- createComponent nDocs idxCmpDir
@@ -130,13 +130,13 @@ indexDocumentsImpl env writer snippets compactor registry collectionName unsorte
 newLocalWarcFileIndex :: Environment
                       -> WarcFileReader
                       -> WarcFileWriter
-                      -> Snippets
+                      -> MetadataApi
                       -> Compactor
                       -> Registry
                       -> CollectionName
                       -> FilePath
                       -> IO (Either String ())
-newLocalWarcFileIndex env warcFileReader writer snippets compactor registry collectionName warcFile =
+newLocalWarcFileIndex env warcFileReader writer metadataApi compactor registry collectionName warcFile =
 
     batchedRead warcFileReader
                 warcFile
@@ -148,7 +148,7 @@ newLocalWarcFileIndex env warcFileReader writer snippets compactor registry coll
 
         let ds' = V.mapMaybe toDoc ds
 
-        V.mapM_ (\d -> indexDocumentsImpl env writer snippets compactor registry collectionName [d]) ds' 
+        V.mapM_ (\d -> indexDocumentsImpl env writer metadataApi compactor registry collectionName [d]) ds' 
 
         where
         toDoc :: WarcEntry -> Maybe Doc

@@ -13,7 +13,7 @@ import           Environment       ( Environment (indexerBinary) )
 
 import           Registry          ( Registry (..) )
 
-import           Snippets          ( Snippets (..) )
+import           Metadata          ( MetadataApi (..) )
 
 import           Types             ( CollectionName (..)
                                    , getCollectionPath
@@ -41,12 +41,12 @@ data Compactor =
 createCompactor :: Environment
                 -> Registry
                 -> WarcFileWriter
-                -> Snippets
+                -> MetadataApi
                 -> (ByteString -> IO ())
                 -> Compactor
-createCompactor env registry wfw snippets logger =
-    Compactor { compact   = compactImpl   env registry wfw snippets logger
-              , mergeInto = mergeIntoImpl env registry wfw snippets logger
+createCompactor env registry wfw metadataApi logger =
+    Compactor { compact   = compactImpl   env registry wfw metadataApi logger
+              , mergeInto = mergeIntoImpl env registry wfw metadataApi logger
               }
 
 chooseAndLockComponents :: Registry
@@ -64,11 +64,11 @@ chooseAndLockComponents registry collectionName = do
 compactImpl :: Environment
             -> Registry
             -> WarcFileWriter
-            -> Snippets
+            -> MetadataApi
             -> (ByteString -> IO ())
             -> CollectionName
             -> IO Bool
-compactImpl env registry wfw snippets logger collectionName@(CollectionName cn) =
+compactImpl env registry wfw metadataApi logger collectionName@(CollectionName cn) =
 
      bracket (atomically $ chooseAndLockComponents registry collectionName)
 
@@ -84,7 +84,7 @@ compactImpl env registry wfw snippets logger collectionName@(CollectionName cn) 
 
                                  logger $ "Took locks: " <> C8.pack (show (cmp_filePath x)) <> " " <> C8.pack (show (cmp_filePath y))
 
-                                 mergeResult <- mergeComponentFiles env wfw snippets (indexerBinary env) collectionName x y logger
+                                 mergeResult <- mergeComponentFiles env wfw metadataApi (indexerBinary env) collectionName x y logger
 
                                  case mergeResult of
 
@@ -109,12 +109,12 @@ compactImpl env registry wfw snippets logger collectionName@(CollectionName cn) 
 mergeIntoImpl :: Environment
               -> Registry
               -> WarcFileWriter
-              -> Snippets
+              -> MetadataApi
               -> (ByteString -> IO ())
               -> CollectionName
               -> CollectionName
               -> IO ()
-mergeIntoImpl env reg wfw snippets logger dest src = do
+mergeIntoImpl env reg wfw metadataApi logger dest src = do
 
     -- Check it has at least one component
     components <- atomically $ viewCollectionComponents reg src
@@ -143,14 +143,14 @@ mergeIntoImpl env reg wfw snippets logger dest src = do
                 registerFromTmp reg dest component
 
                 -- Compact
-                _ <- compactImpl env reg wfw snippets logger dest
+                _ <- compactImpl env reg wfw metadataApi logger dest
 
                 -- Keep going
                 loop
 
 mergeComponentFiles :: Environment
                     -> WarcFileWriter
-                    -> Snippets
+                    -> MetadataApi
                     -> FilePath
                     -> CollectionName
                     -> Component
@@ -158,7 +158,7 @@ mergeComponentFiles :: Environment
                     -> (ByteString -> IO ())
                     -> IO (Either ByteString Component)
 
-mergeComponentFiles env wfw snippets indexerPath collectionName x y logger = do
+mergeComponentFiles env wfw metadataApi indexerPath collectionName x y logger = do
 
     let cn = getCollectionPath env collectionName
     createDirectoryIfMissing True cn
@@ -175,7 +175,7 @@ mergeComponentFiles env wfw snippets indexerPath collectionName x y logger = do
 
                  interleaveWarcFiles wfw x y dest
 
-                 mergeSnippets snippets (path x) (path y) dest
+                 mergeMetadata metadataApi (path x) (path y) dest
 
                  Right <$> createComponent (numDocs x + numDocs y) dest
 

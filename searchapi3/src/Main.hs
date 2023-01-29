@@ -10,7 +10,7 @@ import Indexer                (createIndexer)
 import Network.Fetcher        (createFetcher)
 import QueryProcessor         (createQueryProcessor)
 import Registry               (createRegistry)
-import Snippets               (createSnippets)
+import Metadata               (createMetadataApi)
 import Types                  (CollectionName, Logger (..), parseCollectionName)
 import WarcFileReader         (createWarcFileReader)
 import WarcFileWriter         (createWarcFileWriter)
@@ -35,17 +35,17 @@ main = do
 
     let warcWriter = createWarcFileWriter
 
-    let snippets = createSnippets warcReader
+    let metadataApi = createMetadataApi warcReader
 
     let queryProcessor = createQueryProcessor env
                                               registry
-                                              snippets
+                                              metadataApi
                                               (logger QueryProcessorLogger)
 
     let compactor = createCompactor env
                                     registry
                                     warcWriter
-                                    snippets
+                                    metadataApi
                                     (logger CompactorLogger)
 
     let importer = createImporter env
@@ -55,7 +55,7 @@ main = do
     let indexer = createIndexer env
                                 warcReader
                                 warcWriter
-                                snippets
+                                metadataApi
                                 compactor
                                 registry
 

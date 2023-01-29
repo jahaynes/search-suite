@@ -3,10 +3,9 @@
              OverloadedStrings,
              ScopedTypeVariables #-}
 
-module Snippets ( Snippets (..)
-                , Snippet (..)
-                , createSnippets ) where
-
+module Metadata ( Metadata (..)
+                , MetadataApi (..)
+                , createMetadataApi ) where
 
 import           Data.Warc.Body
 import           Data.Warc.Header
@@ -22,6 +21,8 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Resource
 import           Data.Binary                  (decode, encode)
 import qualified Data.ByteString.Lazy as LBS
+import           Data.Map                     (Map)
+import qualified Data.Map as M
 import           Data.Text                    (Text)
 import           Data.Text.Encoding
 import           Data.Word                    (Word64)
@@ -29,97 +30,97 @@ import           GHC.Generics                 (Generic)
 import           System.IO
 import           Text.HTML.TagSoup
 
-data Snippets =
-    Snippets { generateSnippets :: !(FilePath -> IO ())
-             , mergeSnippets    :: !(FilePath -> FilePath -> FilePath -> IO ())
-             , lookupSnippet    :: !(FilePath -> Text -> IO (Maybe Snippet))
-             }
+data MetadataApi =
+    MetadataApi { generateMetadata :: !(FilePath -> IO ())
+                , mergeMetadata    :: !(FilePath -> FilePath -> FilePath -> IO ())
+                , lookupMetadata   :: !(FilePath -> Text -> IO (Maybe Metadata))
+                }
 
-data Snippet = 
-    Snippet { sn_uri     :: !Text
-            , sn_snippet :: !Text
-            } deriving (Generic, Show)
+-- TODO: speedup opportunity
+-- Keep the uri separate, for less serialisation in the binary search
+newtype Metadata =
+    Metadata { unMetadata :: Map Text Text}
+        deriving Generic
 
-instance Serialise Snippet
+instance Serialise Metadata
 
-createSnippets :: WarcFileReader -> Snippets
-createSnippets wfr =
-    Snippets { generateSnippets = generateSnippetsImpl wfr
-             , mergeSnippets    = mergeSnippetsImpl
-             , lookupSnippet    = lookupSnippetImpl
-             }
+createMetadataApi :: WarcFileReader -> MetadataApi
+createMetadataApi wfr =
+    MetadataApi { generateMetadata = generateMetadataImpl wfr
+                , mergeMetadata    = mergeMetadataImpl
+                , lookupMetadata   = lookupMetadataImpl
+                }
 
-lookupSnippetImpl :: FilePath -> Text -> IO (Maybe Snippet)
-lookupSnippetImpl fp url = do
+-- TODO resourceT
+lookupMetadataImpl :: FilePath -> Text -> IO (Maybe Metadata)
+lookupMetadataImpl fp url = do
 
-    let snippetsOffs = fp <> "/snippets.off"
-    let snippetsFile = fp <> "/snippets.txt"
+    let metadataOffs = fp <> "/metadata.off"
+    let metadataFile = fp <> "/metadata.txt"
 
-    hOffs <- openBinaryFile snippetsOffs ReadMode
-    hSnip <- openBinaryFile snippetsFile ReadMode
+    hOffs <- openBinaryFile metadataOffs ReadMode
+    hMeta <- openBinaryFile metadataFile ReadMode
     
     fs <- hFileSize hOffs
     let (numOffsets, 0) = (fs `divMod` 8)
 
     -- pairs (0,_), etc.
-    snip :: Maybe (Text, Snippet) <- binarySearchM 0 (fromIntegral numOffsets - 1) url $ \i -> do
+    meta :: Maybe (Text, Metadata) <- binarySearchM 0 (fromIntegral numOffsets - 1) url $ \i -> do
 
         -- Find the right offset
         hSeek hOffs AbsoluteSeek (fromIntegral $ i * 8)
 
         -- Read the offset + length
-        eloff <- LBS.hGet hOffs 8
-        let loff = decode eloff :: Word64
-        eroff <- LBS.hGet hOffs 8
-        let roff = decode eroff :: Word64
+        loff :: Word64 <- decode <$> LBS.hGet hOffs 8
+        roff :: Word64 <- decode <$> LBS.hGet hOffs 8
         let len = roff - loff
 
         -- Seek to the offset
-        hSeek hSnip AbsoluteSeek (fromIntegral loff)
-        snip :: Snippet <- deserialise <$> LBS.hGet hSnip (fromIntegral len)
+        hSeek hMeta AbsoluteSeek (fromIntegral loff)
+        meta :: Metadata <- deserialise <$> LBS.hGet hMeta (fromIntegral len)
 
-        pure (sn_uri snip, snip)
+        pure (uriOf meta, meta)
 
-    hClose hSnip
+    hClose hMeta
     hClose hOffs
 
-    pure (snd <$> snip)
+    pure (snd <$> meta)
 
-generateSnippetsImpl :: WarcFileReader -> FilePath -> IO ()
-generateSnippetsImpl wfr x = do
+generateMetadataImpl :: WarcFileReader -> FilePath -> IO ()
+generateMetadataImpl wfr x = do
 
     -- Input
     let warcFile = x <> "/file.warc"
 
     -- Output
-    let snippetsOffs = x <> "/snippets.off"
-    let snippetsFile = x <> "/snippets.txt"
+    let metadataOffs = x <> "/metadata.off"
+    let metadataFile = x <> "/metadata.txt"
 
     runResourceT $ do
 
         (releaseOffsets, handleOffsets) <- allocate
-            (openBinaryFile snippetsOffs WriteMode)
+            (openBinaryFile metadataOffs WriteMode)
             hClose
 
         (releaseDest, handleDest) <- allocate
-            (openBinaryFile snippetsFile WriteMode)
+            (openBinaryFile metadataFile WriteMode)
             hClose
 
         _ <- liftIO $ do
 
             batchedRead wfr warcFile $ \wes ->
-                forM_ wes $ \we@(WarcEntry headers _) ->
-                    case summarise we of
-                        -- Nothing -> pure ()
-                        snippet -> do
+                forM_ wes $ \we@(WarcEntry headers _) -> do
 
-                            -- Record in file.offs the snippets's position 
-                            pos :: Word64 <- fromIntegral <$> hTell handleDest
-                            LBS.hPut handleOffsets (encode pos)
+                    let description = scrapeDescription we
 
-                            -- Write snippet entry
-                            let Just (StringValue uri) = getValue (MandatoryKey WarcRecordId) headers
-                            LBS.hPut handleDest $ serialise Snippet { sn_uri = decodeUtf8 uri, sn_snippet = snippet }
+                    -- Record in file.offs the metadata's position 
+                    pos :: Word64 <- fromIntegral <$> hTell handleDest
+                    LBS.hPut handleOffsets (encode pos)
+
+                    -- Write metadata entry
+                    let Just (StringValue uri) = getValue (MandatoryKey WarcRecordId) headers
+                    LBS.hPut handleDest . serialise . Metadata $ M.fromList [ ("uri",         decodeUtf8 uri)
+                                                                            , ("description", description) ]
 
             -- Write final offset
             pos :: Word64 <- fromIntegral <$> hTell handleDest
@@ -128,16 +129,23 @@ generateSnippetsImpl wfr x = do
         release releaseDest
         release releaseOffsets
 
--- TODO doesn't work if either is empty
-mergeSnippetsImpl :: FilePath -> FilePath -> FilePath -> IO ()
-mergeSnippetsImpl x y destPath = do
+-- all metadata must have uri
+uriOf :: Metadata -> Text
+uriOf (Metadata mm) =
+    case M.lookup "uri" mm of
+        Nothing  -> error "Metadata without uri!"
+        Just uri -> uri
 
-    let fpOff1   = x        <> "/snippets.off"
-        fpDat1   = x        <> "/snippets.txt"
-        fpOff2   = y        <> "/snippets.off"
-        fpDat2   = y        <> "/snippets.txt"
-        destOffs = destPath <> "/snippets.off"
-        dest     = destPath <> "/snippets.txt"
+-- TODO doesn't work if either is empty
+mergeMetadataImpl :: FilePath -> FilePath -> FilePath -> IO ()
+mergeMetadataImpl x y destPath = do
+
+    let fpOff1   = x        <> "/metadata.off"
+        fpDat1   = x        <> "/metadata.txt"
+        fpOff2   = y        <> "/metadata.off"
+        fpDat2   = y        <> "/metadata.txt"
+        destOffs = destPath <> "/metadata.off"
+        dest     = destPath <> "/metadata.txt"
 
     [off1, dat1, off2, dat2] <- mapM (`openFile` ReadMode) [fpOff1, fpDat1, fpOff2, fpDat2]
 
@@ -147,7 +155,7 @@ mergeSnippetsImpl x y destPath = do
     reader1 <- reader off1 dat1
     reader2 <- reader off2 dat2 
 
-    mergeReaders sn_uri reader1 reader2 $ \(x :: Snippet) -> do
+    mergeReaders uriOf reader1 reader2 $ \(x :: Metadata) -> do
 
         -- Write the offset
         off :: Word64 <- fromIntegral <$> hTell hDat
@@ -224,9 +232,9 @@ reader hOff hDat = do
 -- TODO - these summaries are only for HTML
 -- should be contextual
 -- e.g. show public classes for Java?
-summarise :: WarcEntry -> Text
-summarise we@(WarcEntry _ (CompressedBody body)) = summarise $ decompress we
-summarise    (WarcEntry _ (UncompressedBody body)) =
+scrapeDescription :: WarcEntry -> Text
+scrapeDescription we@(WarcEntry _ (CompressedBody _)) = scrapeDescription $ decompress we
+scrapeDescription    (WarcEntry _ (UncompressedBody body)) =
 
     let desc = map snd
              . concatMap (\(TagOpen "meta" attrs) -> filter (\(k,_) -> k == "content" ) attrs)
@@ -241,5 +249,5 @@ summarise    (WarcEntry _ (UncompressedBody body)) =
     in case desc of
         []    -> "No meta description available"
         (x:_) -> case decodeUtf8' x of
-                    Left l  -> "Could not decode snippet"
+                    Left l  -> "Could not decode description"
                     Right r -> r

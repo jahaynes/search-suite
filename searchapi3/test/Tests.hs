@@ -11,7 +11,7 @@ import QueryParams            (QueryParams (..))
 import QueryProcessor         (QueryProcessor (..), createQueryProcessor)
 import QueryProcessorTypes    (QueryResults (..)) 
 import Registry               (Registry (..), createRegistry)
-import Snippets               (Snippets, createSnippets)
+import Metadata               (MetadataApi, createMetadataApi)
 import System.Directory       (removeDirectoryRecursive)
 import Types                  (CollectionName (..), numDocs)
 import WarcFileReader         (WarcFileReader, createWarcFileReader)
@@ -69,20 +69,20 @@ testedWarcWriter = do
     -- TODO tests
     pure warcWriter
 
-testedSnippets :: MonadIO m => WarcFileReader
-                            -> StateT [Group] m Snippets
-testedSnippets wfr = do
-    let snippets = createSnippets wfr
+testedMetadataApi :: MonadIO m => WarcFileReader
+                               -> StateT [Group] m MetadataApi
+testedMetadataApi wfr = do
+    let metadataApi = createMetadataApi wfr
     -- TODO tests
-    pure snippets
+    pure metadataApi
 
 testedQueryProcessor :: MonadIO m => Environment
                                   -> Registry
-                                  -> Snippets
+                                  -> MetadataApi
                                   -> (ByteString -> IO ())
                                   -> StateT [Group] m QueryProcessor
-testedQueryProcessor env registry snippets logger = do
-    let queryProcessor = createQueryProcessor env registry snippets logger
+testedQueryProcessor env registry metadataApi logger = do
+    let queryProcessor = createQueryProcessor env registry metadataApi logger
     -- TODO tests
     pure queryProcessor
 
@@ -119,12 +119,12 @@ willReturnToFib = property $ do
 testedCompactor :: MonadIO m => Environment
                              -> Registry
                              -> WarcFileWriter
-                             -> Snippets
+                             -> MetadataApi
                              -> (ByteString -> IO ())
                              -> StateT [Group] m Compactor
-testedCompactor env reg wfw snippets logger = do
+testedCompactor env reg wfw metadataApi logger = do
 
-    let compactor = createCompactor env reg wfw snippets logger
+    let compactor = createCompactor env reg wfw metadataApi logger
 
     modify' ((++) [Group "Compactor" [("will return to fibonacci", willReturnToFib)]])
 
@@ -144,27 +144,27 @@ testedImporter env reg compactor = do
 testedIndexer :: MonadIO m => Environment
                            -> WarcFileReader
                            -> WarcFileWriter
-                           -> Snippets
+                           -> MetadataApi
                            -> Compactor
                            -> Registry
                            -> StateT [Group] m Indexer
-testedIndexer env wfr wfw snippets compactor reg = do
-    let indexer = createIndexer env wfr wfw snippets compactor reg
+testedIndexer env wfr wfw metadataApi compactor reg = do
+    let indexer = createIndexer env wfr wfw metadataApi compactor reg
     -- TODO tests
     pure indexer
                         
 buildTestedEnvironment :: StateT [Group] IO (Environment, Registry, Indexer, QueryProcessor)
 buildTestedEnvironment = do
-    env        <- testEnv
-    logger     <- noopLogger
-    registry   <- testedRegistry env logger
-    warcReader <- testedWarcReader 128 logger
-    warcWriter <- testedWarcWriter
-    snippets   <- testedSnippets warcReader
-    qp         <- testedQueryProcessor env registry snippets logger
-    compactor  <- testedCompactor env registry warcWriter snippets logger
-    _          <- testedImporter env registry compactor
-    indexer    <- testedIndexer env warcReader warcWriter snippets compactor registry
+    env         <- testEnv
+    logger      <- noopLogger
+    registry    <- testedRegistry env logger
+    warcReader  <- testedWarcReader 128 logger
+    warcWriter  <- testedWarcWriter
+    metadataApi <- testedMetadataApi warcReader
+    qp          <- testedQueryProcessor env registry metadataApi logger
+    compactor   <- testedCompactor env registry warcWriter metadataApi logger
+    _           <- testedImporter env registry compactor
+    indexer     <- testedIndexer env warcReader warcWriter metadataApi compactor registry
     pure (env, registry, indexer, qp)
 
 buildAndRunTests :: StateT [Group] IO ()

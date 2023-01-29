@@ -7,6 +7,7 @@ module QueryProcessorTypes where
 import           Control.DeepSeq            (NFData)
 import           Control.Lens
 import           Data.Aeson                 (FromJSON, ToJSON (..))
+import           Data.Map                   (Map)
 import           Data.Swagger               (ToSchema (..), defaultSchemaOptions, description, example, genericDeclareNamedSchema, schema)
 import           Data.Text                  (Text)
 import           Data.Vector                (Vector)
@@ -22,7 +23,7 @@ data QueryResult =
     QueryResult { uri        :: !Text
                 , score      :: !Float
                 , term_count :: !Int
-                , snippet    :: !(Maybe Text)   -- TODO too soon for snippet
+                , metadata   :: !(Maybe (Map Text Text))
                 } deriving (Show, Generic, FromJSON, ToJSON, NFData)
 
 instance ToSchema QueryResult where
@@ -35,7 +36,7 @@ exampleQueryResult1 =
     QueryResult { uri        = "http://foo.bar"
                 , score      = 0.5
                 , term_count = 3
-                , snippet    = Just "Many lols to be had"
+                , metadata   = mempty
                 }
 
 exampleQueryResult2 :: QueryResult
@@ -43,7 +44,7 @@ exampleQueryResult2 =
     QueryResult { uri        = "http://www.baz.com"
                 , score      = 0.5
                 , term_count = 3
-                , snippet    = Just "dozens of newspaper articles talking about AI-generated text"
+                , metadata   = mempty
                 }
 
 instance ToSchema QueryResults where
