@@ -20,9 +20,11 @@ import           Control.Monad                (forM_)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Resource
 import           Data.Binary                  (decode, encode)
+import           Data.ByteString              (ByteString)
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Map                     (Map)
 import qualified Data.Map as M
+import           Data.Maybe                   (mapMaybe)
 import           Data.Text                    (Text)
 import           Data.Text.Encoding
 import           Data.Word                    (Word64)
@@ -111,16 +113,15 @@ generateMetadataImpl wfr x = do
             batchedRead wfr warcFile $ \wes ->
                 forM_ wes $ \we@(WarcEntry headers _) -> do
 
-                    let description = scrapeDescription we
-
                     -- Record in file.offs the metadata's position 
                     pos :: Word64 <- fromIntegral <$> hTell handleDest
                     LBS.hPut handleOffsets (encode pos)
 
                     -- Write metadata entry
                     let Just (StringValue uri) = getValue (MandatoryKey WarcRecordId) headers
-                    LBS.hPut handleDest . serialise . Metadata $ M.fromList [ ("uri",         decodeUtf8 uri)
-                                                                            , ("description", description) ]
+                    let Metadata mm = scrapeMetadata we
+                    let metadata = Metadata $ M.insert "uri" (decodeUtf8 uri) mm
+                    LBS.hPut handleDest . serialise $ metadata
 
             -- Write final offset
             pos :: Word64 <- fromIntegral <$> hTell handleDest
@@ -155,14 +156,14 @@ mergeMetadataImpl x y destPath = do
     reader1 <- reader off1 dat1
     reader2 <- reader off2 dat2 
 
-    mergeReaders uriOf reader1 reader2 $ \(x :: Metadata) -> do
+    mergeReaders uriOf reader1 reader2 $ \(md :: Metadata) -> do
 
         -- Write the offset
         off :: Word64 <- fromIntegral <$> hTell hDat
         LBS.hPut hOff (encode off)
 
         -- Write the data
-        LBS.hPut hDat (serialise x)
+        LBS.hPut hDat (serialise md)
 
     -- Write the final offset
     off :: Word64 <- fromIntegral <$> hTell hDat
@@ -232,22 +233,34 @@ reader hOff hDat = do
 -- TODO - these summaries are only for HTML
 -- should be contextual
 -- e.g. show public classes for Java?
-scrapeDescription :: WarcEntry -> Text
-scrapeDescription we@(WarcEntry _ (CompressedBody _)) = scrapeDescription $ decompress we
-scrapeDescription    (WarcEntry _ (UncompressedBody body)) =
+-- TODO - filter some interesting subset of possible html metadata names?
+scrapeMetadata :: WarcEntry -> Metadata
+scrapeMetadata we@(WarcEntry _ (CompressedBody _)) = scrapeMetadata $ decompress we
+scrapeMetadata    (WarcEntry _ (UncompressedBody body)) = Metadata
+                                                        . M.fromList
+                                                        . mapMaybe metaNameContentPair
+                                                        . takeWhile (not . isTagCloseName "head")
+                                                        . tail
+                                                        . dropWhile (not . isTagOpenName "head")
+                                                        . parseTags
+                                                        $ body
 
-    let desc = map snd
-             . concatMap (\(TagOpen "meta" attrs) -> filter (\(k,_) -> k == "content" ) attrs)
-             . filter (\(TagOpen "meta" attrs) -> ("name", "description") `elem` attrs)
-             . filter (isTagOpenName "meta")
-             . takeWhile (not . isTagOpenName "body")
-             . parseTags
-             $ body
+    -- TODO title is just a tag, not metadata
     -- TODO failing to get meta description, start reading from first body/div/p?
     -- Also read title from meta?  If not then use first H?, or filename?
 
-    in case desc of
-        []    -> "No meta description available"
-        (x:_) -> case decodeUtf8' x of
-                    Left l  -> "Could not decode description"
-                    Right r -> r
+    where
+    metaNameContentPair :: Tag ByteString -> Maybe (Text, Text)
+    metaNameContentPair t@(TagOpen "meta" _) = do
+        (n, c) <- case (fromAttrib "name" t, fromAttrib "content" t) of
+                      ("",  _) -> Nothing
+                      ( _, "") -> Nothing
+                      nc       -> Just nc
+        n' <- rightToMaybe $ decodeUtf8' n
+        c' <- rightToMaybe $ decodeUtf8' c
+        pure (n', c')
+    metaNameContentPair _ = Nothing
+
+rightToMaybe :: Either l r -> Maybe r
+rightToMaybe Left{} = Nothing
+rightToMaybe (Right r) = Just r
