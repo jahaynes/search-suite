@@ -21,10 +21,12 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Resource
 import           Data.Binary                  (decode, encode)
 import           Data.ByteString              (ByteString)
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as LBS
+import           Data.Char                    (isSpace)
 import           Data.Map                     (Map)
 import qualified Data.Map as M
-import           Data.Maybe                   (mapMaybe)
+import           Data.Maybe                   (mapMaybe, maybeToList)
 import           Data.Text                    (Text)
 import           Data.Text.Encoding
 import           Data.Word                    (Word64)
@@ -236,20 +238,34 @@ reader hOff hDat = do
 -- TODO - filter some interesting subset of possible html metadata names?
 scrapeMetadata :: WarcEntry -> Metadata
 scrapeMetadata we@(WarcEntry _ (CompressedBody _)) = scrapeMetadata $ decompress we
-scrapeMetadata    (WarcEntry _ (UncompressedBody body)) = Metadata
-                                                        . M.fromList
-                                                        . mapMaybe metaNameContentPair
-                                                        . takeWhile (not . isTagCloseName "head")
-                                                        . tail
-                                                        . dropWhile (not . isTagOpenName "head")
-                                                        . parseTags
-                                                        $ body
+scrapeMetadata    (WarcEntry _ (UncompressedBody body)) =
+
+    let headTags = getGroup "head"
+                 . parseTags
+                 $ body
+
+        mTitle = do
+            t <- textFrom $ getGroup "title" headTags
+            pure ("title", t)
+
+    in Metadata $  M.fromList
+                (  maybeToList mTitle
+                ++ mapMaybe metaNameContentPair headTags )
 
     -- TODO title is just a tag, not metadata
     -- TODO failing to get meta description, start reading from first body/div/p?
     -- Also read title from meta?  If not then use first H?, or filename?
 
     where
+    getGroup :: Eq a => a -> [Tag a] -> [Tag a]
+    getGroup name = takeWhile (not . isTagCloseName name)
+                  . tail'
+                  . dropWhile (not . isTagOpenName name)
+
+    textFrom :: [Tag ByteString] -> Maybe Text
+    textFrom ts = rightToMaybe . decodeUtf8'
+              =<< notAllSpace (innerText $ filter isTagText ts)
+
     metaNameContentPair :: Tag ByteString -> Maybe (Text, Text)
     metaNameContentPair t@(TagOpen "meta" _) = do
         (n, c) <- case (fromAttrib "name" t, fromAttrib "content" t) of
@@ -264,3 +280,11 @@ scrapeMetadata    (WarcEntry _ (UncompressedBody body)) = Metadata
 rightToMaybe :: Either l r -> Maybe r
 rightToMaybe Left{} = Nothing
 rightToMaybe (Right r) = Just r
+
+tail' :: [a] -> [a]
+tail' (_:xs) = xs
+tail'     [] = []
+
+notAllSpace :: ByteString -> Maybe ByteString
+notAllSpace x | C8.all isSpace x = Nothing
+              | otherwise        = Just x
