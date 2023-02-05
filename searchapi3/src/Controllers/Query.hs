@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds,
+             LambdaCase,
              TypeOperators #-}
 
 module Controllers.Query where
@@ -15,7 +16,7 @@ import Servant
 type QueryApi = "query" :> Capture "col" CollectionName
                         :> QueryParam' '[Required] "q" Text
                         :> QueryParam "n" Int
-                        :> Get '[JSON] (Either String QueryResults)
+                        :> Get '[JSON] QueryResults
 
            :<|> "spelling" :> Capture "col" CollectionName
                            :> QueryParam' '[Required] "s" Text
@@ -24,5 +25,13 @@ type QueryApi = "query" :> Capture "col" CollectionName
 
 queryServer :: QueryProcessor
             -> ServerT QueryApi IO
-queryServer qp = (\cn q mn -> runQuery qp cn (QueryParams (encodeUtf8 q) mn))
-            :<|> (\cn s mn -> runSpelling qp cn s mn)
+queryServer qp = serveQuery :<|> serveSpelling
+
+    where
+    serveQuery cn q mn =
+        runQuery qp cn (QueryParams (encodeUtf8 q) mn) >>= \case
+            Left e        -> error $ show e
+            Right results -> pure results
+
+    serveSpelling cn s mn =
+        runSpelling qp cn s mn
