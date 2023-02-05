@@ -32,6 +32,7 @@ type SearchApi = CollectionsApi
             :<|> QueryApi
             :<|> IndexationApi
             :<|> DiagnosticApi
+            :<|> Raw
 
 type SearchApiWithDoc = SwaggerSchemaUI "swagger-ui" "swagger.json"
                    :<|> SearchApi
@@ -64,6 +65,8 @@ runController compactor env indexer fetcher qp registry _logger =
             :<|> queryServer qp
             :<|> indexationServer fetcher indexer
             :<|> diagnosticServer registry
+            :<|> serveDirectoryFileServer "frontend"
+
     where
     searchApiWithDoc :: Proxy SearchApiWithDoc
     searchApiWithDoc = Proxy
