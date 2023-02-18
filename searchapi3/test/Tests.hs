@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings, OverloadedLists #-}
 
+import Util.BinarySearchTests (binarySearchTests)
+
 import Api                    (Doc (..))
 import Compactor              (Compactor, createCompactor)
 import CompactorStrategy      (fibSet, hybridStrategy)
@@ -31,9 +33,16 @@ import qualified Hedgehog.Range as Range
 
 main :: IO Bool
 main = do
+
+    mapM_ checkParallel moduleTests
+
     systemTests <- execStateT buildAndRunTests []
     mapM_ checkParallel systemTests
+
     pure True
+
+moduleTests :: [Group]
+moduleTests = [binarySearchTests]
 
 testEnv :: Monad m => StateT [Group] m Environment
 testEnv = do

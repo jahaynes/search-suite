@@ -12,7 +12,7 @@ common deps
 
 library
   import:              deps
-  ghc-options:         -Wall -O3
+  ghc-options:         -Wall -O2
   exposed-modules:     Api,
                        Compactor,
                        CompactorStrategy,
@@ -41,7 +41,7 @@ library
 
 executable benchmarks
     import:           deps
-    ghc-options:      -Wall -threaded -O3
+    ghc-options:      -Wall -threaded -O2
     build-depends:    searchapi3, criterion
     main-is:          Bench.hs
     other-modules:    CompactorStrategy
@@ -53,7 +53,7 @@ executable benchmarks
 
 executable searchapi3
     import:           deps
-    ghc-options:      -Wall -threaded -O3
+    ghc-options:      -Wall -threaded -O2
     build-depends:    searchapi3
     other-modules:    Api,
                       Compactor,
@@ -84,8 +84,9 @@ executable searchapi3
 
 test-suite test-searchapi3
     import: deps
-    build-depends:    searchapi3
-    ghc-options:      -Wall -O3
+    build-depends:    searchapi3, vector-algorithms
+    other-modules:    Util.BinarySearchTests
+    ghc-options:      -Wall -threaded -O2
     type:             exitcode-stdio-1.0
     main-is:          Tests.hs
     build-depends:    base, hedgehog

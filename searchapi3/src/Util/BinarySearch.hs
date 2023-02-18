@@ -1,12 +1,19 @@
-module Util.BinarySearch where
+module Util.BinarySearch (binarySearchM) where
 
--- TODO use worker/wrapper
-binarySearchM :: Ord a => Int
-                       -> Int
-                       -> a
-                       -> (Int -> IO (a, b))
-                       -> IO (Maybe (a, b))
-binarySearchM lo hi target predM = do --TODO TEST boundaries!
+binarySearchM :: (Monad m, Ord a) => Int
+                                  -> a
+                                  -> (Int -> m (a, b))
+                                  -> m (Maybe (a, b))
+binarySearchM   0      _     _ = pure Nothing
+binarySearchM len target predM = binarySearchM' 0 len target predM
+
+-- Does not check for length 0! Use above function instead.
+binarySearchM' :: (Monad m, Ord a) => Int
+                                   -> Int
+                                   -> a
+                                   -> (Int -> m (a, b))
+                                   -> m (Maybe (a, b))
+binarySearchM' lo hi target predM = do
     let i = lo + div (hi - lo) 2
     (probe, dat) <- predM i
     if probe == target
@@ -14,5 +21,5 @@ binarySearchM lo hi target predM = do --TODO TEST boundaries!
         else if i == hi || i == lo
             then pure Nothing
             else if probe < target
-                then binarySearchM i hi target predM
-                else binarySearchM lo i target predM
+                then binarySearchM' i hi target predM
+                else binarySearchM' lo i target predM

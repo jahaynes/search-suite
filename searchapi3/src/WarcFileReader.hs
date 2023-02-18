@@ -53,7 +53,7 @@ findWarcEntryImpl warcFile warcOffs url = do
     fs <- hFileSize hOff
     let (numOffsets, 0) = fs `divMod` 8
 
-    x <- binarySearchM 0 (fromIntegral numOffsets) url $ \i -> do
+    x <- binarySearchM (fromIntegral numOffsets) url $ \i -> do
 
         -- Find the right offset
         hSeek hOff AbsoluteSeek (fromIntegral $ i * 8)

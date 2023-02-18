@@ -69,7 +69,7 @@ lookupMetadataImpl fp url = do
     let (numOffsets, 0) = (fs `divMod` 8)
 
     -- pairs (0,_), etc.
-    meta :: Maybe (Text, Metadata) <- binarySearchM 0 (fromIntegral numOffsets - 1) url $ \i -> do
+    meta :: Maybe (Text, Metadata) <- binarySearchM (fromIntegral numOffsets - 1) url $ \i -> do
 
         -- Find the right offset
         hSeek hOffs AbsoluteSeek (fromIntegral $ i * 8)
