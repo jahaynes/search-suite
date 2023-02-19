@@ -43,6 +43,7 @@ createWarcFileReader batchSize logger =
                    , findWarcEntry = findWarcEntryImpl
                    }
 
+-- TODO do a cached-copy implementation here
 -- TODO use a tighter structure than (offs,fullwarc).  Perhaps (offs,urls-warcoffs,fullwarc))
 -- TODO resourceT
 findWarcEntryImpl :: FilePath -> FilePath -> ByteString -> IO (Maybe WarcEntry)
