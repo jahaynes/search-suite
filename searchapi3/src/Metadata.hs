@@ -102,15 +102,15 @@ generateMetadataImpl wfr x = do
 
     runResourceT $ do
 
-        (releaseOffsets, handleOffsets) <- allocate
+        (_, handleOffsets) <- allocate
             (openBinaryFile metadataOffs WriteMode)
             hClose
 
-        (releaseDest, handleDest) <- allocate
+        (_, handleDest) <- allocate
             (openBinaryFile metadataFile WriteMode)
             hClose
 
-        _ <- liftIO $ do
+        liftIO $ do
 
             batchedRead wfr warcFile $ \wes ->
                 forM_ wes $ \we@(WarcEntry headers _) -> do
@@ -128,9 +128,6 @@ generateMetadataImpl wfr x = do
             -- Write final offset
             pos :: Word64 <- fromIntegral <$> hTell handleDest
             LBS.hPut handleOffsets (encode pos)
-
-        release releaseDest
-        release releaseOffsets
 
 -- all metadata must have uri
 uriOf :: Metadata -> Text

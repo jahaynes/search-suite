@@ -4,6 +4,8 @@
 module WarcFileWriter ( WarcFileWriter (..)
                       , createWarcFileWriter ) where
 
+-- TODO, stop using lazy byte strings? (LBS)
+
 import           Api
 import           Component
 import           Data.Warc.WarcEntry    
@@ -42,11 +44,11 @@ createWarcFileWriter =
 writeWarcFileImpl :: FilePath -> FilePath -> [Doc] -> IO ()
 writeWarcFileImpl destWarcFile destOffsets ds = runResourceT $ do
 
-        (releaseOffsets, handleOffsets) <- allocate
+        (_, handleOffsets) <- allocate
             (openBinaryFile destOffsets WriteMode)
             hClose
 
-        (releaseDest, handleDest) <- allocate
+        (_, handleDest) <- allocate
             (openBinaryFile destWarcFile WriteMode)
             hClose
 
@@ -58,9 +60,6 @@ writeWarcFileImpl destWarcFile destOffsets ds = runResourceT $ do
 
             -- Write entry
             LBS.hPut handleDest (toLazyByteString we)
-
-        release releaseDest
-        release releaseOffsets
 
 fromDoc :: Doc -> WarcEntry
 fromDoc (Doc url content) =
@@ -83,19 +82,19 @@ interleaveWarcFilesSortedImpl x y dest = do
 
     runResourceT $ do
 
-        (releaseX, handleX) <- allocate
+        (_, handleX) <- allocate
             (openBinaryFile sourceWarcX ReadMode)
             hClose
     
-        (releaseY, handleY) <- allocate
+        (_, handleY) <- allocate
             (openBinaryFile sourceWarcY ReadMode)
             hClose
 
-        (releaseOffsets, handleOffsets) <- allocate
+        (_, handleOffsets) <- allocate
             (openBinaryFile destOffsets WriteMode)
             hClose
 
-        (releaseDest, handleDest) <- allocate
+        (_, handleDest) <- allocate
             (openBinaryFile destWarcFile WriteMode)
             hClose
 
@@ -110,11 +109,6 @@ interleaveWarcFilesSortedImpl x y dest = do
 
             -- Write entry
             LBS.hPut handleDest (toLazyByteString we)
-
-        release releaseDest
-        release releaseOffsets
-        release releaseX
-        release releaseY
 
     where
     merge :: [WarcEntry] -> [WarcEntry] -> [WarcEntry]
