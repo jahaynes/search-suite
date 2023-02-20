@@ -4,7 +4,7 @@ const reqHeaders = {
     headers: { 'Content-Type': 'application/json' }
 }
 
-function renderResult(result) {
+function renderResult(collectionName, result) {
 
     const resultItem = document.createElement("li");
     resultItem.classList.add("result");
@@ -32,6 +32,12 @@ function renderResult(result) {
     uri.innerHTML = "<a href='" + result.uri + "'>" + result.uri + "</a>";
     resultItem.append(uri);
 
+    const cached = document.createElement("div");
+    // TODO escape?
+    const link = "/cached/" + collectionName + "?url=" + result.uri;
+    cached.innerHTML = "<a href='" + link + "'>cached</a>";
+    resultItem.append(cached);
+
     return resultItem;
 }
 
@@ -56,7 +62,7 @@ const fireSearch = async (state) => {
             const resultList = document.getElementById("results");
             resultList.innerHTML = '';
             for (i = 0; i < data.results.length; i++) {
-                const resultItem = renderResult(data.results[i]);
+                const resultItem = renderResult(collectionName, data.results[i]);
                 resultList.appendChild(resultItem);
             }
         });

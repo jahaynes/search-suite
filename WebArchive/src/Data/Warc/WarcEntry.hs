@@ -19,8 +19,9 @@ import           Data.Warc.Shared       (crlf)
 import           Data.Warc.Key
 import           Data.Warc.Value
 
-data WarcEntry = WarcEntry !WarcHeader !WarcBody
-                   deriving Generic
+data WarcEntry = WarcEntry { getHeader :: !WarcHeader
+                           , getBody   :: !WarcBody
+                           } deriving Generic
 instance NFData WarcEntry
 
 warcEntry :: Parser WarcEntry

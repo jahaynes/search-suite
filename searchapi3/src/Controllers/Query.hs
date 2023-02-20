@@ -1,16 +1,27 @@
 {-# LANGUAGE DataKinds,
              LambdaCase,
+             OverloadedStrings,
              TypeOperators #-}
 
-module Controllers.Query where
+module Controllers.Query (QueryApi, queryServer) where
 
+import Component               (Component (cmp_filePath))
+import Data.Warc.Body
+import Data.Warc.WarcEntry
 import QueryParams             (QueryParams (QueryParams))
 import QueryProcessor          (QueryProcessor (..))
 import QueryProcessorTypes     (SpellingSuggestions, QueryResults)
+import Registry                (Registry (..))
 import Types                   (CollectionName)
+import WarcFileReader          (WarcFileReader (..))
 
+import Control.Concurrent.STM  (atomically)
+import Control.Monad           (forM)
+import Data.Maybe              (catMaybes, fromMaybe)
+import Data.Set                (toList)
 import Data.Text               (Text)
-import Data.Text.Encoding      (encodeUtf8)
+import Data.Text.Encoding      (decodeUtf8, encodeUtf8)
+import Safe                    (headMay)
 import Servant
 
 type QueryApi = "query" :> Capture "col" CollectionName
@@ -23,9 +34,17 @@ type QueryApi = "query" :> Capture "col" CollectionName
                            :> QueryParam "n" Int
                            :> Get '[JSON] (Either String SpellingSuggestions)
 
+           :<|> "cached" :> Capture "col" CollectionName
+                         :> QueryParam' '[Required] "url" Text
+                         :> Get '[JSON] Text    -- TODO return HTML
+
 queryServer :: QueryProcessor
+            -> Registry
+            -> WarcFileReader
             -> ServerT QueryApi IO
-queryServer qp = serveQuery :<|> serveSpelling
+queryServer qp reg wfr = serveQuery
+                    :<|> serveSpelling
+                    :<|> getCached
 
     where
     serveQuery cn q mn =
@@ -35,3 +54,24 @@ queryServer qp = serveQuery :<|> serveSpelling
 
     serveSpelling cn s mn =
         runSpelling qp cn s mn
+
+    -- TODO take a read lock on each component
+    getCached cn url = do
+
+        paths <- map cmp_filePath
+               . toList
+             <$> atomically (viewCollectionComponents reg cn)
+
+        mBodies <- forM paths $ \path ->
+            let warcFile = path <> "/file.warc"
+                warcOffs = path <> "/file.offs"
+                url'     = encodeUtf8 url
+            in fmap decompressedText <$> findWarcEntry wfr warcFile warcOffs url'
+
+        pure $ fromMaybe "{not found!}"
+                         (headMay $ catMaybes mBodies)
+
+decompressedText :: WarcEntry -> Text
+decompressedText entry =
+    let UncompressedBody body = getBody $ decompress entry
+    in decodeUtf8 body
