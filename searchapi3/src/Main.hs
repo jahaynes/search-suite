@@ -78,6 +78,7 @@ main = do
                   indexer
                   fetcher
                   queryProcessor
+                  warcReader
                   registry
                   (stdoutLogger ControllerLogger)
 
