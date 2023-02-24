@@ -4,7 +4,7 @@ jobs:
     actions:
       -
         action: postTo
-        param: "http://127.0.0.1:8081/index/unis"
+        param: "http://127.0.0.1:8081/indexDoc/unis"
     seedUrls:
 
       - "https://www.anu.edu.au/"
