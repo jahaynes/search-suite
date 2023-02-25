@@ -6,6 +6,7 @@
 module Controllers.Query (QueryApi, queryServer) where
 
 import Component               (Component (cmp_filePath))
+import Controllers.Mime        (Html)
 import Data.Warc.Body
 import Data.Warc.WarcEntry
 import QueryParams             (QueryParams (QueryParams))
@@ -36,7 +37,7 @@ type QueryApi = "query" :> Capture "col" CollectionName
 
            :<|> "cached" :> Capture "col" CollectionName
                          :> QueryParam' '[Required] "url" Text
-                         :> Get '[JSON] Text    -- TODO return HTML
+                         :> Get '[Html] Text
 
 queryServer :: QueryProcessor
             -> Registry
