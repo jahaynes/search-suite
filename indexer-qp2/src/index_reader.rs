@@ -293,8 +293,8 @@ pub fn with_vec<A>(file_name: &str,
     x
 }
 
-fn with_vec_mut<A>(file_name: &str,
-                   f:         &mut dyn FnMut(&[u8]) -> A) -> A {
+pub fn with_vec_mut<A>(file_name: &str,
+                       f:         &mut dyn FnMut(&[u8]) -> A) -> A {
     let file = File::open(file_name).expect(&format!("Could not open {}", file_name));
     let x: A;
     unsafe {

@@ -99,7 +99,9 @@ indexDocumentsImpl env writer metadataApi compactor registry collectionName unso
 
                 Left e -> pure . Left . show $ e
 
-                Right (ExitSuccess, stdout, _stderr) -> do
+                Right (ExitSuccess, stdout, stderr) -> do
+
+                    putStrLn stderr
 
                     case decode $ L8.pack stdout of
                         Nothing -> error "bad output"

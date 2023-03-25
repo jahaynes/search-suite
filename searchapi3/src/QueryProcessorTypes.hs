@@ -7,7 +7,10 @@ module QueryProcessorTypes where
 import           Control.DeepSeq            (NFData)
 import           Control.Lens
 import           Data.Aeson                 (FromJSON, ToJSON (..))
-import           Data.Map                   (Map)
+import           Data.Map.Strict            (Map)
+import qualified Data.Map.Strict as M
+import           Data.Set                   (Set)
+import qualified Data.Set as S
 import           Data.Swagger               (ToSchema (..), defaultSchemaOptions, description, example, genericDeclareNamedSchema, schema)
 import           Data.Text                  (Text)
 import           Data.Vector                (Vector)
@@ -67,3 +70,28 @@ limit (Just n) qr =
                           , results     = V.drop dropAmount (results qr)
                           }
         else qr
+
+newtype SpellingSuggestions =
+    SpellingSuggestions { unSpellingSuggestions :: Map Text (Map Int (Set Text)) }
+        deriving Generic
+
+instance ToJSON SpellingSuggestions where
+    toJSON (SpellingSuggestions m) = toJSON m
+
+instance NFData SpellingSuggestions
+
+instance Semigroup SpellingSuggestions where
+    SpellingSuggestions m1 <> SpellingSuggestions m2 =
+        SpellingSuggestions $ M.unionWith (M.unionWith S.union) m1 m2
+
+instance Monoid SpellingSuggestions where
+    mempty = SpellingSuggestions mempty
+
+instance ToSchema SpellingSuggestions where
+    declareNamedSchema proxy = genericDeclareNamedSchema defaultSchemaOptions proxy
+        & mapped.schema.description ?~ "Spelling suggestions"
+        & mapped.schema.example     ?~ toJSON exampleSpellingSuggestions
+
+exampleSpellingSuggestions :: SpellingSuggestions
+exampleSpellingSuggestions =
+    SpellingSuggestions $ M.singleton "foo" (M.singleton 1 (S.singleton "food"))

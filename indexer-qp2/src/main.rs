@@ -1,4 +1,5 @@
 extern crate byteorder;
+extern crate edit_distance;
 extern crate flate2;
 extern crate intmap;
 extern crate itertools;
@@ -8,6 +9,7 @@ extern crate rand;
 extern crate serde;
 extern crate uuid;
 
+mod bk_tree;
 mod bytes;
 mod deletions;
 mod doc;
@@ -20,6 +22,7 @@ mod merge;
 mod normalise;
 mod query;
 mod ranking;
+mod spelling_correction;
 mod terms;
 mod types;
 mod verify;
@@ -36,9 +39,11 @@ use index::*;
 use index_reader::*;
 use input::*;
 use query::*;
+use spelling_correction::*;
 use types::*;
 use verify::*;
 
+use std::collections::HashMap;
 use std::env;
 
 fn main() {
@@ -82,6 +87,21 @@ fn main() {
                           let serialized = serde_json::to_string(&results).unwrap();
                           println!("{}", serialized);
                     })},
+
+    "spelling"   => { let idx_name     = &args[2];
+                      let str_max_dist = &args[3];
+                      let max_dist     = str_max_dist.parse::<i64>().expect("max_dist should be an i64");
+                      let mut results  = HashMap::new();
+                      args[4..].iter()
+                               .map(|term| term.to_lowercase())
+                               .for_each(|term| {
+                                  let near_matches = query_bk(&idx_name, &term, max_dist);
+                                  if !near_matches.is_empty() {
+                                    results.insert(term, near_matches);
+                                  }});
+                      let serialized = serde_json::to_string(&results).unwrap();
+                      print!("{}", serialized);
+                    },
 
     "delete_doc" => { let idx_name   = &args[2];
                       let str_url    = &args[3];
