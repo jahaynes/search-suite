@@ -4,6 +4,7 @@ use merge::common_urls::*;
 use merge::common_docids::*;
 use merge::util::*;
 use index_reader::*;
+use spelling_correction::mk_spell_correction;
 use terms::*;
 use types::*;
 
@@ -88,6 +89,13 @@ pub fn merge(idx_name_dest: &str,
                 idx_name_b,
                 docid_remapping,
                 docid_deduping);
+
+    // Recreate spellings file (not a merge)
+    with_term_offsets(idx_name_dest, &|term_offs|
+    with_terms(       idx_name_dest, &|terms| {
+        let duration = mk_spell_correction(idx_name_dest, &term_offs, &terms);
+        eprintln!("mk_spell_correction took {}", duration.as_millis());
+    }));
 
     // Write out empty deletions file
     with_doc_offsets(idx_name_dest, &|DocOffsetsRead(doc_offs)|

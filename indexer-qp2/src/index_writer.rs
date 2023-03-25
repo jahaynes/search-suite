@@ -1,11 +1,13 @@
 use deletions::*;
 use index::*;
+use index_reader::*;
+use spelling_correction::mk_spell_correction;
 use terms::*;
 use types::*;
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use std::fs::*;
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Seek, SeekFrom, Write};
 
 pub fn write_files(idx_dir: &String,
                    idx:     Index) -> () {
@@ -61,5 +63,32 @@ pub fn write_files(idx_dir: &String,
     {
         let DocOffsets(doc_offsets) = idx.doc_offsets;
         write_empty_deletions_file(doc_offsets.len(), File::create(format!("{}/{}", idx_dir, "docDeletions")).unwrap());
+    }
+
+    {
+        with_term_offsets(idx_dir, &|term_offs|
+        with_terms(       idx_dir, &|terms| {
+            let duration = mk_spell_correction(idx_dir, &term_offs, &terms);
+            eprintln!("mk_spell_correction took {}", duration.as_millis());
+        }));
+    }
+}
+
+pub fn with_mut_bytes<A>(file_name: &str,
+                         disk_sz:   u64,
+                         f:         &dyn Fn(&mut [u8]) -> A) -> A {
+
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(file_name)
+        .unwrap();
+
+    file.seek(SeekFrom::Start(disk_sz)).unwrap();
+    file.write_all(&[0]).unwrap();
+
+    unsafe {
+        f(&mut memmap::MmapOptions::new().map_mut(&file).unwrap())
     }
 }

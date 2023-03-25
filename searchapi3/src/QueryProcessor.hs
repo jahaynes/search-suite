@@ -3,18 +3,20 @@
 
 module QueryProcessor ( QueryProcessor (..)
                       , createQueryProcessor
-                      , runQueryImpl ) where
+                      , runQueryImpl
+                      ) where
 
 import Component           ( Component )
 import Environment         ( Environment (..) )
 import QueryParams         ( QueryParams (..) )
-import QueryProcessorTypes ( QueryResults (..), QueryResult (..) )
+import QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..) )
 import Registry            ( Registry (..) )
 import Metadata            ( Metadata (..), MetadataApi (..) )
 import Types
 
 import           Control.Concurrent.Async       (forConcurrently)
 import           Control.Concurrent.STM         (atomically)
+import           Control.DeepSeq                (deepseq)
 import           Control.Exception.Safe         (catchAnyDeep)
 import           Control.Monad                  (unless)
 import           Data.Aeson                     (eitherDecodeStrict')
@@ -28,13 +30,15 @@ import qualified Data.Map.Strict as M
 import           Data.Maybe                     (fromMaybe)
 import           Data.Set                       (toList)
 import           Data.Text                      (Text)
+import qualified Data.Text as T
 import qualified Data.Vector as V
 import           GHC.IO.Exception               (ExitCode (..))
 import           System.Process.ByteString      (readProcessWithExitCode)
 import           Text.Printf                    (printf)
 
-newtype QueryProcessor =
-    QueryProcessor { runQuery :: CollectionName -> QueryParams -> IO (Either String QueryResults)
+data QueryProcessor =
+    QueryProcessor { runSpelling  :: !(CollectionName -> Text -> Maybe Int -> IO (Either String SpellingSuggestions))
+                   , runQuery     :: !(CollectionName -> QueryParams -> IO (Either String QueryResults))
                    }
 
 createQueryProcessor :: Environment
@@ -43,7 +47,8 @@ createQueryProcessor :: Environment
                      -> (ByteString -> IO ())
                      -> QueryProcessor
 createQueryProcessor env reg metadataApi lg =
-    QueryProcessor { runQuery = runQueryImpl env reg metadataApi lg
+    QueryProcessor { runSpelling = runSpellingImpl env reg lg
+                   , runQuery    = runQueryImpl env reg metadataApi lg
                    }
 
 data ComponentResult = 
@@ -54,6 +59,71 @@ instance Eq ComponentResult where
 
 instance Ord ComponentResult where
     compare (ComponentResult r1 c1) (ComponentResult r2 c2) = compare (score r1, c1) (score r2, c2)
+
+{-
+    TODO dedupe the following 'withLocks code' between spelling and query
+    error handling?
+-}
+
+runSpellingImpl :: Environment
+                -> Registry
+                -> (ByteString -> IO ())
+                -> CollectionName
+                -> Text
+                -> Maybe Int
+                -> IO (Either String SpellingSuggestions)
+runSpellingImpl env registry logger collectionName@(CollectionName cn) s mMaxDist = do
+
+    -- Take locks
+    lockedComponents <- atomically $ do
+        components <- toList <$> viewCollectionComponents registry collectionName
+        mapM_ (takeLock registry) components
+        pure components
+
+    if null lockedComponents
+
+        then do
+
+            let errMsg = printf "No such collection: %s" cn
+            logger $ C8.pack errMsg
+            pure $ Left errMsg
+
+        else do
+
+            (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> spellingComponent lc)
+
+            let errMsg = C8.unlines (map C8.pack bads)
+            unless (null bads)
+                   (logger errMsg)
+
+            let result =
+                    if null goods
+                          then Left $ unlines bads
+                          else Right 
+                             . mconcat
+                             . map snd
+                             $ goods
+
+            -- Release locks
+            result `deepseq` mapM_ (releaseLockIO registry) lockedComponents
+
+            pure result
+
+    where
+    spellingComponent :: Component -> IO (Either String SpellingSuggestions)
+    spellingComponent cmp =
+
+        let maxDist = fromMaybe 1 mMaxDist
+
+            args = ["spelling", path cmp, show maxDist] ++ (map T.unpack $ T.words s) -- TODO better normalisation
+
+            job = do (exitcode, stdout, stderr) <- readProcessWithExitCode (indexerBinary env) args ""
+                     case exitcode of
+                         ExitSuccess -> pure (SpellingSuggestions <$> eitherDecodeStrict' stdout)
+                         _  -> do print $ "stdout was: " <> stdout
+                                  pure . Left $ C8.unpack stderr
+            handle = pure . Left . show
+        in catchAnyDeep job handle
 
 runQueryImpl :: Environment
              -> Registry
@@ -88,14 +158,11 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
 
             result <- if null goods
                              then pure . Left $ unlines bads
-                             else do
-
-                                 let merged = mergeQueryResults (maxResults params) goods
-
-                                 Right <$> attachMetadata merged
+                             else let merged = mergeQueryResults (maxResults params) goods
+                                  in Right <$> attachMetadata merged
 
             -- Release locks
-            mapM_ (releaseLockIO registry) lockedComponents
+            result `deepseq` mapM_ (releaseLockIO registry) lockedComponents
 
             pure result
 
