@@ -3,7 +3,6 @@
 
 module QueryProcessor ( QueryProcessor (..)
                       , createQueryProcessor
-                      , runQueryImpl
                       ) where
 
 import Component           ( Component )
@@ -16,7 +15,7 @@ import Types
 
 import           Control.Concurrent.Async       (forConcurrently)
 import           Control.Concurrent.STM         (atomically)
-import           Control.DeepSeq                (deepseq)
+import           Control.DeepSeq                (NFData, deepseq)
 import           Control.Exception.Safe         (catchAnyDeep)
 import           Control.Monad                  (unless)
 import           Data.Aeson                     (eitherDecodeStrict')
@@ -35,10 +34,11 @@ import qualified Data.Vector as V
 import           GHC.IO.Exception               (ExitCode (..))
 import           System.Process.ByteString      (readProcessWithExitCode)
 import           Text.Printf                    (printf)
+import           UnliftIO.Exception             (bracket)
 
 data QueryProcessor =
-    QueryProcessor { runSpelling  :: !(CollectionName -> Text -> Maybe Int -> IO (Either String SpellingSuggestions))
-                   , runQuery     :: !(CollectionName -> QueryParams -> IO (Either String QueryResults))
+    QueryProcessor { runSpelling :: !(CollectionName -> Text -> Maybe Int -> IO (Either String SpellingSuggestions))
+                   , runQuery    :: !(CollectionName -> QueryParams -> IO (Either String QueryResults))
                    }
 
 createQueryProcessor :: Environment
@@ -60,10 +60,17 @@ instance Eq ComponentResult where
 instance Ord ComponentResult where
     compare (ComponentResult r1 c1) (ComponentResult r2 c2) = compare (score r1, c1) (score r2, c2)
 
-{-
-    TODO dedupe the following 'withLocks code' between spelling and query
-    error handling?
--}
+withLocks :: NFData a => Registry -> CollectionName -> ([Component] -> IO a) -> IO a
+withLocks reg collectionName f =
+    bracket acquire release $ \cmps -> do
+        y <- f cmps
+        y `deepseq` pure y
+    where
+    acquire = atomically $ do
+        components <- toList <$> viewCollectionComponents reg collectionName
+        mapM_ (takeLock reg) components
+        pure components
+    release = mapM_ (releaseLockIO reg)
 
 runSpellingImpl :: Environment
                 -> Registry
@@ -72,42 +79,28 @@ runSpellingImpl :: Environment
                 -> Text
                 -> Maybe Int
                 -> IO (Either String SpellingSuggestions)
-runSpellingImpl env registry logger collectionName@(CollectionName cn) s mMaxDist = do
+runSpellingImpl env registry logger collectionName@(CollectionName cn) s mMaxDist =
 
-    -- Take locks
-    lockedComponents <- atomically $ do
-        components <- toList <$> viewCollectionComponents registry collectionName
-        mapM_ (takeLock registry) components
-        pure components
+    withLocks registry collectionName $ \lockedComponents -> do
 
-    if null lockedComponents
+        if null lockedComponents
 
-        then do
+            then do
+                let errMsg = printf "No such collection: %s" cn
+                logger $ C8.pack errMsg
+                pure $ Left errMsg
 
-            let errMsg = printf "No such collection: %s" cn
-            logger $ C8.pack errMsg
-            pure $ Left errMsg
+            else do
 
-        else do
+                (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> spellingComponent lc)
 
-            (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> spellingComponent lc)
+                let errMsg = C8.unlines (map C8.pack bads)
+                unless (null bads)
+                       (logger errMsg)
 
-            let errMsg = C8.unlines (map C8.pack bads)
-            unless (null bads)
-                   (logger errMsg)
-
-            let result =
-                    if null goods
-                          then Left $ unlines bads
-                          else Right 
-                             . mconcat
-                             . map snd
-                             $ goods
-
-            -- Release locks
-            result `deepseq` mapM_ (releaseLockIO registry) lockedComponents
-
-            pure result
+                pure $ if null goods
+                           then Left $ unlines bads
+                           else Right . mconcat . map snd $ goods
 
     where
     spellingComponent :: Component -> IO (Either String SpellingSuggestions)
@@ -132,39 +125,30 @@ runQueryImpl :: Environment
              -> CollectionName
              -> QueryParams
              -> IO (Either String QueryResults)
-runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) params = do
+runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) params =
 
-    -- Take locks
-    lockedComponents <- atomically $ do
-        components <- toList <$> viewCollectionComponents registry collectionName
-        mapM_ (takeLock registry) components
-        pure components
+    withLocks registry collectionName $ \lockedComponents -> do
 
-    if null lockedComponents
+        if null lockedComponents
 
-        then do
+            then do
 
-            let errMsg = printf "No such collection: %s" cn
-            logger $ C8.pack errMsg
-            pure $ Left errMsg
+                let errMsg = printf "No such collection: %s" cn
+                logger $ C8.pack errMsg
+                pure $ Left errMsg
 
-        else do
+            else do
 
-            (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> queryComponent lc)
+                (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> queryComponent lc)
 
-            let errMsg = C8.unlines (map C8.pack bads)
-            unless (null bads)
-                   (logger errMsg)
+                let errMsg = C8.unlines (map C8.pack bads)
+                unless (null bads)
+                       (logger errMsg)
 
-            result <- if null goods
-                             then pure . Left $ unlines bads
-                             else let merged = mergeQueryResults (maxResults params) goods
-                                  in Right <$> attachMetadata merged
-
-            -- Release locks
-            result `deepseq` mapM_ (releaseLockIO registry) lockedComponents
-
-            pure result
+                if null goods
+                    then pure . Left $ unlines bads
+                    else let merged = mergeQueryResults (maxResults params) goods
+                         in Right <$> attachMetadata merged
 
     where
     attachMetadata :: V.Vector (Component, QueryResult) -> IO QueryResults
