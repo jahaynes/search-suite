@@ -16,10 +16,12 @@ import Control.Concurrent.Async          (mapConcurrently)
 import Control.Monad                     (forM_)
 import Control.Monad.Trans.Except        (ExceptT, runExceptT)
 import Data.Aeson                        (encode)
+import Data.ByteString                   (ByteString)
 import Data.ByteString.Lazy.Char8        (unpack)
 import Data.Char                         (isSpace)
 import Data.List.Split                   (chunksOf)
 import Data.Map                          (Map)
+import Data.Text                         (Text)
 import Data.Text.Encoding                (decodeUtf8')
 import Servant
 
@@ -41,7 +43,7 @@ type IndexationApi = "indexDoc" :> Capture "col" CollectionName
 
                 :<|> "isDocDeleted" :> Capture "col" CollectionName
                                     :> ReqBody '[PlainText] String
-                                    :> Post '[JSON] (Either String (Map String Int))
+                                    :> Post '[JSON] (Either String (Map Text Int))
 
 indexationApi :: Proxy IndexationApi
 indexationApi = Proxy
