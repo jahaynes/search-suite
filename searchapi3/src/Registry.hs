@@ -12,8 +12,8 @@ import Types
 import           Control.Concurrent.STM   (STM, TVar, atomically, modifyTVar', newTVarIO, readTVar, retry)
 import           Control.Monad            (forM_)
 import           Data.ByteString.Char8    (ByteString)
-import           Data.Map                 (Map)
-import qualified Data.Map as M
+import           Data.Map.Strict          (Map)
+import qualified Data.Map.Strict as M
 import           Data.Maybe               (fromMaybe)
 import           Data.Set                 (Set)
 import qualified Data.Set as S

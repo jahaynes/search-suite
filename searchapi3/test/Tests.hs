@@ -24,12 +24,12 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.State   (StateT, execStateT, modify')
 import           Control.Concurrent.STM      (atomically)
 import           Data.ByteString.Char8       (ByteString)
-import qualified Data.IntSet           as IS
-import qualified Data.Map as M
-import qualified Data.Set as S
+import qualified Data.IntSet     as IS
+import qualified Data.Map.Strict as M
+import qualified Data.Set        as S
 import           Hedgehog
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
+import qualified Hedgehog.Gen    as Gen
+import qualified Hedgehog.Range  as Range
 
 main :: IO Bool
 main = do

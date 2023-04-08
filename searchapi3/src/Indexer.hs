@@ -31,8 +31,8 @@ import qualified Data.ByteString.Char8      as C8
 import qualified Data.ByteString.Lazy.Char8 as L8
 import           Data.Either                      (lefts, rights)
 import           Data.List                        (sort)
-import           Data.Map
-import qualified Data.Map                   as M
+import           Data.Map.Strict
+import qualified Data.Map.Strict            as M
 import qualified Data.Set                   as S
 import           Data.Text                        (Text)
 import           Data.Text.Encoding

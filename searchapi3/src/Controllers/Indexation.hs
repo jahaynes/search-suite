@@ -20,7 +20,7 @@ import Data.ByteString                   (ByteString)
 import Data.ByteString.Lazy.Char8        (unpack)
 import Data.Char                         (isSpace)
 import Data.List.Split                   (chunksOf)
-import Data.Map                          (Map)
+import Data.Map.Strict                   (Map)
 import Data.Text                         (Text)
 import Data.Text.Encoding                (decodeUtf8')
 import Servant

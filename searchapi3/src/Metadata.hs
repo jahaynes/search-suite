@@ -24,8 +24,8 @@ import           Data.ByteString              (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char                    (isSpace)
-import           Data.Map                     (Map)
-import qualified Data.Map as M
+import           Data.Map.Strict              (Map)
+import qualified Data.Map.Strict as M
 import           Data.Maybe                   (mapMaybe, maybeToList)
 import           Data.Text                    (Text)
 import           Data.Text.Encoding

@@ -2,19 +2,19 @@
 
 import           Pipeline.FrontierTypes
 import qualified Pipeline.TimedFrontier as TimedFrontier
-import qualified Storage.MultiMap      as MM
+import qualified Storage.MultiMap       as MM
 import           Url
 
 import           Gen.Time
 
-import Control.Concurrent.STM
-import Control.Monad           (when)
-import Control.Monad.IO.Class  (liftIO)
-import Data.Time
-import Hedgehog
+import           Control.Concurrent.STM
+import           Control.Monad           (when)
+import           Control.Monad.IO.Class  (liftIO)
+import           Data.Time
+import           Hedgehog
 import qualified Hedgehog.Gen as Gen
-import Hedgehog.Range
-import Hedgehog.Main
+import           Hedgehog.Main
+import           Hedgehog.Range
 
 main :: IO ()
 main = defaultMain [
