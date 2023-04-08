@@ -8,7 +8,6 @@ module Types ( CollectionName (..)
              , HasPath (..)
              , Logger (..)
              , NumDocs (..)
-             , Threadedness (..)
              ) where
 
 import Environment (Environment (..))
@@ -74,6 +73,3 @@ data Logger = CompactorLogger
             | RegistryLogger
             | WarcFileReaderLogger
                 deriving Show
-
-data Threadedness = Single
-                  | Multi
