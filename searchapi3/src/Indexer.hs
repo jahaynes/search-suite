@@ -37,6 +37,8 @@ import qualified Data.Map.Strict            as M
 import qualified Data.Set                   as S
 import           Data.Text                        (Text)
 import           Data.Text.Encoding
+import qualified Data.Text.Lazy.Encoding    as LE
+import qualified Data.Text.Lazy             as LT
 import           Data.Vector                      (Vector)
 import qualified Data.Vector                as V
 import           Debug.Trace                      (trace)
@@ -99,7 +101,9 @@ indexDocumentsImpl env writer metadataApi compactor registry collectionName unso
                             then ["index_fast", idxCmpDir]
                             else ["index_json", idxCmpDir]
                 stdin = case ds of
-                            [Doc u c] -> encode u <> "\n" <> encode c
+                            [Doc u c] -> mconcat [ LE.encodeUtf8 $ LT.fromStrict u
+                                                 , "\n"
+                                                 , LE.encodeUtf8 $ LT.fromStrict c]
                             _         -> encode $ IndexRequest ds
 
             eOut <- catchIO (Right <$> PL.readProcessWithExitCode bin args stdin)
