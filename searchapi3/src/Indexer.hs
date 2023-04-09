@@ -19,13 +19,14 @@ import Environment         (Environment (..))
 import IndexerTypes        (IndexerReply (..))
 import Registry            (Registry (..))
 import Metadata            (MetadataApi (generateMetadata))
+import TimingInfo
 import Types
 import WarcFileReader      (WarcFileReader (..))
 import WarcFileWriter      (WarcFileWriter (..))
 
 import           Control.Concurrent.STM           (atomically)
 import           Control.Monad                    (forM, void)
-import           Data.Aeson                       (decodeStrict, encode)
+import           Data.Aeson                       (decode, decodeStrict, encode)
 import           Data.ByteString                  (ByteString)
 import qualified Data.ByteString.Char8      as C8
 import qualified Data.ByteString.Lazy.Char8 as L8
@@ -41,6 +42,7 @@ import qualified Data.Vector                as V
 import           Debug.Trace                      (trace)
 import           System.Exit
 import           System.Process.ByteString        (readProcessWithExitCode)
+import qualified System.Process.ByteString.Lazy as PL
 import           System.IO.Temp                   (getCanonicalTemporaryDirectory, createTempDirectory)
 import           UnliftIO.Exception               (catchIO, finally)
 
@@ -87,14 +89,20 @@ indexDocumentsImpl env writer metadataApi compactor registry collectionName unso
         else do
 
             -- Create temp dir
+            ti <- start "Create temp dir"
             idxCmpDir <- getCanonicalTemporaryDirectory >>= (`createTempDirectory` "idx-cmp")
 
             -- Run indexer in tmp directory
+            switch ti "Running indexer"
             let bin   = indexerBinary env
-                args  = ["index_json", idxCmpDir]
-                stdin = L8.toStrict . encode $ IndexRequest ds
+                args  = if nDocs == 1
+                            then ["index_fast", idxCmpDir]
+                            else ["index_json", idxCmpDir]
+                stdin = case ds of
+                            [Doc u c] -> encode u <> "\n" <> encode c
+                            _         -> encode $ IndexRequest ds
 
-            eOut <- catchIO (Right <$> readProcessWithExitCode bin args stdin)
+            eOut <- catchIO (Right <$> PL.readProcessWithExitCode bin args stdin)
                             (\ex -> pure . Left . show $ ex)
 
             case eOut of 
@@ -103,28 +111,39 @@ indexDocumentsImpl env writer metadataApi compactor registry collectionName unso
 
                 Right (ExitSuccess, stdout, stderr) -> do
 
-                    C8.putStrLn stderr
+                    L8.putStrLn stderr
 
-                    case decodeStrict stdout of
+                    switch ti "Decoding indexer reply"
+                    case decode stdout of
                         Nothing -> error "bad output"
-                        Just (IndexerReply docs' terms)
+                        Just (IndexerReply docs' terms msTaken)
                             | docs' == 0 || terms == 0 -> pure . Left $ "No docs or terms: " ++ show ds
                             | otherwise -> do
 
-                                -- Also write out the warc file and offsets       
+                                -- Also write out the warc file and offsets
+                                switch ti "Writing out warc file and offsets"
                                 let destWarcFile = idxCmpDir <> "/" <> "file.warc"
                                     destOffsets  = idxCmpDir <> "/" <> "file.offs"
                                 writeWarcFile writer destWarcFile destOffsets ds
 
                                 -- Extract / write out metadata
+                                switch ti "Generating Metadata"
                                 generateMetadata metadataApi idxCmpDir
 
                                 -- Import the tmp index into collection
+                                switch ti "Importing index"
                                 component <- createComponent nDocs idxCmpDir
                                 registerFromTmp registry collectionName component
 
                                 -- Run the compactor
+                                switch ti "Compacting"
                                 void $ compact compactor collectionName
+
+                                dti <- done ti
+
+                                let ttime = total dti
+
+                                putStrLn $ "TimeInfo: " <> show ttime <> " - " <> show nDocs <> " - " <> show dti
 
                                 pure $ Right nDocs
 

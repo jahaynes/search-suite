@@ -5,7 +5,7 @@ use normalise::*;
 use terms::*;
 use types::*;
 
-use std::io::{self, Read};
+use std::io::{Read, stdin};
 
 #[derive(Deserialize)]
 pub struct Input { pub docs: Vec<InputDoc>
@@ -19,13 +19,21 @@ pub struct InputDoc { pub url:         String
 
 pub fn docs_from_stdin() -> Vec<Doc> {
     let mut buffer = String::new();
-    io::stdin().read_to_string(&mut buffer).unwrap();
+    stdin().read_to_string(&mut buffer).unwrap();
     let deserialized: Input = serde_json::from_str(&buffer).unwrap();
     let mut docs = Vec::<Doc>::new();
     for input_doc in deserialized.docs {
         docs.push(mk_doc(Url(input_doc.url), &input_doc.content));
     }
     docs
+}
+
+// Read a single doc from stdin to bypass the json encoding/decoding
+pub fn doc_from_stdin() -> Doc {
+    let url = stdin().lines().next().unwrap().unwrap();
+    let mut buffer = String::new();
+    stdin().read_to_string(&mut buffer).unwrap();
+    mk_doc(Url(url), &buffer)
 }
 
 pub struct QueryParams { pub max_results: Option<u32>
@@ -36,7 +44,7 @@ pub struct QueryParams { pub max_results: Option<u32>
 pub fn parse_query_params(args: &Vec<String>) -> QueryParams {
 
     let mut buffer = String::new();
-    io::stdin().read_to_string(&mut buffer).unwrap();
+    stdin().read_to_string(&mut buffer).unwrap();
     let terms = normalise(&buffer);
 
     let base_path: &String = 
