@@ -6,12 +6,14 @@ use write_to_buf::WriteToBuf;
 
 use serde::Serialize;
 use std::collections::HashMap;
+use std::time::SystemTime;
 
 struct Inverted(Vec<(Term, Vec<(DocId, TermFreq)>)>);
 
 #[derive(Serialize)]
 pub struct IndexResult { pub num_docs:  usize
                        , pub num_terms: u32
+                       , pub ms_taken:  u128
                        }
 
 pub struct Index<'a> { pub total_doc_len: u64 
@@ -23,7 +25,8 @@ pub struct Index<'a> { pub total_doc_len: u64
                      }
 
 pub fn index(idx_dir: &String,
-             mut mem_docs: Vec<Doc>) -> IndexResult {
+             mut mem_docs: Vec<Doc>,
+             start_time: SystemTime) -> IndexResult {
 
     let total_doc_len =
             mem_docs.iter()
@@ -60,10 +63,11 @@ pub fn index(idx_dir: &String,
         };
 
         write_files(idx_dir, idx);
-        IndexResult { num_docs: num_docs, num_terms: num_terms }
-
+        let ms_taken = SystemTime::now().duration_since(start_time).unwrap().as_millis();
+        IndexResult { num_docs: num_docs, num_terms: num_terms, ms_taken: ms_taken }
     } else {
-        IndexResult { num_docs: 0, num_terms: 0 }
+        let ms_taken = SystemTime::now().duration_since(start_time).unwrap().as_millis();
+        IndexResult { num_docs: 0, num_terms: 0, ms_taken: ms_taken }
     }
 }
 

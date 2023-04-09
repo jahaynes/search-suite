@@ -45,8 +45,11 @@ use verify::*;
 
 use std::collections::HashMap;
 use std::env;
+use std::time::SystemTime;
 
 fn main() {
+
+  let start_time = SystemTime::now();
 
   let args: Vec<String> = env::args().collect();
 
@@ -59,11 +62,19 @@ fn main() {
                       let result: IndexResult;
 
                       if !input_docs.is_empty() {
-                        result = index(&args[2], input_docs);
+                        result = index(&args[2], input_docs, start_time);
                       } else {
-                        result = IndexResult { num_docs: 0, num_terms: 0 };
+                        let ms_taken = SystemTime::now().duration_since(start_time).unwrap().as_millis();
+                        result = IndexResult { num_docs: 0, num_terms: 0, ms_taken: ms_taken };
                       }
                       // verify(&args[2]);
+                      let serialized = serde_json::to_string(&result).unwrap();
+                      println!("{}", serialized);
+                    },
+
+    "index_fast" => { let doc = doc_from_stdin();
+                      let input_docs = vec!(doc);
+                      let result: IndexResult = index(&args[2], input_docs, start_time);
                       let serialized = serde_json::to_string(&result).unwrap();
                       println!("{}", serialized);
                     },

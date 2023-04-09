@@ -8,7 +8,7 @@ author:              John Haynes
 extra-source-files:  CHANGELOG.md
 
 common deps
-  build-depends:       aeson, async, base, binary, bytestring, crawler-lib, WebArchive, cereal, containers, deepseq, directory, hashable, heaps, lens, process, process-extras, resourcet, safe-exceptions, serialise, servant, servant-server, servant-swagger, servant-swagger-ui, split, stm, stm-containers, swagger2, tagsoup, temporary, text, transformers, unliftio, uuid, vector, wai-cors, wai-middleware-prometheus, warp
+  build-depends:       aeson, async, base, binary, bytestring, crawler-lib, WebArchive, cereal, containers, deepseq, directory, hashable, heaps, lens, process, process-extras, resourcet, safe-exceptions, serialise, servant, servant-server, servant-swagger, servant-swagger-ui, split, stm, stm-containers, swagger2, tagsoup, temporary, text, time, transformers, unliftio, uuid, vector, wai-cors, wai-middleware-prometheus, warp
 
 library
   import:              deps
@@ -32,6 +32,7 @@ library
                        QueryProcessor,
                        QueryProcessorTypes,
                        Registry,
+                       TimingInfo,
                        Types,
                        Util.BinarySearch,
                        WarcFileReader,
@@ -74,6 +75,7 @@ executable searchapi3
                       QueryProcessor,
                       QueryProcessorTypes,
                       Registry,
+                      TimingInfo,
                       Types,
                       Util.BinarySearch,
                       WarcFileReader,
