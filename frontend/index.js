@@ -10,12 +10,22 @@ function renderResult(collectionName, result) {
     resultItem.classList.add("result");
 
     const title = document.createElement("div");
-    title.innerText = result.metadata.title == null ? "Untitled" : result.metadata.title;
+
+    const metadata = result.metadata;
+    if (metadata == null || metadata.title == null) {
+        title.innerText = "Untitled";
+    } else {
+        title.innerText = metadata.title;
+    }
     title.classList.add("result_title");
     resultItem.append(title);
 
     const desc = document.createElement("p");
-    desc.innerText = result.metadata.description;
+    if (metadata == null || metadata.description == null) {
+        desc.innerText = "No description";
+    } else {
+        desc.innerText = metadata.description;
+    }
     desc.classList.add("result_desc");
     resultItem.append(desc);
 
