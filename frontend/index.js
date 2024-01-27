@@ -59,7 +59,7 @@ const fireSearch = async (state) => {
     const collectionName =
         state.selectedCollection;
 
-    if (!collectionName) {
+    if (!collectionName || query.trim().length == 0) {
         return;
     }
 
