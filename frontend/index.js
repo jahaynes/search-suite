@@ -56,15 +56,21 @@ const fireSearch = async (state) => {
     const query =
         document.getElementById("search").value;
 
+    const strMaxResults =
+        parseInt(document.getElementById("max_results").value);
+
+    const maxResults =
+        strMaxResults == NaN ? 8 : strMaxResults;
+
     const collectionName =
         state.selectedCollection;
 
-    if (!collectionName || query.trim().length == 0) {
+    if (!collectionName || query.trim().length == 0 || maxResults < 1) {
         return;
     }
 
     // TODO Escape here
-    const url = "/query/" + collectionName + "?q=" + query + "&n=8"
+    const url = "/query/" + collectionName + "?q=" + query + "&n=" + maxResults
 
     await fetch(url, reqHeaders)
         .then(resp => resp.json())
@@ -116,11 +122,15 @@ const onLoad = async () => {
     const state =
         {};
 
-    const search =
-        document.getElementById("search");
+    document
+        .getElementById("search")
+        .addEventListener("input",
+            () => fireSearch(state));
 
-    search.addEventListener("input",
-        () => fireSearch(state));
+    document
+        .getElementById("max_results")
+        .addEventListener("input",
+            () => fireSearch(state));
 
     const url = "/collection"
     await fetch(url, reqHeaders)
