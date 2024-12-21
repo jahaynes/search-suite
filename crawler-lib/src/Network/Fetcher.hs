@@ -13,10 +13,11 @@ import Control.Monad.IO.Class     (liftIO)
 import Control.Monad.Trans.Except (ExceptT (ExceptT), throwE)
 import Crypto.Hash.MD5
 import Data.ByteString.Char8      (ByteString, unpack)
+import Data.Default               (def)
 import Network.Connection         (TLSSettings (..))
 import Network.HTTP.Client        
 import Network.HTTP.Client.TLS
-import Network.HTTP.Types         
+import Network.HTTP.Types
 import Safe                       (headMay)
 
 fetchTimeoutMicros :: Int   -- TODO settings
@@ -38,7 +39,10 @@ createFetcher mProxy =
     where
     makeInsecureProxiedSettings :: ByteString -> Int -> ManagerSettings
     makeInsecureProxiedSettings pAddr pPort =
-        let tlsSettings = TLSSettingsSimple True undefined undefined
+        let tlsSettings = TLSSettingsSimple { settingDisableCertificateValidation = True
+                                            , settingDisableSession = undefined
+                                            , settingUseServerName = undefined
+                                            , settingClientSupported = def }
         in managerSetProxy (useProxy $ Proxy pAddr pPort) (mkManagerSettings tlsSettings Nothing) { managerResponseTimeout = responseTimeoutMicro fetchTimeoutMicros }
 
 fetchImpl :: Manager -> Url -> ExceptT Error IO Page
