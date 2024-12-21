@@ -69,7 +69,7 @@ postEntry man collection entry =
                             , requestHeaders  = [("Content-Type", "application/json")]
                             , requestBody     = RequestBodyLBS payload
                             , responseTimeout = responseTimeoutNone -- responseTimeoutMicro 10000000
-                            } ) <$> parseRequest (printf "http://127.0.0.1:8081/index/%s" collection)
+                            } ) <$> parseRequest (printf "http://127.0.0.1:8081/indexDoc/%s" collection)
             print =<< httpNoBody req man
 
 toDoc :: WarcEntry -> Either String Doc
