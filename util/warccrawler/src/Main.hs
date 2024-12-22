@@ -21,6 +21,7 @@ import           Data.Text                   (Text)
 import           Data.Text.Encoding          (decodeUtf8')
 import           GHC.Generics                (Generic)
 import           Network.HTTP.Client
+import           Network.HTTP.Types          (statusCode)
 import           System.Environment          (getArgs)
 import           System.IO
 import           Text.Printf
@@ -70,7 +71,9 @@ postEntry man collection entry =
                             , requestBody     = RequestBodyLBS payload
                             , responseTimeout = responseTimeoutNone -- responseTimeoutMicro 10000000
                             } ) <$> parseRequest (printf "http://127.0.0.1:8081/indexDoc/%s" collection)
-            print =<< httpNoBody req man
+            resp <- httpNoBody req man
+            let code = statusCode (responseStatus resp)
+            printf "%d %s\n" code (d_url doc)
 
 toDoc :: WarcEntry -> Either String Doc
 toDoc entry@(WarcEntry _ CompressedBody{}) = toDoc $ W.decompress entry
