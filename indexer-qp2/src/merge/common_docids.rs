@@ -124,7 +124,7 @@ impl Iterator for FindFreeDocId<'_> {
         let mut candidate;
         // WARN unbounded
         loop {
-            candidate = DocId(rand::thread_rng().gen());
+            candidate = DocId(rand::rng().random());
             if candidate == DocId(0)                           ||
                find_docid(self.offs_a, self.docs_a, candidate) ||
                find_docid(self.offs_b, self.docs_b, candidate) {

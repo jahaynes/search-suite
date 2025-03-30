@@ -76,7 +76,7 @@ pub fn mk_doc(url: Url,
 
     Doc {
         url              : url,
-        doc_id           : DocId(rand::thread_rng().gen()),
+        doc_id           : DocId(rand::rng().random()),
         term_frequencies : term_frequencies,
         doc_len          : doc_len,
     }
