@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings,
+{-# LANGUAGE LambdaCase,
+             OverloadedStrings,
              ScopedTypeVariables #-}
 
 module Main where
@@ -6,13 +7,13 @@ module Main where
 import Types
 
 import           Control.Concurrent.Async           (forConcurrently_, mapConcurrently)
-import           Control.Monad.IO.Class             (liftIO)
-import           Control.Monad.Trans.Resource       (MonadResource, runResourceT)
+import           Control.Exception.Safe             (tryAny)
+import           Control.Monad.IO.Class             (MonadIO, liftIO)
 import           Data.Aeson                         (decode, encode)
 import qualified Data.ByteString.Char8        as C8
 import qualified Data.ByteString.Lazy.Char8   as L8
 import           Data.Char                          (isAscii, toLower)
-import           Data.Conduit                       ((.|), ($$))
+import           Data.Conduit                       ((.|), runConduitRes)
 import qualified Data.Conduit.List            as CL
 import           Data.Conduit.Combinators           (sourceDirectoryDeep)
 import           Data.List                          (isPrefixOf)
@@ -36,13 +37,13 @@ main = do
 
     [colName, startPath] <- getArgs
     let followSymlinks = False
-    runResourceT $ sourceDirectoryDeep followSymlinks startPath
+    runConduitRes $ sourceDirectoryDeep followSymlinks startPath
                 .| CL.filter (\p -> not (noIndexDir `isPrefixOf` p))
                 .| CL.chunksOf 20
                 .| CL.mapM (liftIO . mapConcurrently (processFile http))
                 .| CL.map catMaybes
                 .| CL.map (map (\(fp, _content) -> (replaceNonAscii fp, _content)))
-                $$ CL.mapM_ (send http hostname colName)
+                .| CL.mapM_ (send http hostname colName)
 
 fetchCollectionDir :: Manager -> IO FilePath
 fetchCollectionDir http = do
@@ -80,13 +81,22 @@ processTika http filePath = do
     let request = initialRequest { method = "POST"
                                  , requestBody = RequestBodyLBS $ encode (Filepath filePath) 
                                  }
-    response <- httpLbs request http
-    case statusCode $ responseStatus response of
-        200 -> case decodeUtf8' . L8.toStrict . responseBody $ response of 
-                    Left _ -> do putStrLn $ "Bad UTF-8 in from Tika: " <> filePath
-                                 pure Nothing
-                    Right txt -> pure $ Just (filePath, txt)
-        _   -> pure Nothing
+    tryAny (httpLbs request http) >>= \case
+        Left{} -> do
+            putStrLn $ "Could not reach rich text extractor for: " ++ filePath
+            pure Nothing
+        Right response ->
+            let sc = statusCode $ responseStatus response in
+            case sc of
+                200 -> case decodeUtf8' . L8.toStrict . responseBody $ response of
+                    Left _ -> do
+                        putStrLn $ "Bad UTF-8 in from Tika: " <> filePath
+                        pure Nothing
+                    Right txt ->
+                        pure $ Just (filePath, txt)
+                _ -> do
+                    putStrLn $ "Unexpected status code: " ++ show sc
+                    pure Nothing
 
 processPlainText :: FilePath -> IO (Maybe (FilePath, Text))
 processPlainText filePath = do
@@ -96,7 +106,7 @@ processPlainText filePath = do
                      pure Nothing
         Right txt -> pure . Just $ (filePath, txt)
 
-send :: MonadResource m => Manager -> String -> String -> [(FilePath, Text)] -> m ()
+send :: MonadIO m => Manager -> String -> String -> [(FilePath, Text)] -> m ()
 send http fromHostName colName filePathsAndBodies = liftIO $ do
 
   forConcurrently_ filePathsAndBodies $ \(filePath, body) -> do
