@@ -6,7 +6,7 @@ import Url (Url, valText)
 
 import Control.Exception.Safe (SomeException)
 import Data.Aeson
-import Data.Text
+import Data.Text              (Text)
 
 data Error = FetchError { fe_url           :: !Url 
                         , fe_simpleMessage :: !String
