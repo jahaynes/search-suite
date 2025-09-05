@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings,
+             ScopedTypeVariables #-}
 
 module Indexer ( Indexer (..)
                , createIndexer
@@ -35,7 +36,8 @@ import           Data.List                        (sort)
 import           Data.Map.Strict
 import qualified Data.Map.Strict            as M
 import qualified Data.Set                   as S
-import           Data.Text                        (Text)
+import           Data.Text                        (Text, pack)
+import qualified Data.Text.IO as T
 import           Data.Text.Encoding
 import qualified Data.Text.Lazy.Encoding    as LE
 import qualified Data.Text.Lazy             as LT
@@ -50,6 +52,7 @@ import           UnliftIO.Exception               (catchIO, finally)
 
 data Indexer =
     Indexer { indexDocuments     :: !(CollectionName -> [Doc] -> IO (Either String Int))
+            , indexLocalFiles    :: !(CollectionName -> [FilePath] -> IO (Either String ()))
             , indexLocalWarcFile :: !(CollectionName -> FilePath -> IO (Either String ()))
             , deleteDocument     :: !(CollectionName -> String -> IO (Either String ()))
             , isDocDeleted       :: !(CollectionName -> String -> IO (Either String (Map Text Int)))
@@ -64,7 +67,8 @@ createIndexer :: Environment
               -> Indexer
 createIndexer env wfr writer metadataApi cpc reg =
     Indexer { indexDocuments     = indexDocumentsImpl env writer metadataApi cpc reg
-            , indexLocalWarcFile = newLocalWarcFileIndex env wfr writer metadataApi cpc reg
+            , indexLocalFiles    = indexLocalFileImpl env wfr writer metadataApi cpc reg
+            , indexLocalWarcFile = indexLocalWarcFileImpl env wfr writer metadataApi cpc reg
             , deleteDocument     = deleteDocumentImpl env reg
             , isDocDeleted       = isDocDeletedImpl env reg
             }
@@ -153,17 +157,42 @@ indexDocumentsImpl env writer metadataApi compactor registry collectionName unso
 
                 Right (_, stdout, stderr) -> pure . Left . show $ (stdout, stderr)
 
+indexLocalFileImpl :: Environment
+                   -> WarcFileReader
+                   -> WarcFileWriter
+                   -> MetadataApi
+                   -> Compactor
+                   -> Registry
+                   -> CollectionName
+                   -> [FilePath]  -- TO Vector? or just json
+                   -> IO (Either String ())
+indexLocalFileImpl env warcFileReader writer metadataApi compactor registry collectionName filePaths = do
+    -- jsonify?
+    -- Unnecessary packing
+    -- safe-exceptions
+    unsortedDocs <- forM filePaths $ \fp -> do
+        t <- T.readFile fp
+        pure $ Doc (pack fp) t
+
+    ei <- indexDocumentsImpl env writer metadataApi compactor registry collectionName unsortedDocs
+
+    case ei of
+        Left e -> pure $ Left e
+        Right i -> do
+            putStrLn $ "Indexed: " ++ show i ++ " documents."
+            pure $ Right ()
+
 -- TODO unnecessary encoding/decoding?
-newLocalWarcFileIndex :: Environment
-                      -> WarcFileReader
-                      -> WarcFileWriter
-                      -> MetadataApi
-                      -> Compactor
-                      -> Registry
-                      -> CollectionName
-                      -> FilePath
-                      -> IO (Either String ())
-newLocalWarcFileIndex env warcFileReader writer metadataApi compactor registry collectionName warcFile =
+indexLocalWarcFileImpl :: Environment
+                       -> WarcFileReader
+                       -> WarcFileWriter
+                       -> MetadataApi
+                       -> Compactor
+                       -> Registry
+                       -> CollectionName
+                       -> FilePath
+                       -> IO (Either String ())
+indexLocalWarcFileImpl env warcFileReader writer metadataApi compactor registry collectionName warcFile =
 
     batchedRead warcFileReader
                 warcFile
@@ -173,7 +202,7 @@ newLocalWarcFileIndex env warcFileReader writer metadataApi compactor registry c
     newIndexify :: Vector WarcEntry -> IO ()
     newIndexify ds = do
 
-        let ds' = V.mapMaybe toDoc ds
+        let ds' = V.mapMaybe toDoc ds -- TODO report failures
 
         V.mapM_ (\d -> indexDocumentsImpl env writer metadataApi compactor registry collectionName [d]) ds' 
 

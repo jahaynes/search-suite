@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds,
              OverloadedStrings,
+             ScopedTypeVariables,
              TypeOperators #-}
 
 module Controllers.Indexation where
@@ -16,7 +17,6 @@ import Control.Concurrent.Async          (mapConcurrently)
 import Control.Monad                     (forM_)
 import Control.Monad.Trans.Except        (ExceptT, runExceptT)
 import Data.Aeson                        (encode)
-import Data.ByteString                   (ByteString)
 import Data.ByteString.Lazy.Char8        (unpack)
 import Data.Char                         (isSpace)
 import Data.List.Split                   (chunksOf)
@@ -33,9 +33,13 @@ type IndexationApi = "indexDoc" :> Capture "col" CollectionName
                                  :> ReqBody '[PlainText] String
                                  :> Post '[JSON] (Either String ())
 
-                :<|> "indexLocal" :> Capture "col" CollectionName
-                                  :> ReqBody '[PlainText] String
-                                  :> Post '[JSON] (Either String ())
+                :<|> "indexLocalFiles" :> Capture "col" CollectionName
+                                       :> ReqBody '[PlainText] String
+                                       :> Post '[JSON] (Either String ())
+
+                :<|> "indexLocalWarcFile" :> Capture "col" CollectionName
+                                          :> ReqBody '[PlainText] String
+                                          :> Post '[JSON] (Either String ())
 
                 :<|> "deleteDoc" :> Capture "col" CollectionName
                                  :> ReqBody '[PlainText] String
@@ -54,6 +58,7 @@ indexationServer :: Fetcher (ExceptT Error IO)
 indexationServer fetcher indexer
     = (\cn ir -> indexDocuments indexer cn (docs ir))
  :<|> fetchUrlLines fetcher indexer
+ :<|> indexLocalFilesImpl indexer
  :<|> indexLocalWarcFile indexer
  :<|> deleteDocument indexer
  :<|> isDocDeleted indexer
@@ -92,3 +97,9 @@ fetchUrlLines fetcher indexer col strUrlLines = do
                             Right body = decodeUtf8' $ p_body r
                         _ <- indexDocuments indexer col [Doc txtUrl body]
                         pure $ Right ()
+
+-- TODO use more efficient filepath - or json?
+-- or dirs, or regexes
+indexLocalFilesImpl :: Indexer -> CollectionName -> FilePath -> IO (Either String ())
+indexLocalFilesImpl indexer cn filePaths =
+    indexLocalFiles indexer cn (lines filePaths)
