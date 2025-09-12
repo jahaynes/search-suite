@@ -15,6 +15,7 @@ import Indexer                 (Indexer)
 import Network.Fetcher         (Fetcher)
 import Query.QueryProcessor    (QueryProcessor)
 import Registry                (Registry)
+import WarcFileReader          (WarcFileReader (..))
 
 import Control.Lens                      ((&), (.~))
 import Control.Monad.IO.Class            (liftIO)
@@ -32,6 +33,7 @@ type SearchApi = CollectionsApi
             :<|> QueryApi
             :<|> IndexationApi
             :<|> DiagnosticApi
+            :<|> Raw
 
 type SearchApiWithDoc = SwaggerSchemaUI "swagger-ui" "swagger.json"
                    :<|> SearchApi
@@ -50,10 +52,11 @@ runController :: Compactor
               -> Indexer
               -> Fetcher (ExceptT Error IO)
               -> QueryProcessor
+              -> WarcFileReader
               -> Registry
               -> (ByteString -> IO ())
               -> IO ()
-runController compactor env indexer fetcher qp registry _logger =
+runController compactor env indexer fetcher qp warcFileReader registry _logger =
 
     run 8081 . simpleCors
              . prometheus def 
@@ -61,9 +64,11 @@ runController compactor env indexer fetcher qp registry _logger =
              . hoistServer searchApiWithDoc liftIO 
              $ swaggerSchemaUIServerT searchApiSwagger
             :<|> collectionsServer compactor env registry
-            :<|> queryServer qp
+            :<|> queryServer qp registry warcFileReader
             :<|> indexationServer fetcher indexer
             :<|> diagnosticServer registry
+            :<|> serveDirectoryFileServer "frontend"
+
     where
     searchApiWithDoc :: Proxy SearchApiWithDoc
     searchApiWithDoc = Proxy
