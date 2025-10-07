@@ -1,4 +1,4 @@
-module QueryParams where
+module Query.QueryParams where
 
 import Types (CollectionName)
 

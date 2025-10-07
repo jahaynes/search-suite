@@ -8,7 +8,7 @@ import Environment            (Environment (..), loadEnvironment)
 import Importer               (Importer (importCollection), createImporter)
 import Indexer                (createIndexer)
 import Network.Fetcher        (createFetcher)
-import QueryProcessor         (createQueryProcessor)
+import Query.QueryProcessor   (createQueryProcessor)
 import Registry               (createRegistry)
 import Metadata               (createMetadataApi)
 import Types                  (CollectionName, Logger (..), parseCollectionName)
@@ -17,8 +17,8 @@ import WarcFileWriter         (createWarcFileWriter)
 
 import Control.Monad         (filterM)
 import Data.ByteString.Char8 (ByteString, unpack)
-import Text.Printf           (printf)
 import System.Directory      (createDirectoryIfMissing, doesDirectoryExist, listDirectory)
+import Text.Printf           (printf)
 
 main :: IO ()
 main = do

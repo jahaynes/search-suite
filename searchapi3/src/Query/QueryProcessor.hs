@@ -1,16 +1,16 @@
 {-# LANGUAGE OverloadedStrings
            , ScopedTypeVariables #-}
 
-module QueryProcessor ( QueryProcessor (..)
-                      , createQueryProcessor
-                      ) where
+module Query.QueryProcessor ( QueryProcessor (..)
+                            , createQueryProcessor
+                            ) where
 
-import Component           ( Component )
-import Environment         ( Environment (..) )
-import QueryParams         ( QueryParams (..) )
-import QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..) )
-import Registry            ( Registry (..) )
-import Metadata            ( Metadata (..), MetadataApi (..) )
+import Component                 ( Component )
+import Environment               ( Environment (..) )
+import Query.QueryParams         ( QueryParams (..) )
+import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..) )
+import Registry                  ( Registry (..) )
+import Metadata                  ( Metadata (..), MetadataApi (..) )
 import Types
 
 import           Control.Concurrent.Async       (forConcurrently)
@@ -24,7 +24,7 @@ import qualified Data.ByteString.Char8 as C8
 import           Data.Either                    (partitionEithers)
 import           Data.Heap                      (Heap)
 import qualified Data.Heap as H
-import           Data.List                      (foldl', sortOn)
+import           Data.List                      (sortOn)
 import qualified Data.Map.Strict as M
 import           Data.Maybe                     (fromMaybe)
 import           Data.Set                       (toList)
@@ -172,6 +172,8 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
         -- gather them into a map
         let resultMap :: M.Map Text (Component, QueryResult) =
                 foldl' (\m (ComponentResult qr c) -> M.insertWith (maxBy (score . snd)) (uri qr) (c, qr) m) M.empty resultHeap
+
+            -- Maybe do a foldr or foldmaybe or something to try to simplify+
 
         -- Could do more with mutable vectors
 

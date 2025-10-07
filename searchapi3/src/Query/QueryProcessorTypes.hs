@@ -2,7 +2,7 @@
            , DeriveGeneric
            , OverloadedStrings #-}
 
-module QueryProcessorTypes where
+module Query.QueryProcessorTypes where
 
 import           Control.DeepSeq            (NFData)
 import           Control.Lens
