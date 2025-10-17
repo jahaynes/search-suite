@@ -40,6 +40,7 @@ pub fn doc_from_stdin() -> Doc {
 pub struct QueryParams { pub max_results: Option<u32>
                        , pub base_path:   String
                        , pub query_terms: Vec<Term>
+                       , pub scoring:     Option<String> // Enum this?
                        }
 
 pub fn parse_query_params(args: &Vec<String>) -> QueryParams {
