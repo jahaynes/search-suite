@@ -219,7 +219,9 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
 
                      case exitcode of
 
-                         ExitSuccess -> Right <$> decodeOutput stdout
+                         ExitSuccess -> do
+                            C8.putStr stderr
+                            Right <$> decodeOutput stdout
 
                          _  -> do print $ "stdout was: " <> stdout
                                   pure . Left $ C8.unpack stderr

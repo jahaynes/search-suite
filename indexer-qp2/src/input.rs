@@ -36,6 +36,7 @@ pub fn doc_from_stdin() -> Doc {
     mk_doc(Url(url), &buffer)
 }
 
+#[derive(Debug)]
 pub struct QueryParams { pub max_results: Option<u32>
                        , pub base_path:   String
                        , pub query_terms: Vec<Term>
@@ -54,10 +55,14 @@ pub fn parse_query_params(args: &Vec<String>) -> QueryParams {
                 .next()
                 .unwrap();
 
-    QueryParams { max_results: get_max_results(args)
-                , base_path:   base_path.to_owned()
-                , query_terms: terms
-                }
+    let qp = QueryParams { max_results: get_max_results(args)
+                         , base_path:   base_path.to_owned()
+                         , query_terms: terms
+                         };
+
+    eprintln!("{:?}", qp);
+
+    qp
 }
 
 fn get_max_results(args: &Vec<String>) -> Option<u32> {
