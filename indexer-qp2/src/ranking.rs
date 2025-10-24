@@ -50,7 +50,7 @@ impl Ord for Scored {
 
 use std::collections::HashMap;
 
-pub fn rank_result(
+pub fn rank_result_bm25(
     ir: &IndexRead,
     doc_freqs: &HashMap<&Term, u32>,
     TermPost { doc_id, term_freqs }: TermPost,
