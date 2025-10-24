@@ -246,5 +246,5 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
         execParams :: [String]
         execParams = concat [ ["query"]
                             , case maxResults params of Just n -> [printf "-max_results=%d" n]; Nothing -> []
-                            , [path component]
+                            , ["--base_path", path component]
                             ]
