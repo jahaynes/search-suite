@@ -12,7 +12,7 @@ import Data.Warc.WarcEntry
 import Query.QueryParams         (QueryParams (QueryParams))
 import Query.QueryParser
 import Query.QueryProcessor      (QueryProcessor (..))
-import Query.QueryProcessorTypes (SpellingSuggestions, QueryResults)
+import Query.QueryProcessorTypes (SpellingSuggestions, QueryResults, UnscoredResults)
 import Registry                  (Registry (..))
 import Types                     (CollectionName)
 import WarcFileReader            (WarcFileReader (..))
@@ -32,6 +32,10 @@ type QueryApi = "query" :> Capture "col" CollectionName
                         :> QueryParam "n" Int
                         :> Get '[JSON] QueryResults
 
+           -- Probably not needed for FE
+           :<|> "unscored-query" :> Capture "col" CollectionName
+                                 :> Get '[JSON] UnscoredResults
+
            :<|> "structured-query" :> ReqBody '[PlainText] Text
                                    :> Post '[JSON] (Either Text String)
 
@@ -50,6 +54,7 @@ queryServer :: QueryProcessor
             -> ServerT QueryApi IO
 
 queryServer qp reg wfr = serveQuery
+                    :<|> serveUnscored
                     :<|> previewStructuredQuery
                     :<|> serveSpelling
                     :<|> getCached
@@ -59,6 +64,11 @@ queryServer qp reg wfr = serveQuery
         runQuery qp cn (QueryParams (encodeUtf8 q) mn) >>= \case
             Left e        -> error $ show e
             Right results -> pure results
+
+    serveUnscored cn =
+        runUnscored qp cn >>= \case
+            Left e        -> error $ show e
+            Right unscored -> pure unscored
 
     previewStructuredQuery = pure . right show . left decodeUtf8 . parseQuery . encodeUtf8 -- TODO hook this up
 
