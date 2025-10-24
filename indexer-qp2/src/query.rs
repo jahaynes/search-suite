@@ -19,17 +19,9 @@ pub fn query(ir:           &IndexRead,
 
     let mut scored = Vec::new();
 
-    let skip =
-          match query_params.max_results {
-            None    => false,
-            Some(n) => n < 1
-          };
-
-    if !skip {
-        run_query(&mut scored,
-                  ir,
-                  &query_params);
-    }
+    run_query(&mut scored,
+              ir,
+              &query_params);
 
     QueryResult { num_results: scored.len()
                 , results:     scored
