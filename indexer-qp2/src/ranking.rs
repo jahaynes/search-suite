@@ -9,8 +9,7 @@ use std::cmp::Ordering;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 
-#[derive(Debug)]
-pub struct Posting {
+pub struct _Posting {
     pub doc_id: u32,
     pub term_freq: u32,
 }
@@ -95,7 +94,7 @@ pub fn _rank_results(
     out_scored: &mut Vec<Scored>,
     ir: &IndexRead,
     query_params: &QueryParams,
-    results: &Vec<(TermEntry, Vec<Posting>)>,
+    results: &Vec<(TermEntry, Vec<_Posting>)>,
 ) -> () {
     let DocOffsetsRead(doc_offsets) = ir.doc_offsets;
 
