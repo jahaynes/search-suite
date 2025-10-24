@@ -19,18 +19,18 @@ pub fn query(ir:           &IndexRead,
 
     let mut scored = Vec::new();
 
-    run_query(&mut scored,
-              ir,
-              &query_params);
+    run_query_bm25(&mut scored,
+                   ir,
+                   &query_params);
 
     QueryResult { num_results: scored.len()
                 , results:     scored
                 }
 }
 
-fn run_query(out_scored:   &mut Vec<Scored>,
-             ir:           &IndexRead,        
-             query_params: &QueryParams) -> () {
+fn run_query_bm25(out_scored:   &mut Vec<Scored>,
+                  ir:           &IndexRead,        
+                  query_params: &QueryParams) -> () {
 
     let terms: Vec<TermEntry> =
         query_params.query_terms
@@ -45,7 +45,7 @@ fn run_query(out_scored:   &mut Vec<Scored>,
                     .collect();
 
     let scored_iter =
-        scored_iterator(ir, &terms, query_params);
+            scored_iterator_bm25(ir, &terms, query_params);
 
     match query_params.max_results {
 
@@ -87,9 +87,9 @@ fn run_query(out_scored:   &mut Vec<Scored>,
 
 // TODO be able to score here while still streaming
 // So as to decide whether to include low-term-matched docs
-fn scored_iterator<'a>(ir:           &'a IndexRead,
-                       terms:        &'a Vec<TermEntry>,
-                       query_params: &'a QueryParams) -> impl Iterator <Item=Scored> + 'a {
+fn scored_iterator_bm25<'a>(ir:           &'a IndexRead,
+                            terms:        &'a Vec<TermEntry>,
+                            query_params: &'a QueryParams) -> impl Iterator <Item=Scored> + 'a {
 
     use std::collections::HashMap;
 
@@ -118,7 +118,7 @@ fn scored_iterator<'a>(ir:           &'a IndexRead,
                      Err((a,b))
                  }})
          .filter(move |xs| xs.term_freqs.len() == num_query_terms)
-         .map(move |xs| rank_result(ir, &doc_freqs, xs))
+         .map(move |xs| rank_result_bm25(ir, &doc_freqs, xs))
 }
 
 fn postings_list_for_term<'a>(ir:   &'a IndexRead,
