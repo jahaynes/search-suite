@@ -99,6 +99,13 @@ fn main() {
                           println!("{}", serialized);
                     })},
 
+    "unscored"   => { let query_params = parse_query_params(&args);
+                      with_index_read(&query_params.base_path, &|ir| {
+                          let results    = unscored_query(&ir, &query_params);
+                          let serialized = serde_json::to_string(&results).unwrap();
+                      println!("{}", serialized);
+                    })},
+
     "spelling"   => { let idx_name     = &args[2];
                       let str_max_dist = &args[3];
                       let max_dist     = str_max_dist.parse::<i64>().expect("max_dist should be an i64");
