@@ -14,6 +14,18 @@ pub struct QueryResult { pub num_results: usize
                        , pub results:     Vec<Scored>
                        }
 
+#[derive(Debug, Serialize)]
+pub struct UnscoredResult { }
+
+/*  Want to implement TermId->DocId retrieval suitable for
+    set-manipulations at a higher-level (outside this collection component),
+    skipping scoring */
+pub fn unscored_query(ir:           &IndexRead,
+                      query_params: &QueryParams) -> UnscoredResult {
+
+    panic!("unscored_query not implemented");
+}
+
 pub fn query(ir:           &IndexRead,
              query_params: &QueryParams) -> QueryResult {
 
