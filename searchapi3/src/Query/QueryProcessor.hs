@@ -201,14 +201,15 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
                 | H.size h' < limit = H.insert (ComponentResult qr cmp) h'
 
                 | otherwise =
-                    let Just (ComponentResult hqr _, h'') = H.viewMin h'
-                    in if score qr > score hqr
 
-                           -- Greater than smallest result
-                           then H.insert (ComponentResult qr cmp) h''
-
-                           -- Lesser (no change)
-                           else h'
+                    case H.viewMin h' of
+                        Nothing -> h'
+                        Just (ComponentResult hqr _, h'') ->
+                            if score qr > score hqr
+                                -- Greater than smallest result
+                                then H.insert (ComponentResult qr cmp) h''
+                                -- Lesser (no change)
+                                else h'
 
     queryComponent :: Component -> IO (Either String QueryResults)
     queryComponent component =
