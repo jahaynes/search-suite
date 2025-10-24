@@ -23,6 +23,9 @@ pub struct UnscoredResult { }
 pub fn unscored_query(ir:           &IndexRead,
                       query_params: &QueryParams) -> UnscoredResult {
 
+    let terms =
+            collect_query_terms(ir, query_params);
+
     panic!("unscored_query not implemented");
 }
 
@@ -41,20 +44,11 @@ pub fn query(ir:           &IndexRead,
 }
 
 fn run_query_bm25(out_scored:   &mut Vec<Scored>,
-                  ir:           &IndexRead,        
+                  ir:           &IndexRead,
                   query_params: &QueryParams) -> () {
 
-    let terms: Vec<TermEntry> =
-        query_params.query_terms
-                    .iter()
-
-                    // Look up the string terms into term ids
-                    .map    ( | s| find_term(ir, s) )
-
-                    // Keep only the found term ids
-                    .filter ( |rt| rt.is_some() )
-                    .map    ( |rt| rt.unwrap() )
-                    .collect();
+    let terms =
+            collect_query_terms(ir, query_params);
 
     let scored_iter =
             scored_iterator_bm25(ir, &terms, query_params);
@@ -95,6 +89,20 @@ fn run_query_bm25(out_scored:   &mut Vec<Scored>,
             }
         }
     }
+}
+
+fn collect_query_terms(ir:           &IndexRead,
+                       query_params: &QueryParams) -> Vec<TermEntry> {
+    query_params.query_terms
+                .iter()
+
+                // Look up the string terms into term ids
+                .map    ( | s| find_term(ir, s) )
+
+                // Keep only the found term ids
+                .filter ( |rt| rt.is_some() )
+                .map    ( |rt| rt.unwrap() )
+                .collect()
 }
 
 // TODO be able to score here while still streaming
