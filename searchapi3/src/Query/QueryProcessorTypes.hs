@@ -17,6 +17,34 @@ import           Data.Vector                (Vector)
 import qualified Data.Vector           as V
 import           GHC.Generics               (Generic)
 
+data UnscoredResults =
+    UnscoredResults { num_unscored :: !Int
+                    , unscored     :: !(Vector UnscoredResult)
+                    } deriving (Show, Generic, FromJSON, ToJSON)
+
+data UnscoredResult =
+    UnscoredResult deriving (Show, Generic, FromJSON, ToJSON)
+
+instance ToSchema UnscoredResults where
+    declareNamedSchema proxy = genericDeclareNamedSchema defaultSchemaOptions proxy
+        & mapped.schema.description ?~ "Unscored query results"
+        & mapped.schema.example     ?~ toJSON exampleUnscoredResults
+
+instance ToSchema UnscoredResult where
+    declareNamedSchema proxy = genericDeclareNamedSchema defaultSchemaOptions proxy
+        & mapped.schema.description ?~ "Unscored query result"
+        & mapped.schema.example     ?~ toJSON exampleUnscoredResult
+
+exampleUnscoredResults :: UnscoredResults
+exampleUnscoredResults =
+    UnscoredResults { num_unscored = 1
+                    , unscored = V.singleton exampleUnscoredResult
+                    }
+
+exampleUnscoredResult :: UnscoredResult
+exampleUnscoredResult =
+    UnscoredResult
+
 data QueryResults =
     QueryResults { num_results :: !Int
                  , results     :: !(Vector QueryResult)

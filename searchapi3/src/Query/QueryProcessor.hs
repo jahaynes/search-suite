@@ -8,7 +8,7 @@ module Query.QueryProcessor ( QueryProcessor (..)
 import Component                 ( Component )
 import Environment               ( Environment (..) )
 import Query.QueryParams         ( QueryParams (..) )
-import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..) )
+import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..), UnscoredResult (..) )
 import Registry                  ( Registry (..) )
 import Metadata                  ( Metadata (..), MetadataApi (..) )
 import Types
@@ -37,8 +37,9 @@ import           Text.Printf                    (printf)
 import           UnliftIO.Exception             (bracket)
 
 data QueryProcessor =
-    QueryProcessor { runSpelling :: !(CollectionName -> Text -> Maybe Int -> IO (Either String SpellingSuggestions))
-                   , runQuery    :: !(CollectionName -> QueryParams -> IO (Either String QueryResults))
+    QueryProcessor { runQuery    :: !(CollectionName -> QueryParams -> IO (Either String QueryResults))
+                   , runSpelling :: !(CollectionName -> Text -> Maybe Int -> IO (Either String SpellingSuggestions))
+                   , runUnscored :: !(CollectionName -> IO (Either String UnscoredResults))
                    }
 
 createQueryProcessor :: Environment
@@ -47,8 +48,9 @@ createQueryProcessor :: Environment
                      -> (ByteString -> IO ())
                      -> QueryProcessor
 createQueryProcessor env reg metadataApi lg =
-    QueryProcessor { runSpelling = runSpellingImpl env reg lg
-                   , runQuery    = runQueryImpl env reg metadataApi lg
+    QueryProcessor { runQuery    = runQueryImpl env reg metadataApi lg
+                   , runSpelling = runSpellingImpl env reg lg
+                   , runUnscored = runUnscoredImpl
                    }
 
 data ComponentResult = 
@@ -59,6 +61,9 @@ instance Eq ComponentResult where
 
 instance Ord ComponentResult where
     compare (ComponentResult r1 c1) (ComponentResult r2 c2) = compare (score r1, c1) (score r2, c2)
+
+runUnscoredImpl :: CollectionName -> IO (Either String UnscoredResults)
+runUnscoredImpl cn = pure $ Left "runUnscoredImpl not impl"
 
 withLocks :: NFData a => Registry -> CollectionName -> ([Component] -> IO a) -> IO a
 withLocks reg collectionName f =

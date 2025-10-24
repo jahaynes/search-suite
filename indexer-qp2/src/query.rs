@@ -26,7 +26,9 @@ pub fn unscored_query(ir:           &IndexRead,
     let terms =
             collect_query_terms(ir, query_params);
 
-    panic!("unscored_query not implemented");
+    // panic!("unscored_query not implemented");
+
+    return UnscoredResult {};
 }
 
 pub fn query(ir:           &IndexRead,
