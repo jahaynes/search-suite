@@ -1,9 +1,9 @@
 use serde::Deserialize;
 
-use doc::*;
-use normalise::*;
-use terms::*;
-use types::*;
+use crate::doc::*;
+use crate::normalise::*;
+use crate::terms::*;
+use crate::types::*;
 
 use std::io::{Read, stdin};
 

@@ -1,6 +1,6 @@
-use bytes::*;
-use types::Escaped;
-use write_to_buf::WriteToBuf;
+use crate::bytes::*;
+use crate::types::Escaped;
+use crate::write_to_buf::WriteToBuf;
 
 #[derive(Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct Term(pub String);

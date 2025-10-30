@@ -1,5 +1,5 @@
-use index_reader::*;
-use types::*;
+use crate::index_reader::*;
+use crate::types::*;
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use itertools::Itertools;

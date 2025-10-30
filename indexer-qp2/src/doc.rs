@@ -1,8 +1,8 @@
-use bytes::*;
-use normalise::*;
-use terms::Term;
-use types::*;
-use write_to_buf::WriteToBuf;
+use crate::bytes::*;
+use crate::normalise::*;
+use crate::terms::Term;
+use crate::types::*;
+use crate::write_to_buf::WriteToBuf;
 
 use rand::prelude::*;
 use std::collections::HashMap;

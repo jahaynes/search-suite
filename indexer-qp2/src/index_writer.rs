@@ -1,9 +1,9 @@
-use deletions::*;
-use index::*;
-use index_reader::*;
-use spelling_correction::mk_spell_correction;
-use terms::*;
-use types::*;
+use crate::deletions::*;
+use crate::index::*;
+use crate::index_reader::*;
+use crate::spelling_correction::mk_spell_correction;
+use crate::terms::*;
+use crate::types::*;
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use std::fs::*;

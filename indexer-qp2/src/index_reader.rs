@@ -1,8 +1,8 @@
 
-use bytes::*;
-use doc::*;
-use terms::*;
-use types::*;
+use crate::bytes::*;
+use crate::doc::*;
+use crate::terms::*;
+use crate::types::*;
 
 use memmap::{Mmap, MmapMut};
 use std::fs::{File, OpenOptions};

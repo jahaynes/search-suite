@@ -1,8 +1,8 @@
-use doc::*;
-use index_writer::*;
-use terms::*;
-use types::*;
-use write_to_buf::WriteToBuf;
+use crate::doc::*;
+use crate::index_writer::*;
+use crate::terms::*;
+use crate::types::*;
+use crate::write_to_buf::WriteToBuf;
 
 use serde::Serialize;
 use std::collections::HashMap;

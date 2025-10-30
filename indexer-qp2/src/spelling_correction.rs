@@ -1,5 +1,5 @@
-use bk_tree::*;
-use terms::*;
+use crate::bk_tree::*;
+use crate::terms::*;
 use std::collections::{HashMap, HashSet};
 use std::str;
 use std::time::{Duration, SystemTime};

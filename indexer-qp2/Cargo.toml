@@ -2,6 +2,7 @@
 name = "indexer-qp2"
 version = "0.1.0"
 authors = ["John Haynes <john.andrew.haynes@gmail.com>"]
+edition = "2021"
 
 [dependencies]
 byteorder = "1.5.0"

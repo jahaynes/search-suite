@@ -3,8 +3,8 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::cmp;
 
-use index_reader::*;
-use types::*;
+use crate::index_reader::*;
+use crate::types::*;
 
 pub fn write_empty_deletions_file(doc_offsets_length: usize,
                                   deleted_docs_file: File) {

@@ -1,7 +1,7 @@
-use index_reader::*;
-use input::*;
-use terms::*;
-use types::*;
+use crate::index_reader::*;
+use crate::input::*;
+use crate::terms::*;
+use crate::types::*;
 
 use intmap::IntMap;
 use serde::Serialize;

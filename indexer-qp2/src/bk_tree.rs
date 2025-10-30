@@ -1,6 +1,6 @@
-use edit_distance::edit_distance;
-use index_reader::with_vec_mut;
-use index_writer::with_mut_bytes;
+use crate::edit_distance::edit_distance;
+use crate::index_reader::with_vec_mut;
+use crate::index_writer::with_mut_bytes;
 use intmap::IntMap;
 use std::mem::size_of;
 use std::str::from_utf8;

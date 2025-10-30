@@ -1,7 +1,7 @@
-use index_reader::*;
-use terms::*;
-use types::*;
-use write_to_buf::WriteToBuf;
+use crate::index_reader::*;
+use crate::terms::*;
+use crate::types::*;
+use crate::write_to_buf::WriteToBuf;
 
 use std::fs;
 

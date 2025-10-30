@@ -1,4 +1,4 @@
-use terms::Term;
+use crate::terms::Term;
 
 use itertools::Itertools;
 

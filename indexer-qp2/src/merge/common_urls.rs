@@ -1,8 +1,8 @@
-use bytes::*;
-use doc::*;
-use index_reader::*;
-use merge::util::prepare_empty_file;
-use types::*;
+use crate::bytes::*;
+use crate::doc::*;
+use crate::index_reader::*;
+use crate::merge::util::prepare_empty_file;
+use crate::types::*;
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use std::fs;

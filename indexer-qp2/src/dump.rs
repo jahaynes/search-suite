@@ -1,7 +1,7 @@
 
-use index_reader::*;
-use terms::*;
-use types::*;
+use crate::index_reader::*;
+use crate::terms::*;
+use crate::types::*;
 
 pub fn dump(index_path: &str) {
 

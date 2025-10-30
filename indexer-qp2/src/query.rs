@@ -1,9 +1,9 @@
 
-use index_reader::*;
-use input::*;
-use ranking::*;
-use terms::*;
-use types::*;
+use crate::index_reader::*;
+use crate::input::*;
+use crate::ranking::*;
+use crate::terms::*;
+use crate::types::*;
 
 use itertools::*;
 use serde::Serialize;   

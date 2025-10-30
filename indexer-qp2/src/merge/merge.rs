@@ -1,19 +1,19 @@
-use deletions::*;
-use doc::*;
-use merge::common_urls::*;
-use merge::common_docids::*;
-use merge::util::*;
-use index_reader::*;
-use spelling_correction::mk_spell_correction;
-use terms::*;
-use types::*;
+use crate::deletions::*;
+use crate::doc::*;
+use crate::merge::common_urls::*;
+use crate::merge::common_docids::*;
+use crate::merge::util::*;
+use crate::index_reader::*;
+use crate::spelling_correction::mk_spell_correction;
+use crate::terms::*;
+use crate::types::*;
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use itertools::Itertools;
 use std::fs;
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use write_to_buf::WriteToBuf;
+use crate::write_to_buf::WriteToBuf;
 
 #[derive(Debug)]
 struct DocIdRemapping<'a>
