@@ -23,12 +23,20 @@ pub struct UnscoredResult { }
 pub fn unscored_query(ir:           &IndexRead,
                       query_params: &QueryParams) -> UnscoredResult {
 
-    let terms =
-            collect_query_terms(ir, query_params);
+    let terms = collect_query_terms(ir, query_params);
 
-    // panic!("unscored_query not implemented");
+    eprintln!("Terms:");
+    for t in &terms {
+        eprintln!("{:?}", t);
+    }
 
-    return UnscoredResult {};
+    // let scored_iter =
+    unscored_perhaps_iter(ir, &terms, query_params);
+
+    eprintln!("\n");
+    panic!("Done");
+
+    // return UnscoredResult {};
 }
 
 pub fn query(ir:           &IndexRead,
@@ -43,6 +51,94 @@ pub fn query(ir:           &IndexRead,
     QueryResult { num_results: scored.len()
                 , results:     scored
                 }
+}
+
+// TODO be able to score here while still streaming
+// So as to decide whether to include low-term-matched docs
+fn unscored_perhaps_iter<'a>(ir:           &'a IndexRead,
+                             terms:        &'a Vec<TermEntry>,
+                             query_params: &'a QueryParams) {
+
+    // use std::collections::HashMap;
+
+    if terms.is_empty() {
+        // return Vec::new();
+        return ();
+    }
+
+    let mut terms_by_asc_doc_freqs : Vec<(u32, &Term)>=
+            terms.iter()
+                 .map(|t| (t.doc_freq, &t.term))
+                 .collect();
+    terms_by_asc_doc_freqs.sort();
+
+    eprintln!("");
+    for t in terms_by_asc_doc_freqs {
+        eprintln!("{:?}", t);
+    }
+
+    /* Start with rarest term and intersect doc_ids against more common ones */
+    let mut intersection : HashSet<DocId> = HashSet::new();
+    
+    let first_doc_ids = docids_only_for_term(ir, &terms[0]); // TODO check
+    
+    intersection.add(first_doc_ids);
+    //eprintln!("{:?}", &first_doc_ids);
+
+    for other_term in &terms[1..] {
+        if intersection.is_empty() {
+            break;
+        }
+        let fooble = docids_only_for_term(ir, &other_term);
+        //intersection.retain();
+    }
+
+   // let outs =
+     //   terms.iter()
+       //      .map(|t| docids_only_for_term(ir, t)).collect()
+
+    /*
+    // 3. Create the intersection set
+    let intersection: HashSet<DocId> =
+        if let Some((_, first_term)) = terms_by_asc_doc_freqs.first() {
+            HashSet::from_iter(first_term.doc_id.iter().cloned())
+        } else {
+            HashSet::new()
+        };
+
+    // 4. Intersect with the remaining terms
+    let mut intersection = intersection;   // make it mutable for the loop
+    for (_, term) in terms_by_asc_doc_freqs.iter().skip(1) {
+    // `retain` keeps only those ids that are present in the current term.
+    intersection.retain(|doc_id| term.doc_ids.contains(doc_id));
+    }
+
+    // 5. `intersection` now holds the common DocIds
+    println!("Intersection contains {} docs", intersection.len());
+*/
+
+
+    /*
+    let mut acc: HashMap<DocId, u32> = HashMap::new();
+
+    let first = &terms[0];  // TODO implies non-empty
+    for f in docids_only_for_term(ir, first) {
+        
+    }
+    
+    let rest  = &terms[1..];
+
+    
+
+
+    let outs =
+        terms.iter()
+             .map(|t| docids_only_for_term(ir, t)).collect()
+             
+    for o in outs {
+        eprintln!("{:?}", o);
+    } */
+
 }
 
 fn run_query_bm25(out_scored:   &mut Vec<Scored>,
@@ -124,6 +220,7 @@ fn scored_iterator_bm25<'a>(ir:           &'a IndexRead,
          .map(|t| postings_list_for_term(ir, t))
          .kmerge_by(|a,b| a.doc_id <= b.doc_id) 
          .coalesce(|a,b| {
+             // What is this for? (merging results from different terms)
              // TODO can neaten
              if a.doc_id == b.doc_id {
                  let mut term_freqs = Vec::new();
@@ -141,6 +238,21 @@ fn scored_iterator_bm25<'a>(ir:           &'a IndexRead,
                  }})
          .filter(move |xs| xs.term_freqs.len() == num_query_terms)
          .map(move |xs| rank_result_bm25(ir, &doc_freqs, xs))
+}
+
+fn docids_only_for_term<'a>(ir:   &'a IndexRead,
+                            term: &'a TermEntry) -> impl Iterator <Item=DocId> + 'a {
+
+    let deletions_vec = unpack_bits(ir);
+
+    let deletion_set = docids_for_bits(ir, deletions_vec);
+
+    let start =         term.offset   as usize;
+    let end   = start + term.doc_freq as usize;
+    let PostingsRead(posts) = ir.postings;
+    (start..end)
+        .map(move |i| DocId(posts[2 * i]))
+        .filter(move |doc_id| ! deletion_set.contains(doc_id) )
 }
 
 fn postings_list_for_term<'a>(ir:   &'a IndexRead,
