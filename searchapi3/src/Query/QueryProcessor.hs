@@ -8,7 +8,7 @@ module Query.QueryProcessor ( QueryProcessor (..)
 import Component                 ( Component )
 import Environment               ( Environment (..) )
 import Query.QueryParams         ( QueryParams (..) )
-import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..), UnscoredResult (..) )
+import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) )
 import Registry                  ( Registry (..) )
 import Metadata                  ( Metadata (..), MetadataApi (..) )
 import Types
@@ -18,7 +18,7 @@ import           Control.Concurrent.STM         (atomically)
 import           Control.DeepSeq                (NFData, deepseq)
 import           Control.Exception.Safe         (catchAnyDeep)
 import           Control.Monad                  (unless)
-import           Data.Aeson                     (eitherDecodeStrict')
+import           Data.Aeson                     (FromJSON, eitherDecodeStrict')
 import           Data.ByteString                (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import           Data.Either                    (partitionEithers)
@@ -50,7 +50,7 @@ createQueryProcessor :: Environment
 createQueryProcessor env reg metadataApi lg =
     QueryProcessor { runQuery    = runQueryImpl env reg metadataApi lg
                    , runSpelling = runSpellingImpl env reg lg
-                   , runUnscored = runUnscoredImpl reg lg
+                   , runUnscored = runUnscoredImpl env reg lg
                    }
 
 data ComponentResult = 
@@ -62,11 +62,12 @@ instance Eq ComponentResult where
 instance Ord ComponentResult where
     compare (ComponentResult r1 c1) (ComponentResult r2 c2) = compare (score r1, c1) (score r2, c2)
 
-runUnscoredImpl :: Registry
+runUnscoredImpl :: Environment
+                -> Registry
                 -> (ByteString -> IO ())
                 -> CollectionName
                 -> IO (Either String UnscoredResults)
-runUnscoredImpl registry logger collectionName@(CollectionName cn) =
+runUnscoredImpl env registry logger collectionName@(CollectionName cn) =
 
     withLocks registry collectionName $ \lockedComponents -> do
         if null lockedComponents
@@ -75,8 +76,24 @@ runUnscoredImpl registry logger collectionName@(CollectionName cn) =
                 logger $ C8.pack errMsg
                 pure $ Left errMsg
             else do
+
                 putStrLn $ "Found components: " ++ show lockedComponents
+                
+                let (lc:_) = lockedComponents
+
+                -- queryComponent env logger execParams queryStr
+                foo <- queryComponent env logger (execParams lc) "cash restaurant"
+
+                print foo
+
                 pure $ Left "runUnscoredImpl not impl"
+
+    where
+    execParams :: Component -> [String]
+    execParams component =
+        concat [ ["unscored"]
+               , ["--base_path", path component]
+               ]
 
 withLocks :: NFData a => Registry -> CollectionName -> ([Component] -> IO a) -> IO a
 withLocks reg collectionName f =
@@ -157,7 +174,7 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
 
             else do
 
-                (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> queryComponent lc)
+                (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> queryComponent env logger (execParams lc) (query params))
 
                 let errMsg = C8.unlines (map C8.pack bads)
                 unless (null bads)
@@ -169,6 +186,13 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
                          in Right <$> attachMetadata merged
 
     where
+    execParams :: Component -> [String]
+    execParams component =
+        concat [ ["query"]
+               , case maxResults params of Just n -> [printf "-max_results=%d" n]; Nothing -> []
+               , ["--base_path", path component]
+               ]
+
     attachMetadata :: V.Vector (Component, QueryResult) -> IO QueryResults
     attachMetadata vcqrs = do
         xs <- V.forM vcqrs $ \(cmp, qr) -> do
@@ -229,41 +253,37 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
                                 -- Lesser (no change)
                                 else h'
 
-    queryComponent :: Component -> IO (Either String QueryResults)
-    queryComponent component =
+queryComponent :: (FromJSON a, NFData a) => Environment -> (ByteString -> IO ()) -> [String] -> ByteString -> IO (Either String a)
+queryComponent env logger execParams queryStr =
 
-        let job = do logExecution
+    let job = do logExecution
 
-                     (exitcode, stdout, stderr) <- readProcessWithExitCode (indexerBinary env) execParams (query params)
+                 (exitcode, stdout, stderr) <- readProcessWithExitCode (indexerBinary env) execParams queryStr
 
-                     case exitcode of
+                 case exitcode of
 
-                         ExitSuccess -> do
-                            C8.putStr stderr
-                            Right <$> decodeOutput stdout
+                     ExitSuccess -> do
+                         C8.putStr stderr
+                         Right <$> decodeOutput stdout
 
-                         _  -> do print $ "stdout was: " <> stdout
-                                  pure . Left $ C8.unpack stderr
+                     _  -> do
+                        print $ "stdout was: " <> stdout
+                        pure . Left $ C8.unpack stderr
 
-            handle = pure . Left . show
+        handle = pure . Left . show
 
-        in catchAnyDeep job handle
+    in catchAnyDeep job handle
 
-        where
-        decodeOutput :: ByteString -> IO QueryResults
-        decodeOutput stdout =
-            case eitherDecodeStrict' stdout of
-                Right r -> pure r
-                Left _  -> error $ "Could not decode output: " <> take 100 (C8.unpack stdout) <> "..."
+    where
+    decodeOutput :: FromJSON a => ByteString -> IO a
+    decodeOutput stdout =
+        case eitherDecodeStrict' stdout of
+            Right r -> pure r
+            Left _  -> error $ "Could not decode output: " <> take 100 (C8.unpack stdout) <> "..."
 
-        logExecution :: IO ()
-        logExecution = logger . C8.pack $ unwords [ "Running binary: "
-                                                  , show (indexerBinary env)
-                                                  , show execParams
-                                                  ]
+    logExecution :: IO ()
+    logExecution = logger . C8.pack $ unwords [ "Running binary: "
+                                                , show (indexerBinary env)
+                                                , show execParams
+                                                ]
 
-        execParams :: [String]
-        execParams = concat [ ["query"]
-                            , case maxResults params of Just n -> [printf "-max_results=%d" n]; Nothing -> []
-                            , ["--base_path", path component]
-                            ]

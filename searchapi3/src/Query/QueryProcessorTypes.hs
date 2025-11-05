@@ -15,39 +15,40 @@ import           Data.Swagger               (ToSchema (..), defaultSchemaOptions
 import           Data.Text                  (Text)
 import           Data.Vector                (Vector)
 import qualified Data.Vector           as V
+import           Data.Word                  (Word32)
 import           GHC.Generics               (Generic)
+
+newtype DocId =
+    DocId Word32
+        deriving (Show, Generic, FromJSON, ToJSON)
+
+instance NFData DocId
+
+instance ToSchema DocId where
+    declareNamedSchema proxy = genericDeclareNamedSchema defaultSchemaOptions proxy
+        & mapped.schema.description ?~ "DocId"
+        & mapped.schema.example     ?~ toJSON exampleDocId
 
 data UnscoredResults =
     UnscoredResults { num_unscored :: !Int
-                    , unscored     :: !(Vector UnscoredResult)
+                    , doc_ids      :: !(Vector DocId)
                     } deriving (Show, Generic, FromJSON, ToJSON)
 
 instance NFData UnscoredResults
-
-data UnscoredResult =
-    UnscoredResult deriving (Show, Generic, FromJSON, ToJSON)
-
-instance NFData UnscoredResult
 
 instance ToSchema UnscoredResults where
     declareNamedSchema proxy = genericDeclareNamedSchema defaultSchemaOptions proxy
         & mapped.schema.description ?~ "Unscored query results"
         & mapped.schema.example     ?~ toJSON exampleUnscoredResults
 
-instance ToSchema UnscoredResult where
-    declareNamedSchema proxy = genericDeclareNamedSchema defaultSchemaOptions proxy
-        & mapped.schema.description ?~ "Unscored query result"
-        & mapped.schema.example     ?~ toJSON exampleUnscoredResult
+exampleDocId :: DocId
+exampleDocId = DocId 32045
 
 exampleUnscoredResults :: UnscoredResults
 exampleUnscoredResults =
     UnscoredResults { num_unscored = 1
-                    , unscored = V.singleton exampleUnscoredResult
+                    , doc_ids = V.singleton exampleDocId
                     }
-
-exampleUnscoredResult :: UnscoredResult
-exampleUnscoredResult =
-    UnscoredResult
 
 data QueryResults =
     QueryResults { num_results :: !Int

@@ -15,7 +15,8 @@ pub struct QueryResult { pub num_results: usize
                        }
 
 #[derive(Debug, Serialize)]
-pub struct UnscoredResult { pub doc_ids: HashSet<DocId>
+pub struct UnscoredResult { pub num_unscored: usize
+                          , pub doc_ids: HashSet<DocId>
                           }
 
 /*  Want to implement TermId->DocId retrieval suitable for
@@ -33,7 +34,9 @@ pub fn unscored_query(ir:           &IndexRead,
 
     let doc_ids = unscored_doc_id_intersection(ir, &terms, query_params);
 
-    return UnscoredResult { doc_ids };
+    UnscoredResult { num_unscored: doc_ids.len()
+                   , doc_ids:      doc_ids
+                   }
 }
 
 pub fn query(ir:           &IndexRead,
