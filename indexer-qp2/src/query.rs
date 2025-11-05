@@ -15,7 +15,8 @@ pub struct QueryResult { pub num_results: usize
                        }
 
 #[derive(Debug, Serialize)]
-pub struct UnscoredResult { }
+pub struct UnscoredResult { pub doc_ids: HashSet<DocId>
+                          }
 
 /*  Want to implement TermId->DocId retrieval suitable for
     set-manipulations at a higher-level (outside this collection component),
@@ -25,18 +26,14 @@ pub fn unscored_query(ir:           &IndexRead,
 
     let terms = collect_query_terms(ir, query_params);
 
-    eprintln!("Terms:");
+    /*eprintln!("Terms:");
     for t in &terms {
         eprintln!("{:?}", t);
-    }
+    }*/
 
-    // let scored_iter =
-    unscored_perhaps_iter(ir, &terms, query_params);
+    let doc_ids = unscored_doc_id_intersection(ir, &terms, query_params);
 
-    eprintln!("\n");
-    panic!("Done");
-
-    // return UnscoredResult {};
+    return UnscoredResult { doc_ids };
 }
 
 pub fn query(ir:           &IndexRead,
@@ -53,17 +50,12 @@ pub fn query(ir:           &IndexRead,
                 }
 }
 
-// TODO be able to score here while still streaming
-// So as to decide whether to include low-term-matched docs
-fn unscored_perhaps_iter<'a>(ir:           &'a IndexRead,
-                             terms:        &'a Vec<TermEntry>,
-                             query_params: &'a QueryParams) {
-
-    // use std::collections::HashMap;
+fn unscored_doc_id_intersection<'a>(ir:           &'a IndexRead,
+                                    terms:        &'a Vec<TermEntry>,
+                                    query_params: &'a QueryParams) -> HashSet<DocId>{
 
     if terms.is_empty() {
-        // return Vec::new();
-        return ();
+        return HashSet::new();
     }
 
     let mut terms_by_asc_doc_freqs : Vec<(u32, &Term)>=
@@ -72,73 +64,29 @@ fn unscored_perhaps_iter<'a>(ir:           &'a IndexRead,
                  .collect();
     terms_by_asc_doc_freqs.sort();
 
-    eprintln!("");
-    for t in terms_by_asc_doc_freqs {
-        eprintln!("{:?}", t);
-    }
+    //eprintln!("");
+    //for t in terms_by_asc_doc_freqs {
+    //    eprintln!("{:?}", t);
+    //}
 
     /* Start with rarest term and intersect doc_ids against more common ones */
     let mut intersection : HashSet<DocId> = HashSet::new();
     
-    let first_doc_ids = docids_only_for_term(ir, &terms[0]); // TODO check
-    
-    intersection.add(first_doc_ids);
-    //eprintln!("{:?}", &first_doc_ids);
+    let first_doc_ids = docids_only_for_term(ir, &terms[0]);
+    intersection.extend(first_doc_ids);
+    // eprintln!("{:?}", &intersection);
 
     for other_term in &terms[1..] {
         if intersection.is_empty() {
             break;
         }
-        let fooble = docids_only_for_term(ir, &other_term);
-        //intersection.retain();
+        let other_docids : HashSet<DocId> = docids_only_for_term(ir, &other_term).collect();
+        intersection.retain(|di| other_docids.contains(di));
     }
 
-   // let outs =
-     //   terms.iter()
-       //      .map(|t| docids_only_for_term(ir, t)).collect()
+    // eprintln!("{:?}", &intersection);
 
-    /*
-    // 3. Create the intersection set
-    let intersection: HashSet<DocId> =
-        if let Some((_, first_term)) = terms_by_asc_doc_freqs.first() {
-            HashSet::from_iter(first_term.doc_id.iter().cloned())
-        } else {
-            HashSet::new()
-        };
-
-    // 4. Intersect with the remaining terms
-    let mut intersection = intersection;   // make it mutable for the loop
-    for (_, term) in terms_by_asc_doc_freqs.iter().skip(1) {
-    // `retain` keeps only those ids that are present in the current term.
-    intersection.retain(|doc_id| term.doc_ids.contains(doc_id));
-    }
-
-    // 5. `intersection` now holds the common DocIds
-    println!("Intersection contains {} docs", intersection.len());
-*/
-
-
-    /*
-    let mut acc: HashMap<DocId, u32> = HashMap::new();
-
-    let first = &terms[0];  // TODO implies non-empty
-    for f in docids_only_for_term(ir, first) {
-        
-    }
-    
-    let rest  = &terms[1..];
-
-    
-
-
-    let outs =
-        terms.iter()
-             .map(|t| docids_only_for_term(ir, t)).collect()
-             
-    for o in outs {
-        eprintln!("{:?}", o);
-    } */
-
+    intersection
 }
 
 fn run_query_bm25(out_scored:   &mut Vec<Scored>,
