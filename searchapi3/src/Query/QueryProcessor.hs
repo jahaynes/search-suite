@@ -50,7 +50,7 @@ createQueryProcessor :: Environment
 createQueryProcessor env reg metadataApi lg =
     QueryProcessor { runQuery    = runQueryImpl env reg metadataApi lg
                    , runSpelling = runSpellingImpl env reg lg
-                   , runUnscored = runUnscoredImpl
+                   , runUnscored = runUnscoredImpl reg lg
                    }
 
 data ComponentResult = 
@@ -62,8 +62,21 @@ instance Eq ComponentResult where
 instance Ord ComponentResult where
     compare (ComponentResult r1 c1) (ComponentResult r2 c2) = compare (score r1, c1) (score r2, c2)
 
-runUnscoredImpl :: CollectionName -> IO (Either String UnscoredResults)
-runUnscoredImpl cn = pure $ Left "runUnscoredImpl not impl"
+runUnscoredImpl :: Registry
+                -> (ByteString -> IO ())
+                -> CollectionName
+                -> IO (Either String UnscoredResults)
+runUnscoredImpl registry logger collectionName@(CollectionName cn) =
+
+    withLocks registry collectionName $ \lockedComponents -> do
+        if null lockedComponents
+            then do
+                let errMsg = printf "No such collection: %s" cn
+                logger $ C8.pack errMsg
+                pure $ Left errMsg
+            else do
+                putStrLn $ "Found components: " ++ show lockedComponents
+                pure $ Left "runUnscoredImpl not impl"
 
 withLocks :: NFData a => Registry -> CollectionName -> ([Component] -> IO a) -> IO a
 withLocks reg collectionName f =

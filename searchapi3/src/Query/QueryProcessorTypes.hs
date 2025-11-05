@@ -22,8 +22,12 @@ data UnscoredResults =
                     , unscored     :: !(Vector UnscoredResult)
                     } deriving (Show, Generic, FromJSON, ToJSON)
 
+instance NFData UnscoredResults
+
 data UnscoredResult =
     UnscoredResult deriving (Show, Generic, FromJSON, ToJSON)
+
+instance NFData UnscoredResult
 
 instance ToSchema UnscoredResults where
     declareNamedSchema proxy = genericDeclareNamedSchema defaultSchemaOptions proxy
