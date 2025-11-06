@@ -20,7 +20,7 @@ import           GHC.Generics               (Generic)
 
 newtype DocId =
     DocId Word32
-        deriving (Show, Generic, FromJSON, ToJSON)
+        deriving (Show, Generic, FromJSON, ToJSON, Eq, Ord)
 
 instance NFData DocId
 
@@ -31,8 +31,16 @@ instance ToSchema DocId where
 
 data UnscoredResults =
     UnscoredResults { num_unscored :: !Int
-                    , doc_ids      :: !(Vector DocId)
+                    , doc_ids      :: !(Set DocId)
                     } deriving (Show, Generic, FromJSON, ToJSON)
+
+instance Semigroup UnscoredResults where
+    UnscoredResults _ ds1 <> UnscoredResults _ ds2 =
+        let ds = ds1 <> ds2 in
+        UnscoredResults (S.size ds) ds
+
+instance Monoid UnscoredResults where
+    mempty = UnscoredResults 0 mempty
 
 instance NFData UnscoredResults
 
@@ -47,7 +55,7 @@ exampleDocId = DocId 32045
 exampleUnscoredResults :: UnscoredResults
 exampleUnscoredResults =
     UnscoredResults { num_unscored = 1
-                    , doc_ids = V.singleton exampleDocId
+                    , doc_ids = S.singleton exampleDocId
                     }
 
 data QueryResults =

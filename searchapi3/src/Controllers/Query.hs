@@ -34,6 +34,7 @@ type QueryApi = "query" :> Capture "col" CollectionName
 
            -- Probably not needed for FE
            :<|> "unscored-query" :> Capture "col" CollectionName
+                                 :> QueryParam' '[Required] "q" Text
                                  :> Get '[JSON] UnscoredResults
 
            :<|> "structured-query" :> ReqBody '[PlainText] Text
@@ -65,8 +66,8 @@ queryServer qp reg wfr = serveQuery
             Left e        -> error $ show e
             Right results -> pure results
 
-    serveUnscored cn =
-        runUnscored qp cn >>= \case
+    serveUnscored cn q =
+        runUnscored qp cn q >>= \case
             Left e        -> error $ show e
             Right unscored -> pure unscored
 

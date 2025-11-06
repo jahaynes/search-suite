@@ -87,7 +87,7 @@ fn unscored_doc_id_intersection<'a>(ir:           &'a IndexRead,
         intersection.retain(|di| other_docids.contains(di));
     }
 
-    // eprintln!("{:?}", &intersection);
+    eprintln!("{:?}", &intersection.len());
 
     intersection
 }

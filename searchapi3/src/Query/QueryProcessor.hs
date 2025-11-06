@@ -30,6 +30,7 @@ import           Data.Maybe                     (fromMaybe)
 import           Data.Set                       (toList)
 import           Data.Text                      (Text)
 import qualified Data.Text as T
+import           Data.Text.Encoding             (encodeUtf8)
 import qualified Data.Vector as V
 import           GHC.IO.Exception               (ExitCode (..))
 import           System.Process.ByteString      (readProcessWithExitCode)
@@ -39,7 +40,7 @@ import           UnliftIO.Exception             (bracket)
 data QueryProcessor =
     QueryProcessor { runQuery    :: !(CollectionName -> QueryParams -> IO (Either String QueryResults))
                    , runSpelling :: !(CollectionName -> Text -> Maybe Int -> IO (Either String SpellingSuggestions))
-                   , runUnscored :: !(CollectionName -> IO (Either String UnscoredResults))
+                   , runUnscored :: !(CollectionName -> Text -> IO (Either String UnscoredResults))
                    }
 
 createQueryProcessor :: Environment
@@ -66,9 +67,9 @@ runUnscoredImpl :: Environment
                 -> Registry
                 -> (ByteString -> IO ())
                 -> CollectionName
+                -> Text
                 -> IO (Either String UnscoredResults)
-runUnscoredImpl env registry logger collectionName@(CollectionName cn) =
-
+runUnscoredImpl env registry logger collectionName@(CollectionName cn) q =
     withLocks registry collectionName $ \lockedComponents -> do
         if null lockedComponents
             then do
@@ -76,17 +77,14 @@ runUnscoredImpl env registry logger collectionName@(CollectionName cn) =
                 logger $ C8.pack errMsg
                 pure $ Left errMsg
             else do
-
-                putStrLn $ "Found components: "
                 mapM_ print lockedComponents
-
-                let (lc:_) = lockedComponents
-
-                foo :: Either String UnscoredResults <- queryComponent env logger (execParams lc) "cash restaurant"
-
-                print foo
-
-                pure $ Left "runUnscoredImpl not impl"
+                (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> queryComponent env logger (execParams lc) (encodeUtf8 q))
+                let errMsg = C8.unlines (map C8.pack bads)
+                unless (null bads)
+                       (logger errMsg)
+                pure $ if null goods
+                           then Left $ unlines bads
+                           else Right $ mconcat goods
 
     where
     execParams :: Component -> [String]
