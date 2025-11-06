@@ -78,11 +78,10 @@ runUnscoredImpl env registry logger collectionName@(CollectionName cn) =
             else do
 
                 putStrLn $ "Found components: " ++ show lockedComponents
-                
+
                 let (lc:_) = lockedComponents
 
-                -- queryComponent env logger execParams queryStr
-                foo <- queryComponent env logger (execParams lc) "cash restaurant"
+                foo :: Either String UnscoredResults <- queryComponent env logger (execParams lc) "cash restaurant"
 
                 print foo
 
