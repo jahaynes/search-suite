@@ -77,7 +77,8 @@ runUnscoredImpl env registry logger collectionName@(CollectionName cn) =
                 pure $ Left errMsg
             else do
 
-                putStrLn $ "Found components: " ++ show lockedComponents
+                putStrLn $ "Found components: "
+                mapM_ print lockedComponents
 
                 let (lc:_) = lockedComponents
 
