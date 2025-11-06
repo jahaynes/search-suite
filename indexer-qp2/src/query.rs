@@ -27,10 +27,13 @@ pub fn unscored_query(ir:           &IndexRead,
 
     let terms = collect_query_terms(ir, query_params);
 
-    /*eprintln!("Terms:");
-    for t in &terms {
-        eprintln!("{:?}", t);
-    }*/
+    // Fast abort if we don't match all terms (TODO it's not done later)
+    // (Not all terms have Term Entries)
+    if terms.len() < query_params.query_terms.len() {
+        return UnscoredResult { num_unscored: 0
+                              , doc_ids: HashSet::new()
+                              };
+    }
 
     let doc_ids = unscored_doc_id_intersection(ir, &terms, query_params);
 

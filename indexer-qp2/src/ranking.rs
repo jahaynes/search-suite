@@ -90,6 +90,7 @@ pub fn rank_result_bm25(
     }
 }
 
+// TODO - unused?
 pub fn _rank_results(
     out_scored: &mut Vec<Scored>,
     ir: &IndexRead,

@@ -57,6 +57,19 @@ fn main() {
 
     "dump"       => dump(&args[2]),
 
+    "doc"        => { let doc_id    = args[2].parse::<u32>().expect("doc_id should be a u32");
+                      let base_path = &args[3];
+                      with_index_read(base_path, &|ir| {
+                          match find_doc(&ir, DocId(doc_id)) {
+                              None => {},
+                              Some(doc) => {
+                                  let serialized = serde_json::to_string(&doc).unwrap();
+                                  println!("{}", serialized);
+                              }
+                          }
+                      })
+                    },
+
     "index_json" => { let input_docs = docs_from_stdin();
 
                       let result: IndexResult;
