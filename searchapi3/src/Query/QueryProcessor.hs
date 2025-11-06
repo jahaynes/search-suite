@@ -8,6 +8,7 @@ module Query.QueryProcessor ( QueryProcessor (..)
 import Component                 ( Component )
 import Environment               ( Environment (..) )
 import Query.QueryParams         ( QueryParams (..) )
+import Query.QueryParser         ( Clause (..), Op (..) )
 import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) )
 import Registry                  ( Registry (..) )
 import Metadata                  ( Metadata (..), MetadataApi (..) )
@@ -25,6 +26,7 @@ import           Data.Either                    (partitionEithers)
 import           Data.Heap                      (Heap)
 import qualified Data.Heap as H
 import           Data.List                      (sortOn)
+import           Data.List.NonEmpty             (NonEmpty (..))
 import qualified Data.Map.Strict as M
 import           Data.Maybe                     (fromMaybe)
 import           Data.Set                       (toList)
@@ -38,9 +40,10 @@ import           Text.Printf                    (printf)
 import           UnliftIO.Exception             (bracket)
 
 data QueryProcessor =
-    QueryProcessor { runQuery    :: !(CollectionName -> QueryParams -> IO (Either String QueryResults))
-                   , runSpelling :: !(CollectionName -> Text -> Maybe Int -> IO (Either String SpellingSuggestions))
-                   , runUnscored :: !(CollectionName -> Text -> IO (Either String UnscoredResults))
+    QueryProcessor { runQuery      :: !(CollectionName -> QueryParams -> IO (Either String QueryResults))
+                   , runSpelling   :: !(CollectionName -> Text -> Maybe Int -> IO (Either String SpellingSuggestions))
+                   , runUnscored   :: !(CollectionName -> Text -> IO (Either String UnscoredResults))
+                   , runStructured :: !(CollectionName -> Clause -> IO (Either String ()))
                    }
 
 createQueryProcessor :: Environment
@@ -49,9 +52,10 @@ createQueryProcessor :: Environment
                      -> (ByteString -> IO ())
                      -> QueryProcessor
 createQueryProcessor env reg metadataApi lg =
-    QueryProcessor { runQuery    = runQueryImpl env reg metadataApi lg
-                   , runSpelling = runSpellingImpl env reg lg
-                   , runUnscored = runUnscoredImpl env reg lg
+    QueryProcessor { runQuery      = runQueryImpl env reg metadataApi lg
+                   , runSpelling   = runSpellingImpl env reg lg
+                   , runUnscored   = runUnscoredImpl env reg lg
+                   , runStructured = runStructuredImpl env reg lg
                    }
 
 data ComponentResult = 
@@ -62,6 +66,28 @@ instance Eq ComponentResult where
 
 instance Ord ComponentResult where
     compare (ComponentResult r1 c1) (ComponentResult r2 c2) = compare (score r1, c1) (score r2, c2)
+
+-- TODO, this can probably pushed into indexer-qp2
+runStructuredImpl :: Environment
+                  -> Registry
+                  -> (ByteString -> IO ())
+                  -> CollectionName
+                  -> Clause
+                  -> IO (Either String ())
+runStructuredImpl env reg lg cn clause = do
+
+    print cn
+
+    print clause
+
+    pure $ Right ()
+
+    where
+    go (ClauseText q) = pure ()
+
+    go (Conjunction Or  (c :| cs)) = pure ()
+
+    go (Conjunction And (c :| cs)) = pure ()
 
 runUnscoredImpl :: Environment
                 -> Registry
