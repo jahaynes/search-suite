@@ -70,17 +70,11 @@ fn unscored_doc_id_intersection<'a>(ir:           &'a IndexRead,
                  .collect();
     terms_by_asc_doc_freqs.sort();
 
-    //eprintln!("");
-    //for t in terms_by_asc_doc_freqs {
-    //    eprintln!("{:?}", t);
-    //}
-
     /* Start with rarest term and intersect doc_ids against more common ones */
     let mut intersection : HashSet<DocId> = HashSet::new();
     
     let first_doc_ids = docids_only_for_term(ir, &terms[0]);
     intersection.extend(first_doc_ids);
-    // eprintln!("{:?}", &intersection);
 
     for other_term in &terms[1..] {
         if intersection.is_empty() {
@@ -89,8 +83,6 @@ fn unscored_doc_id_intersection<'a>(ir:           &'a IndexRead,
         let other_docids : HashSet<DocId> = docids_only_for_term(ir, &other_term).collect();
         intersection.retain(|di| other_docids.contains(di));
     }
-
-    eprintln!("{:?}", &intersection.len());
 
     intersection
 }
