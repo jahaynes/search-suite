@@ -38,7 +38,7 @@ type QueryApi = "query" :> Capture "col" CollectionName
 
            :<|> "structured-query" :> Capture "col" CollectionName
                                    :> ReqBody '[PlainText] Text
-                                   :> Post '[JSON] (Either String UnscoredResults)
+                                   :> Post '[JSON] (Either Text UnscoredResults)
 
            :<|> "spelling" :> Capture "col" CollectionName
                            :> QueryParam' '[Required] "s" Text
@@ -56,7 +56,7 @@ queryServer :: QueryProcessor
 
 queryServer qp reg wfr = serveQuery
                     :<|> serveUnscored
-                    :<|> previewStructuredQuery
+                    :<|> structuredQuery
                     :<|> serveSpelling
                     :<|> getCached
 
@@ -71,9 +71,9 @@ queryServer qp reg wfr = serveQuery
             Left e        -> error $ show e
             Right unscored -> pure unscored
 
-    previewStructuredQuery cn txt =
+    structuredQuery cn txt =
         case parseQuery (encodeUtf8 txt) of
-            Left e -> error $ show e
+            Left e   -> pure $ Left e
             Right sq -> runStructured qp cn sq
 
     serveSpelling cn s mn =

@@ -9,7 +9,7 @@ import Component                 ( Component )
 import Environment               ( Environment (..) )
 import Query.QueryParams         ( QueryParams (..) )
 import Query.QueryParser         ( Clause (..), Op (..) )
-import Query.QueryProcessorTypes ( DocId (..), SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) )
+import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) )
 import Registry                  ( Registry (..) )
 import Metadata                  ( Metadata (..), MetadataApi (..) )
 import Types
@@ -29,7 +29,6 @@ import           Data.List                      (sortOn)
 import           Data.List.NonEmpty             (NonEmpty (..))
 import qualified Data.Map.Strict as M
 import           Data.Maybe                     (fromMaybe)
-import           Data.Set                       (Set)
 import qualified Data.Set as S
 import           Data.Text                      (Text)
 import qualified Data.Text as T
@@ -44,7 +43,7 @@ data QueryProcessor =
     QueryProcessor { runQuery      :: !(CollectionName -> QueryParams -> IO (Either String QueryResults))
                    , runSpelling   :: !(CollectionName -> Text -> Maybe Int -> IO (Either String SpellingSuggestions))
                    , runUnscored   :: !(CollectionName -> Text -> IO (Either String UnscoredResults))
-                   , runStructured :: !(CollectionName -> Clause -> IO (Either String UnscoredResults))
+                   , runStructured :: !(CollectionName -> Clause -> IO (Either Text UnscoredResults))
                    }
 
 createQueryProcessor :: Environment
@@ -75,7 +74,7 @@ runStructuredImpl :: Environment
                   -> (ByteString -> IO ())
                   -> CollectionName
                   -> Clause
-                  -> IO (Either String UnscoredResults)
+                  -> IO (Either Text UnscoredResults)
 runStructuredImpl env reg lg cn clause = do
     rs <- go clause
     pure . Right $ UnscoredResults (S.size rs) rs

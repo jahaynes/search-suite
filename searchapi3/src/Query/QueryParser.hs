@@ -14,6 +14,7 @@ import qualified Data.ByteString.Char8 as C8
 import           Data.Char                   (isSpace)
 import           Data.Functor                (void)
 import           Data.List.NonEmpty          (NonEmpty)
+import           Data.Text                   (Text)
 
 data Clause = Conjunction !Op !(NonEmpty Clause)
             | ClauseText !ByteString
@@ -29,7 +30,7 @@ data Op = And | Or deriving (Eq, Show)
 /\ feature
 -}
 
-parseQuery :: ByteString -> Either ByteString Clause
+parseQuery :: ByteString -> Either Text Clause
 parseQuery bs =
     case runParser parse (fromInput bs) of
         Right (ls, p)
