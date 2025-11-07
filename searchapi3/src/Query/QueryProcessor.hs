@@ -83,7 +83,9 @@ runStructuredImpl env reg lg cn clause = do
     pure $ Right ()
 
     where
-    go (ClauseText q) = pure ()
+    go (ClauseText q) = do
+        r <- runUnscoredImpl env reg lg cn (decodeUtf8 q) -- TODO can this decode be skipped
+        print r
 
     go (Conjunction Or  (c :| cs)) = pure ()
 
