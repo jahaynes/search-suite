@@ -12,12 +12,11 @@ import Data.Warc.WarcEntry
 import Query.QueryParams         (QueryParams (QueryParams))
 import Query.QueryParser
 import Query.QueryProcessor      (QueryProcessor (..))
-import Query.QueryProcessorTypes (SpellingSuggestions, QueryResults, UnscoredResults)
+import Query.QueryProcessorTypes (QueryResults, SpellingSuggestions, UnscoredResults)
 import Registry                  (Registry (..))
 import Types                     (CollectionName)
 import WarcFileReader            (WarcFileReader (..))
 
-import Control.Arrow             (left, right)
 import Control.Concurrent.STM    (atomically)
 import Control.Monad             (forM)
 import Data.Maybe                (catMaybes, fromMaybe)
@@ -39,7 +38,7 @@ type QueryApi = "query" :> Capture "col" CollectionName
 
            :<|> "structured-query" :> Capture "col" CollectionName
                                    :> ReqBody '[PlainText] Text
-                                   :> Post '[JSON] (Either String ())
+                                   :> Post '[JSON] (Either String UnscoredResults)
 
            :<|> "spelling" :> Capture "col" CollectionName
                            :> QueryParam' '[Required] "s" Text

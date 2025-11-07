@@ -9,7 +9,7 @@ import Component                 ( Component )
 import Environment               ( Environment (..) )
 import Query.QueryParams         ( QueryParams (..) )
 import Query.QueryParser         ( Clause (..), Op (..) )
-import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) )
+import Query.QueryProcessorTypes ( DocId (..), SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) )
 import Registry                  ( Registry (..) )
 import Metadata                  ( Metadata (..), MetadataApi (..) )
 import Types
@@ -29,10 +29,11 @@ import           Data.List                      (sortOn)
 import           Data.List.NonEmpty             (NonEmpty (..))
 import qualified Data.Map.Strict as M
 import           Data.Maybe                     (fromMaybe)
-import           Data.Set                       (toList)
+import           Data.Set                       (Set)
+import qualified Data.Set as S
 import           Data.Text                      (Text)
 import qualified Data.Text as T
-import           Data.Text.Encoding             (encodeUtf8)
+import           Data.Text.Encoding             (decodeUtf8, encodeUtf8)
 import qualified Data.Vector as V
 import           GHC.IO.Exception               (ExitCode (..))
 import           System.Process.ByteString      (readProcessWithExitCode)
@@ -43,7 +44,7 @@ data QueryProcessor =
     QueryProcessor { runQuery      :: !(CollectionName -> QueryParams -> IO (Either String QueryResults))
                    , runSpelling   :: !(CollectionName -> Text -> Maybe Int -> IO (Either String SpellingSuggestions))
                    , runUnscored   :: !(CollectionName -> Text -> IO (Either String UnscoredResults))
-                   , runStructured :: !(CollectionName -> Clause -> IO (Either String ()))
+                   , runStructured :: !(CollectionName -> Clause -> IO (Either String UnscoredResults))
                    }
 
 createQueryProcessor :: Environment
@@ -68,28 +69,29 @@ instance Ord ComponentResult where
     compare (ComponentResult r1 c1) (ComponentResult r2 c2) = compare (score r1, c1) (score r2, c2)
 
 -- TODO, this can probably pushed into indexer-qp2
+-- TODO, locks are independent here and probably shouldn't be
 runStructuredImpl :: Environment
                   -> Registry
                   -> (ByteString -> IO ())
                   -> CollectionName
                   -> Clause
-                  -> IO (Either String ())
+                  -> IO (Either String UnscoredResults)
 runStructuredImpl env reg lg cn clause = do
-
-    print cn
-
-    print clause
-
-    pure $ Right ()
+    rs <- go clause
+    pure . Right $ UnscoredResults (S.size rs) rs
 
     where
     go (ClauseText q) = do
-        r <- runUnscoredImpl env reg lg cn (decodeUtf8 q) -- TODO can this decode be skipped
-        print r
+        Right r <- runUnscoredImpl env reg lg cn (decodeUtf8 q) -- TODO can this decode be skipped
+        pure $ doc_ids r
 
-    go (Conjunction Or  (c :| cs)) = pure ()
+    go (Conjunction Or cs) = do
+        r :| rs <- mapM go cs
+        pure (foldl' S.union r rs)
 
-    go (Conjunction And (c :| cs)) = pure ()
+    go (Conjunction And cs) = do
+        r :| rs <- mapM go cs
+        pure (foldl' S.intersection r rs)
 
 runUnscoredImpl :: Environment
                 -> Registry
@@ -98,7 +100,7 @@ runUnscoredImpl :: Environment
                 -> Text
                 -> IO (Either String UnscoredResults)
 runUnscoredImpl env registry logger collectionName@(CollectionName cn) q =
-    withLocks registry collectionName $ \lockedComponents -> do
+    withLocks registry collectionName $ \lockedComponents ->
         if null lockedComponents
             then do
                 let errMsg = printf "No such collection: %s" cn
@@ -128,7 +130,7 @@ withLocks reg collectionName f =
         y `deepseq` pure y
     where
     acquire = atomically $ do
-        components <- toList <$> viewCollectionComponents reg collectionName
+        components <- S.toList <$> viewCollectionComponents reg collectionName
         mapM_ (takeLock reg) components
         pure components
     release = mapM_ (releaseLockIO reg)
