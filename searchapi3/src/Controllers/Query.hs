@@ -31,11 +31,6 @@ type QueryApi = "query" :> Capture "col" CollectionName
                         :> QueryParam "n" Int
                         :> Get '[JSON] QueryResults
 
-           -- Probably not needed for FE
-           :<|> "unscored-query" :> Capture "col" CollectionName
-                                 :> QueryParam' '[Required] "q" Text
-                                 :> Get '[JSON] UnscoredResults
-
            :<|> "structured-query" :> Capture "col" CollectionName
                                    :> ReqBody '[PlainText] Text
                                    :> Post '[JSON] (Either Text UnscoredResults)
@@ -55,7 +50,6 @@ queryServer :: QueryProcessor
             -> ServerT QueryApi IO
 
 queryServer qp reg wfr = serveQuery
-                    :<|> serveUnscored
                     :<|> structuredQuery
                     :<|> serveSpelling
                     :<|> getCached
@@ -65,11 +59,6 @@ queryServer qp reg wfr = serveQuery
         runQuery qp cn (QueryParams (encodeUtf8 q) mn) >>= \case
             Left e        -> error $ show e
             Right results -> pure results
-
-    serveUnscored cn q =
-        runUnscored qp cn q >>= \case
-            Left e        -> error $ show e
-            Right unscored -> pure unscored
 
     structuredQuery cn txt =
         case parseQuery (encodeUtf8 txt) of

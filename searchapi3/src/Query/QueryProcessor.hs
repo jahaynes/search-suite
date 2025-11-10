@@ -42,7 +42,6 @@ import           UnliftIO.Exception             (bracket)
 data QueryProcessor =
     QueryProcessor { runQuery      :: !(CollectionName -> QueryParams -> IO (Either String QueryResults))
                    , runSpelling   :: !(CollectionName -> Text -> Maybe Int -> IO (Either String SpellingSuggestions))
-                   , runUnscored   :: !(CollectionName -> Text -> IO (Either String UnscoredResults))
                    , runStructured :: !(CollectionName -> Clause -> IO (Either Text UnscoredResults))
                    }
 
@@ -54,7 +53,6 @@ createQueryProcessor :: Environment
 createQueryProcessor env reg metadataApi lg =
     QueryProcessor { runQuery      = runQueryImpl env reg metadataApi lg
                    , runSpelling   = runSpellingImpl env reg lg
-                   , runUnscored   = runUnscoredImpl env reg lg
                    , runStructured = runStructuredImpl env reg lg
                    }
 
@@ -75,13 +73,13 @@ runStructuredImpl :: Environment
                   -> CollectionName
                   -> Clause
                   -> IO (Either Text UnscoredResults)
-runStructuredImpl env reg lg cn clause = do
+runStructuredImpl env reg logger collectionName@(CollectionName cn) clause = do
     rs <- go clause
     pure . Right $ UnscoredResults (S.size rs) rs
 
     where
     go (ClauseText q) = do
-        Right r <- runUnscoredImpl env reg lg cn (decodeUtf8 q) -- TODO can this decode be skipped
+        Right r <- runUnscored (decodeUtf8 q) -- TODO can this decode be skipped
         pure $ unscored_results r
 
     go (Conjunction Or cs) = do
@@ -92,35 +90,29 @@ runStructuredImpl env reg lg cn clause = do
         r :| rs <- mapM go cs
         pure (foldl' S.intersection r rs)
 
-runUnscoredImpl :: Environment
-                -> Registry
-                -> (ByteString -> IO ())
-                -> CollectionName
-                -> Text
-                -> IO (Either String UnscoredResults)
-runUnscoredImpl env registry logger collectionName@(CollectionName cn) q =
-    withLocks registry collectionName $ \lockedComponents ->
-        if null lockedComponents
-            then do
-                let errMsg = printf "No such collection: %s" cn
-                logger $ C8.pack errMsg
-                pure $ Left errMsg
-            else do
-                mapM_ print lockedComponents
-                (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> queryComponent env logger (execParams lc) (encodeUtf8 q))
-                let errMsg = C8.unlines (map C8.pack bads)
-                unless (null bads)
-                       (logger errMsg)
-                pure $ if null goods
-                           then Left $ unlines bads
-                           else Right $ mconcat goods
+    runUnscored :: Text -> IO (Either String UnscoredResults)
+    runUnscored q =
+        withLocks reg collectionName $ \lockedComponents ->
+            if null lockedComponents
+                then do
+                    let errMsg = printf "No such collection: %s" cn
+                    logger $ C8.pack errMsg
+                    pure $ Left errMsg
+                else do
+                    (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> queryComponent env logger (execParams lc) (encodeUtf8 q))
+                    let errMsg = C8.unlines (map C8.pack bads)
+                    unless (null bads)
+                           (logger errMsg)
+                    pure $ if null goods
+                            then Left $ unlines bads
+                            else Right $ mconcat goods
 
-    where
-    execParams :: Component -> [String]
-    execParams component =
-        concat [ ["unscored"]
-               , ["--base_path", path component]
-               ]
+        where
+        execParams :: Component -> [String]
+        execParams component =
+            concat [ ["unscored"]
+                   , ["--base_path", path component]
+                   ]
 
 withLocks :: NFData a => Registry -> CollectionName -> ([Component] -> IO a) -> IO a
 withLocks reg collectionName f =
