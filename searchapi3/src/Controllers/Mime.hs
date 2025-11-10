@@ -1,6 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses,
              OverloadedStrings #-}
 
+-- TODO: not used?
 module Controllers.Mime where
 
 import Data.ByteString.Lazy              (fromStrict)

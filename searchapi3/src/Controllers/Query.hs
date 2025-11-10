@@ -6,7 +6,6 @@
 module Controllers.Query (QueryApi, queryServer) where
 
 import Component                 (Component (cmp_filePath))
-import Controllers.Mime          (Html)
 import Data.Warc.Body
 import Data.Warc.WarcEntry
 import Query.QueryParams         (QueryParams (QueryParams))
@@ -42,7 +41,7 @@ type QueryApi = "query" :> Capture "col" CollectionName
 
            :<|> "cached" :> Capture "col" CollectionName
                          :> QueryParam' '[Required] "url" Text
-                         :> Get '[Html] Text
+                         :> Get '[PlainText] (Headers '[Header "Content-Disposition" Text] Text)
 
 queryServer :: QueryProcessor
             -> Registry
@@ -81,8 +80,8 @@ queryServer qp reg wfr = serveQuery
                 url'     = encodeUtf8 url
             in fmap decompressedText <$> findWarcEntry wfr warcFile warcOffs url'
 
-        pure $ fromMaybe "{not found!}"
-                         (headMay $ catMaybes mBodies)
+        pure . addHeader "inline" $ fromMaybe ("{not found!}")
+                                              (headMay $ catMaybes mBodies)
 
 decompressedText :: WarcEntry -> Text
 decompressedText entry =

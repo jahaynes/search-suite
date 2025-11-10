@@ -2,7 +2,7 @@
            , DeriveGeneric
            , OverloadedStrings #-}
 
-module Query.QueryProcessorTypes where
+module Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) ) where
 
 import           Control.DeepSeq            (NFData)
 import           Control.Lens
@@ -118,16 +118,6 @@ exampleQueryResults =
     QueryResults { num_results = 2
                  , results = V.fromList [exampleQueryResult1, exampleQueryResult2]
                  }
-
-limit :: Maybe Int -> QueryResults -> QueryResults
-limit  Nothing qr = qr
-limit (Just n) qr =
-    let dropAmount = num_results qr - n
-    in if dropAmount > 0
-        then QueryResults { num_results = n
-                          , results     = V.drop dropAmount (results qr)
-                          }
-        else qr
 
 newtype SpellingSuggestions =
     SpellingSuggestions { unSpellingSuggestions :: Map Text (Map Int (Set Text)) }
