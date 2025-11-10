@@ -1,18 +1,17 @@
+type Either<L, R> = { Left: L } | { Right: R };
 
 type QueryUIState = {
     selectedCollection: string | null;
 };
 
-type QueryResults = {
-    num_results: number;
-    results: QueryResult[];
+type UnscoredResults = {
+    num_unscored: number;
+    unscored_results: UnscoredResult[];
 };
 
-type QueryResult = {
-    uri: string;
-    score: number;
-    term_count: number;
-    metadata: Record<string, string>;
+type UnscoredResult = {
+    ur_doc_id: number;
+    ur_uri: string;
 };
 
 const reqHeaders: RequestInit = {
@@ -20,43 +19,13 @@ const reqHeaders: RequestInit = {
     headers: { 'Content-Type': 'application/json' }
 }
 
-function renderResult(collectionName: string, result: QueryResult) {
-
-    const createTitle = () => {
-        const title = document.createElement("div");
-        title.innerText = result.metadata?.title ?? "Untitled";
-        title.classList.add("result_title");
-        resultItem.append(title);
-        return title;
-    }
-
-    const createDesc = () => {
-        const desc = document.createElement("p");
-        desc.innerText = result.metadata?.description ?? "No description";
-        desc.classList.add("result_desc");
-        resultItem.append(desc);
-        return desc;
-    }
-
-    const createTermCount = () => {
-        const termCount = document.createElement("div");
-        termCount.innerText = result.term_count.toString();
-        resultItem.append(termCount);
-        return termCount;
-    }
-
-    const createScore = () => {
-        const score = document.createElement("div");
-        score.innerText = result.score.toString();
-        resultItem.append(score);
-        return score;
-    }
+function renderResult(collectionName: string, result: UnscoredResult) {
 
     const createUriLink = () => {
         const uri = document.createElement("div");
         const a = document.createElement('a');
-        a.href = result.uri;
-        a.textContent = result.uri;
+        a.href = result.ur_uri;
+        a.textContent = result.ur_uri;
         uri.innerHTML = '';
         uri.appendChild(a);
         return uri;
@@ -64,7 +33,7 @@ function renderResult(collectionName: string, result: QueryResult) {
 
     const createCacheLink = () => {
         const cached = document.createElement("div");
-        const safeTarget = encodeURIComponent(result.uri);
+        const safeTarget = encodeURIComponent(result.ur_uri);
         const link = `/cached/${encodeURIComponent(collectionName)}?url=${safeTarget}`;
         const a = document.createElement("a");
         a.href = link;
@@ -76,10 +45,6 @@ function renderResult(collectionName: string, result: QueryResult) {
     const resultItem = document.createElement("li");
     resultItem.classList.add("result");
     resultItem.append(
-        createTitle(),
-        createDesc(),
-        createTermCount(),
-        createScore(),
         createUriLink(),
         createCacheLink());
 
@@ -98,38 +63,25 @@ const fireStructuredSearch = async (state: QueryUIState) => {
         return;
     }
 
-    console.log("Will fire structured search: " + query);
-
     const url = `/structured-query/${encodeURIComponent(collectionName)}`;
-
-    const body = 'dummy string';
 
     await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: body
+        body: query
     })
     .then(resp => resp.json())
-    .then((data: QueryResults) => {
+    .then((data: Either<string, UnscoredResults>) => {
         const resultList = document.querySelector<HTMLElement>("#results")!;
         resultList.innerHTML = '';
-        for (let i = 0; i < data.results.length; i++) {
-            const resultItem = renderResult(collectionName, data.results[i]!);
-            resultList.appendChild(resultItem);
-        }
-    });
 
-/*
-    await fetch(url, reqHeaders)
-        .then(resp => resp.json())
-        .then((data : QueryResults) => {
-            const resultList = document.querySelector<HTMLElement>("#results")!;
-            resultList.innerHTML = '';
-            for (let i = 0; i < data.results.length; i++) {
-                const resultItem = renderResult(collectionName, data.results[i]!);
+        if ('Right' in data) {
+            for (let i = 0; i < data.Right.num_unscored; i++) {
+                const resultItem = renderResult(collectionName, data.Right.unscored_results[i]!);
                 resultList.appendChild(resultItem);
             }
-        });*/
+        }
+    });
 }
 
 const displayCollections = async (state: QueryUIState, collectionNames: string[]) => {

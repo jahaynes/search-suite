@@ -82,7 +82,7 @@ runStructuredImpl env reg lg cn clause = do
     where
     go (ClauseText q) = do
         Right r <- runUnscoredImpl env reg lg cn (decodeUtf8 q) -- TODO can this decode be skipped
-        pure $ doc_ids r
+        pure $ unscored_results r
 
     go (Conjunction Or cs) = do
         r :| rs <- mapM go cs

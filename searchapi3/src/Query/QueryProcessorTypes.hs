@@ -29,9 +29,21 @@ instance ToSchema DocId where
         & mapped.schema.description ?~ "DocId"
         & mapped.schema.example     ?~ toJSON exampleDocId
 
+data UnscoredResult =
+    UnscoredResult { ur_doc_id :: !DocId
+                   , ur_uri    :: !Text
+                   } deriving (Eq, Ord, Show, Generic, FromJSON, ToJSON)
+
+instance NFData UnscoredResult
+
+instance ToSchema UnscoredResult where
+    declareNamedSchema proxy = genericDeclareNamedSchema defaultSchemaOptions proxy
+        & mapped.schema.description ?~ "Unscored query result"
+        & mapped.schema.example     ?~ toJSON exampleUnscored
+
 data UnscoredResults =
-    UnscoredResults { num_unscored :: !Int
-                    , doc_ids      :: !(Set DocId)
+    UnscoredResults { num_unscored     :: !Int
+                    , unscored_results :: !(Set UnscoredResult)
                     } deriving (Show, Generic, FromJSON, ToJSON)
 
 instance Semigroup UnscoredResults where
@@ -52,10 +64,15 @@ instance ToSchema UnscoredResults where
 exampleDocId :: DocId
 exampleDocId = DocId 32045
 
+exampleUnscored :: UnscoredResult
+exampleUnscored = UnscoredResult { ur_doc_id = exampleDocId
+                                 , ur_uri    = "https://www.foo.bar"
+                                 }
+
 exampleUnscoredResults :: UnscoredResults
 exampleUnscoredResults =
-    UnscoredResults { num_unscored = 1
-                    , doc_ids = S.singleton exampleDocId
+    UnscoredResults { num_unscored     = 1
+                    , unscored_results = S.singleton exampleUnscored
                     }
 
 data QueryResults =

@@ -14,32 +14,43 @@ pub struct QueryResult { pub num_results: usize
                        , pub results:     Vec<Scored>
                        }
 
-#[derive(Debug, Serialize)]
-pub struct UnscoredResult { pub num_unscored: usize
-                          , pub doc_ids: HashSet<DocId>
+#[derive(Debug, PartialEq, Eq, Hash, Serialize)]
+pub struct UnscoredResult { pub ur_doc_id: DocId
+                          , pub ur_uri: Url
                           }
 
+#[derive(Debug, Serialize)]
+pub struct UnscoredResults { pub num_unscored: usize
+                           , pub unscored_results: HashSet<UnscoredResult>
+                           }
+                          
 /*  Want to implement TermId->DocId retrieval suitable for
     set-manipulations at a higher-level (outside this collection component),
     skipping scoring */
 pub fn unscored_query(ir:           &IndexRead,
-                      query_params: &QueryParams) -> UnscoredResult {
+                      query_params: &QueryParams) -> UnscoredResults {
 
     let terms = collect_query_terms(ir, query_params);
 
     // Fast abort if we don't match all terms (TODO it's not done later)
     // (Not all terms have Term Entries)
     if terms.len() < query_params.query_terms.len() {
-        return UnscoredResult { num_unscored: 0
-                              , doc_ids: HashSet::new()
-                              };
+        return UnscoredResults { num_unscored: 0
+                               , unscored_results: HashSet::new()
+                               };
     }
 
-    let doc_ids = unscored_doc_id_intersection(ir, &terms, query_params);
+    // TODO: Think about safety
+    // TODO: Batching
+    let unscored_results: HashSet<UnscoredResult> =
+            unscored_doc_id_intersection(ir, &terms, query_params)
+                .iter()
+                .map(|&doc_id| UnscoredResult { ur_doc_id : doc_id, ur_uri : find_doc(ir, doc_id).unwrap().url })
+                .collect();
 
-    UnscoredResult { num_unscored: doc_ids.len()
-                   , doc_ids:      doc_ids
-                   }
+    UnscoredResults { num_unscored:     unscored_results.len()
+                    , unscored_results: unscored_results
+                    }
 }
 
 pub fn query(ir:           &IndexRead,
