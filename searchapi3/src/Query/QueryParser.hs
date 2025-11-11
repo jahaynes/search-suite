@@ -20,7 +20,7 @@ data Clause = Conjunction !Op !(NonEmpty Clause)
             | ClauseText !ByteString
                 deriving Show
 
-data Op = And | Or deriving (Eq, Show)
+data Op = And | Or | Sub deriving (Eq, Show)
 
 {- Example
 /\ search
@@ -67,6 +67,7 @@ parse = clauseOrText <* ws
             where
             parseOp = (Or  <$ lexString "\\/")
                   <|> (And <$ lexString "/\\")
+                  <|> (Sub <$ lexString "--")
 
     text :: LineLexer Clause
     text = ws *> fmap ClauseText restOfLine

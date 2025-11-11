@@ -90,6 +90,10 @@ runStructuredImpl env reg logger collectionName@(CollectionName cn) clause = do
         r :| rs <- mapM go cs
         pure (foldl' S.intersection r rs)
 
+    go (Conjunction Sub cs) = do
+        r :| rs <- mapM go cs
+        pure (foldl' S.difference r rs)
+
     runUnscored :: Text -> IO (Either String UnscoredResults)
     runUnscored q =
         withLocks reg collectionName $ \lockedComponents ->
