@@ -16,7 +16,8 @@ import           Data.Functor                (void)
 import           Data.List.NonEmpty          (NonEmpty)
 import           Data.Text                   (Text)
 
-data Clause = Conjunction !Op !(NonEmpty Clause)
+data Clause = Disjunction !Clause !Clause
+            | Conjunction !Op !(NonEmpty Clause)
             | ClauseText !ByteString
                 deriving Show
 
@@ -41,17 +42,27 @@ parseQuery bs =
 -- Still to do.  Check AND-OR mismatches,  AND/ORs introduced out of nowhere
 -- TODO - use a proper Writer for errors?
 parse :: LineLexer Clause
-parse = clauseOrText <* ws
+parse = clause <* ws
 
     where
-    clauseOrText :: LineLexer Clause
-    clauseOrText = clause <|> text
+    clause :: LineLexer Clause
+    clause = disjunction <|> positive
+
+    disjunction :: LineLexer Clause
+    disjunction = do
+
+        a <- ws *> positive
+        b <- ws *> positive
+        undefined -- b <- 
+
+    positive :: LineLexer Clause
+    positive = clause <|> text
 
         where
         clause :: LineLexer Clause
         clause = do
             (col, op) <- junc
-            Conjunction op <$> sepBy1 (matchJunc col op) clauseOrText
+            Conjunction op <$> sepBy1 (matchJunc col op) clause
 
             where
             matchJunc :: Int -> Op -> LineLexer ()
