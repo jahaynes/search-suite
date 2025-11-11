@@ -82,17 +82,13 @@ runStructuredImpl env reg logger collectionName@(CollectionName cn) clause = do
         Right r <- runUnscored (decodeUtf8 q) -- TODO can this decode be skipped
         pure $ unscored_results r
 
-    go (Conjunction Or cs) = do
+    go (Conjunction op cs) = do
+        let f = case op of
+                    Or  -> S.union
+                    And -> S.intersection
+                    Sub -> S.difference
         r :| rs <- mapM go cs
-        pure (foldl' S.union r rs)
-
-    go (Conjunction And cs) = do
-        r :| rs <- mapM go cs
-        pure (foldl' S.intersection r rs)
-
-    go (Conjunction Sub cs) = do
-        r :| rs <- mapM go cs
-        pure (foldl' S.difference r rs)
+        pure (foldl' f r rs)
 
     runUnscored :: Text -> IO (Either String UnscoredResults)
     runUnscored q =
