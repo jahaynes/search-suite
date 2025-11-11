@@ -2,7 +2,7 @@
            , DeriveGeneric
            , OverloadedStrings #-}
 
-module Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) ) where
+module Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..), UnscoredResult (..) ) where
 
 import           Control.DeepSeq            (NFData)
 import           Control.Lens

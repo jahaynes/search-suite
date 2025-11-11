@@ -18,6 +18,7 @@ import           Data.Text                   (Text)
 
 data Clause = Conjunction !Op !(NonEmpty Clause)
             | ClauseText !ByteString
+            | Negated !Clause
                 deriving Show
 
 data Op = And | Or deriving (Eq, Show)
@@ -45,9 +46,16 @@ parse = clauseOrText <* ws
 
     where
     clauseOrText :: LineLexer Clause
-    clauseOrText = clause <|> text
+    clauseOrText = negated <|> positive
 
         where
+        negated :: LineLexer Clause
+        negated = do
+            _ <- ws *> lexString "!!"
+            Negated <$> positive
+
+        positive = clause <|> text
+
         clause :: LineLexer Clause
         clause = do
             (col, op) <- junc

@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings
+{-# LANGUAGE LambdaCase
+           , OverloadedStrings
            , ScopedTypeVariables #-}
 
 module Query.QueryProcessor ( QueryProcessor (..)
@@ -9,7 +10,7 @@ import Component                 ( Component )
 import Environment               ( Environment (..) )
 import Query.QueryParams         ( QueryParams (..) )
 import Query.QueryParser         ( Clause (..), Op (..) )
-import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) )
+import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..), UnscoredResult (..) )
 import Registry                  ( Registry (..) )
 import Metadata                  ( Metadata (..), MetadataApi (..) )
 import Types
@@ -23,12 +24,14 @@ import           Data.Aeson                     (FromJSON, eitherDecodeStrict')
 import           Data.ByteString                (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import           Data.Either                    (partitionEithers)
+import           Data.Functor                   ((<&>))
 import           Data.Heap                      (Heap)
 import qualified Data.Heap as H
 import           Data.List                      (sortOn)
 import           Data.List.NonEmpty             (NonEmpty (..))
 import qualified Data.Map.Strict as M
 import           Data.Maybe                     (fromMaybe)
+import           Data.Set                       (Set)
 import qualified Data.Set as S
 import           Data.Text                      (Text)
 import qualified Data.Text as T
@@ -65,6 +68,10 @@ instance Eq ComponentResult where
 instance Ord ComponentResult where
     compare (ComponentResult r1 c1) (ComponentResult r2 c2) = compare (score r1, c1) (score r2, c2)
 
+
+data Pos a =
+    Pos a | Neg a
+
 -- TODO, this can probably pushed into indexer-qp2
 -- TODO, locks are independent here and probably shouldn't be
 runStructuredImpl :: Environment
@@ -73,22 +80,43 @@ runStructuredImpl :: Environment
                   -> CollectionName
                   -> Clause
                   -> IO (Either Text UnscoredResults)
-runStructuredImpl env reg logger collectionName@(CollectionName cn) clause = do
-    rs <- go clause
-    pure . Right $ UnscoredResults (S.size rs) rs
+runStructuredImpl env reg logger collectionName@(CollectionName cn) clause =
+
+    go clause <&> \case
+
+        Neg{} -> Left "Not returning negative result set"
+
+        Pos rs -> Right $ UnscoredResults (S.size rs) rs
 
     where
+    go :: Clause -> IO (Pos (Set UnscoredResult))
+
+    go (Negated (ClauseText q)) = do
+
+        Pos p <- go (ClauseText q)
+        pure $ Neg p
+
     go (ClauseText q) = do
         Right r <- runUnscored (decodeUtf8 q) -- TODO can this decode be skipped
-        pure $ unscored_results r
+        pure . Pos $ unscored_results r
 
     go (Conjunction Or cs) = do
-        r :| rs <- mapM go cs
-        pure (foldl' S.union r rs)
+        rs <- mapM go cs
+        pure $ unify rs
 
     go (Conjunction And cs) = do
-        r :| rs <- mapM go cs
-        pure (foldl' S.intersection r rs)
+        rs <- mapM go cs
+        pure $ unify rs
+
+    go x = error $ show x
+
+    unify (r:|rs) = foldl' u r rs  -- check fold direction
+        where
+        u (Pos x) (Pos y) = Pos (S.union x y)
+
+    intersect (r:|rs) = foldl' i r rs -- check fold direction
+        where
+        i (Pos x) (Pos y) = Pos (S.intersection x y)
 
     runUnscored :: Text -> IO (Either String UnscoredResults)
     runUnscored q =
