@@ -70,6 +70,16 @@ lTakeWhile p = Parser go
             (r', c')     = newLineCol r c some
         in Right (LexState r' c' rest, some)
 
+lTakeWhile1 :: (Char -> Bool) -> LineLexer ByteString
+lTakeWhile1 p = Parser go
+    where
+    go (LexState r c i) =
+        let (some, rest) = C8.span p i
+            (r', c')     = newLineCol r c some
+        in if C8.null some
+            then Left "lTakeWhile1 empty"
+            else Right (LexState r' c' rest, some)
+
 restOfLine :: LineLexer ByteString
 restOfLine = Parser go
 

@@ -18,10 +18,12 @@ import WarcFileReader            (WarcFileReader (..))
 
 import Control.Concurrent.STM    (atomically)
 import Control.Monad             (forM)
+import Control.Monad.IO.Class    (liftIO)
 import Data.Maybe                (catMaybes, fromMaybe)
 import Data.Set                  (toList)
 import Data.Text                 (Text)
 import Data.Text.Encoding        (decodeUtf8, encodeUtf8)
+import qualified Data.Text.IO as T
 import Safe                      (headMay)
 import Servant
 
@@ -59,7 +61,17 @@ queryServer qp reg wfr = serveQuery
             Left e        -> error $ show e
             Right results -> pure results
 
-    structuredQuery cn txt =
+    structuredQuery cn txt = do
+
+        print $ "Lexing: " ++ show txt 
+        let y = lexQuery (encodeUtf8 txt)
+        liftIO $ print y
+
+        print $ "Parsing!"
+        case lexAndParse (encodeUtf8 txt) of
+            Left l -> liftIO $ T.putStrLn l
+            Right r -> liftIO $ print r
+
         case parseQuery (encodeUtf8 txt) of
             Left e   -> pure $ Left e
             Right sq -> runStructured qp cn sq
