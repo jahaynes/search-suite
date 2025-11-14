@@ -14,8 +14,8 @@ import           Control.Applicative         ((<|>), many)
 import           Data.ByteString             (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import           Data.Char                   (isSpace)
-import           Data.Functor                (void)
-import           Data.List.NonEmpty          (NonEmpty)
+import           Data.Functor                ((<&>), void)
+import           Data.List.NonEmpty          (NonEmpty (..))
 import           Data.Text                   (Text)
 import qualified Data.Text as T
 
@@ -50,7 +50,7 @@ parseTokens :: [Token] -> Either Text Clause
 parseTokens ts =
     case runParser parse' ts of
         Right ([], p) -> Right p
-        Right (ts, p) -> Left . T.pack $ ("Partial parse:\n" ++ show ts ++ "\n" ++ show p)
+        Right (lo, p) -> Left . T.pack $ ("Partial parse:\n" ++ show lo ++ "\n" ++ show p)
         Left l        -> Left l
 
 lexQuery :: ByteString -> Either Text [Token]
@@ -60,7 +60,6 @@ lexQuery bs =
             | C8.null (_input ls) -> Right p
             | otherwise           -> Left "Parse failure (leftover)"
         Left l                    -> Left l
-
 
 -- Still to do.  Check AND-OR mismatches,  AND/ORs introduced out of nowhere
 -- TODO - use a proper Writer for errors?
@@ -96,40 +95,50 @@ parse = clauseOrText <* ws
     text :: LineLexer Clause
     text = ws *> fmap ClauseText restOfLine
 
+-- TODO:
+-- Then Multiline (outer)
+    -- SingleLine first (inner)
 
 parse' :: Parser [Token] Clause
-parse' = dotPointClause <|> adhocClause <|> text'
+parse' = singleLineClause
 
     where
-    dotPointClause :: Parser [Token] Clause
-    dotPointClause = do
-        (col, op) <- junc'
-        Conjunction op <$> sepBy1 (matchJunc' col op) parse'
+    singleLineClause :: Parser [Token] Clause
+    singleLineClause = orClause
 
-    matchJunc' :: Int -> Op -> Parser [Token] ()
-    matchJunc' col op = do
-        (col', op') <- junc'
-        case (col == col', op == op') of
-            (False, _)    -> reject "not aligned"
-            (True, False) -> error "mismatch!" -- TODO: would like this reported
-            (True, True)  -> pure ()
-
-    adhocClause :: Parser [Token] Clause
-    adhocClause = reject "looking for adhoc"
-
-    text' :: Parser [Token] Clause
-    text' = Parser f
         where
-        f (TText text:ts) = Right (ts, ClauseText text)
-        f _               = Left "Not text"
+        orClause = sepBy1 orSep andClause <&> \case
+                       x :| [] -> x
+                       xs      -> Conjunction Or xs
 
-    junc' :: Parser [Token] (Int, Op)
-    junc' = Parser f
+        andClause = sepBy1 andSep text <&> \case
+                        x :| [] -> x
+                        xs      -> Conjunction And xs
+
+        orSep = transform f
+            where
+            f TOr{} = Just ()
+            f     _ = Nothing
+
+        andSep = transform f
+            where
+            f TAnd{} = Just ()
+            f      _ = Nothing
+
+    text :: Parser [Token] Clause
+    text = transform f
         where
-        f          [] = Left "Out of input"
-        f (TOr  c:ts) = Right (ts, (c, Or))
-        f (TAnd c:ts) = Right (ts, (c, And))
-        f           _ = Left "mismatch"
+        f (TText t) = Just (ClauseText t)
+        f         _ = Nothing
+
+transform :: (a -> Maybe b) -> Parser [a] b
+transform p = Parser f
+    where
+    f    [] = Left "transform empty"
+    f(x:xs) =
+        case p x of
+            Just y  -> Right (xs, y)
+            Nothing -> Left "failed p"
 
 data Token = TOr !Int
            | TAnd !Int
