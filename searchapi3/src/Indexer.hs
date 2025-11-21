@@ -27,9 +27,8 @@ import WarcFileWriter      (WarcFileWriter (..))
 
 import           Control.Concurrent.STM           (atomically)
 import           Control.Monad                    (forM, void)
-import           Data.Aeson                       (decode, decodeStrict, encode)
+import           Data.Aeson                       (decode, encode)
 import           Data.ByteString                  (ByteString)
-import qualified Data.ByteString.Char8      as C8
 import qualified Data.ByteString.Lazy.Char8 as L8
 import           Data.Either                      (lefts, rights)
 import           Data.List                        (sort)
@@ -67,7 +66,7 @@ createIndexer :: Environment
               -> Indexer
 createIndexer env wfr writer metadataApi cpc reg =
     Indexer { indexDocuments     = indexDocumentsImpl env writer metadataApi cpc reg
-            , indexLocalFiles    = indexLocalFileImpl env wfr writer metadataApi cpc reg
+            , indexLocalFiles    = indexLocalFileImpl env writer metadataApi cpc reg
             , indexLocalWarcFile = indexLocalWarcFileImpl env wfr writer metadataApi cpc reg
             , deleteDocument     = deleteDocumentImpl env reg
             , isDocDeleted       = isDocDeletedImpl env reg
@@ -158,7 +157,6 @@ indexDocumentsImpl env writer metadataApi compactor registry collectionName unso
                 Right (_, stdout, stderr) -> pure . Left . show $ (stdout, stderr)
 
 indexLocalFileImpl :: Environment
-                   -> WarcFileReader
                    -> WarcFileWriter
                    -> MetadataApi
                    -> Compactor
@@ -166,7 +164,7 @@ indexLocalFileImpl :: Environment
                    -> CollectionName
                    -> [FilePath]  -- TO Vector? or just json
                    -> IO (Either String ())
-indexLocalFileImpl env warcFileReader writer metadataApi compactor registry collectionName filePaths = do
+indexLocalFileImpl env writer metadataApi compactor registry collectionName filePaths = do
     -- jsonify?
     -- Unnecessary packing
     -- safe-exceptions

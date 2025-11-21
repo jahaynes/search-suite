@@ -3,11 +3,11 @@
 module Parser.Parser where
 
 import           Control.Applicative
-import           Data.ByteString             (ByteString)
-import           Data.Functor                ((<&>))
+import           Data.Functor        ((<&>))
+import           Data.Text           (Text)
 
 newtype Parser s a =
-    Parser { runParser :: s -> Either ByteString (s, a) }
+    Parser { runParser :: s -> Either Text (s, a) }
 
 instance Functor (Parser s) where
 

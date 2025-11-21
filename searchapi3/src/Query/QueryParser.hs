@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Query.QueryParser ( Clause, parseQuery ) where
+module Query.QueryParser ( Clause (..)
+                         , Op (..)
+                         , parseQuery ) where
 
 import Parser.Combinators
 import Parser.LineLexer
@@ -12,12 +14,14 @@ import qualified Data.ByteString.Char8 as C8
 import           Data.Char                   (isSpace)
 import           Data.Functor                (void)
 import           Data.List.NonEmpty          (NonEmpty)
+import           Data.Text                   (Text)
 
 data Clause = Conjunction !Op !(NonEmpty Clause)
             | ClauseText !ByteString
+            | ClauseRegex !ByteString
                 deriving Show
 
-data Op = And | Or deriving (Eq, Show)
+data Op = And | Or | Sub deriving (Eq, Show)
 
 {- Example
 /\ search
@@ -27,7 +31,7 @@ data Op = And | Or deriving (Eq, Show)
 /\ feature
 -}
 
-parseQuery :: ByteString -> Either ByteString Clause
+parseQuery :: ByteString -> Either Text Clause
 parseQuery bs =
     case runParser parse (fromInput bs) of
         Right (ls, p)
@@ -42,7 +46,7 @@ parse = clauseOrText <* ws
 
     where
     clauseOrText :: LineLexer Clause
-    clauseOrText = clause <|> text
+    clauseOrText = clause <|> regex <|> text
 
         where
         clause :: LineLexer Clause
@@ -64,6 +68,12 @@ parse = clauseOrText <* ws
             where
             parseOp = (Or  <$ lexString "\\/")
                   <|> (And <$ lexString "/\\")
+                  <|> (Sub <$ lexString "--")
+
+    regex :: LineLexer Clause
+    regex = do
+        ws *> lexString "~"
+        ws *> fmap ClauseRegex restOfLine
 
     text :: LineLexer Clause
     text = ws *> fmap ClauseText restOfLine

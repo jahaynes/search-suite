@@ -1,10 +1,10 @@
 use serde::Serialize;
 use std::ops::AddAssign;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct Url(pub String);
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash, Serialize)]
 pub struct DocId(pub u32);
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]

@@ -6,20 +6,19 @@
 module Controllers.Query (QueryApi, queryServer) where
 
 import Component                 (Component (cmp_filePath))
-import Controllers.Mime          (Html)
 import Data.Warc.Body
 import Data.Warc.WarcEntry
 import Query.QueryParams         (QueryParams (QueryParams))
 import Query.QueryParser
 import Query.QueryProcessor      (QueryProcessor (..))
-import Query.QueryProcessorTypes (SpellingSuggestions, QueryResults)
+import Query.QueryProcessorTypes (QueryResults, SpellingSuggestions, UnscoredResults)
 import Registry                  (Registry (..))
 import Types                     (CollectionName)
 import WarcFileReader            (WarcFileReader (..))
 
-import Control.Arrow             (left, right)
 import Control.Concurrent.STM    (atomically)
 import Control.Monad             (forM)
+import Control.Monad.IO.Class    (liftIO)
 import Data.Maybe                (catMaybes, fromMaybe)
 import Data.Set                  (toList)
 import Data.Text                 (Text)
@@ -32,8 +31,9 @@ type QueryApi = "query" :> Capture "col" CollectionName
                         :> QueryParam "n" Int
                         :> Get '[JSON] QueryResults
 
-           :<|> "structured-query" :> ReqBody '[PlainText] Text
-                                   :> Post '[JSON] (Either Text String)
+           :<|> "structured-query" :> Capture "col" CollectionName
+                                   :> ReqBody '[PlainText] Text
+                                   :> Post '[JSON] (Either Text UnscoredResults)
 
            :<|> "spelling" :> Capture "col" CollectionName
                            :> QueryParam' '[Required] "s" Text
@@ -42,7 +42,7 @@ type QueryApi = "query" :> Capture "col" CollectionName
 
            :<|> "cached" :> Capture "col" CollectionName
                          :> QueryParam' '[Required] "url" Text
-                         :> Get '[Html] Text
+                         :> Get '[PlainText] (Headers '[Header "Content-Disposition" Text] Text)
 
 queryServer :: QueryProcessor
             -> Registry
@@ -50,7 +50,7 @@ queryServer :: QueryProcessor
             -> ServerT QueryApi IO
 
 queryServer qp reg wfr = serveQuery
-                    :<|> previewStructuredQuery
+                    :<|> structuredQuery
                     :<|> serveSpelling
                     :<|> getCached
 
@@ -60,7 +60,12 @@ queryServer qp reg wfr = serveQuery
             Left e        -> error $ show e
             Right results -> pure results
 
-    previewStructuredQuery = pure . right show . left decodeUtf8 . parseQuery . encodeUtf8 -- TODO hook this up
+    structuredQuery cn txt = do
+        case parseQuery (encodeUtf8 txt) of
+            Left e   -> pure $ Left e
+            Right sq -> do
+                liftIO $ print ("Parsed: ", sq)
+                runStructured qp cn sq
 
     serveSpelling cn s mn =
         runSpelling qp cn s mn
@@ -78,8 +83,8 @@ queryServer qp reg wfr = serveQuery
                 url'     = encodeUtf8 url
             in fmap decompressedText <$> findWarcEntry wfr warcFile warcOffs url'
 
-        pure $ fromMaybe "{not found!}"
-                         (headMay $ catMaybes mBodies)
+        pure . addHeader "inline" $ fromMaybe ("{not found!}")
+                                              (headMay $ catMaybes mBodies)
 
 decompressedText :: WarcEntry -> Text
 decompressedText entry =

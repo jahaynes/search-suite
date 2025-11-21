@@ -5,6 +5,7 @@ use crate::terms::*;
 use crate::types::*;
 
 use memmap::{Mmap, MmapMut};
+use regex::Regex;
 use std::fs::{File, OpenOptions};
 use std::str::from_utf8;
 use std::io::BufReader;
@@ -83,6 +84,19 @@ pub fn find_term(ir: &IndexRead,
             Some(term)
         }
     }
+}
+
+/* Scan all terms linearly - matching by regex */
+pub fn scan_terms_regex(ir: &IndexRead,
+                        regex: &Regex) -> Vec<TermEntry> {
+    let TermOffsetsRead(term_offsets) = ir.term_offsets;
+    term_offsets
+        .iter()
+        .map(|off| *off as usize)
+        .map(|off| (off, read_term_at(&ir.terms, off)))
+        .filter(|(_, Term(t))| regex.is_match(&t))
+        .map(|(off, _)| read_term_entry_at(&ir.terms, off))
+        .collect()
 }
 
 pub fn find_doc(ir:     &IndexRead,

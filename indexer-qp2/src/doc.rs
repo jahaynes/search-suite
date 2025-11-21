@@ -5,6 +5,7 @@ use crate::types::*;
 use crate::write_to_buf::WriteToBuf;
 
 use rand::prelude::*;
+use serde::Serialize;
 use std::collections::HashMap;
 
 pub struct Doc {
@@ -20,7 +21,7 @@ impl WriteToBuf for Doc {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct DocEntry {
     pub url:     Url,
     pub doc_id:  DocId,

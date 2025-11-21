@@ -1,4 +1,3 @@
-
 use crate::index_reader::*;
 use crate::input::*;
 use crate::ranking::*;
@@ -14,46 +13,114 @@ pub struct QueryResult { pub num_results: usize
                        , pub results:     Vec<Scored>
                        }
 
+#[derive(Debug, PartialEq, Eq, Hash, Serialize)]
+pub struct UnscoredResult { pub ur_doc_id: DocId
+                          , pub ur_uri: Url
+                          }
+
+#[derive(Debug, Serialize)]
+pub struct UnscoredResults { pub num_unscored: usize
+                           , pub unscored_results: HashSet<UnscoredResult>
+                           }
+                          
+/*  Implemented TermId->DocId retrieval suitable for
+    set-manipulations at a higher-level (outside this collection component),
+    skipping scoring */
+pub fn unscored_query(ir:           &IndexRead,
+                      query_params: &QueryParams) -> UnscoredResults {
+
+    let terms = collect_query_terms(ir, query_params);
+
+    // Fast abort if we don't match all terms (TODO it's not done later)
+    // (Not all terms have Term Entries)
+    if terms.len() < query_params.query_terms.len() {
+        return UnscoredResults { num_unscored: 0
+                               , unscored_results: HashSet::new()
+                               };
+    }
+
+    // TODO: Think about safety
+    // TODO: Batching
+    let unscored_results: HashSet<UnscoredResult> =
+            match query_params.mode  {
+                None =>
+                    unscored_doc_id_intersection(ir, terms)
+                        .iter()
+                        .map(|&doc_id| UnscoredResult { ur_doc_id : doc_id, ur_uri : find_doc(ir, doc_id).unwrap().url })
+                        .collect(),
+                Some(Mode::Regex) =>
+                    unscored_doc_id_union(ir, terms)
+                        .iter()
+                        .map(|&doc_id| UnscoredResult { ur_doc_id : doc_id, ur_uri : find_doc(ir, doc_id).unwrap().url })
+                        .collect()
+            };
+
+    UnscoredResults { num_unscored:     unscored_results.len()
+                    , unscored_results: unscored_results
+                    }
+}
+
 pub fn query(ir:           &IndexRead,
              query_params: &QueryParams) -> QueryResult {
 
     let mut scored = Vec::new();
 
-    let skip =
-          match query_params.max_results {
-            None    => false,
-            Some(n) => n < 1
-          };
-
-    if !skip {
-        run_query(&mut scored,
-                  ir,
-                  &query_params);
-    }
+    run_query_bm25(&mut scored,
+                   ir,
+                   &query_params);
 
     QueryResult { num_results: scored.len()
                 , results:     scored
                 }
 }
 
-fn run_query(out_scored:   &mut Vec<Scored>,
-             ir:           &IndexRead,        
-             query_params: &QueryParams) -> () {
+fn unscored_doc_id_union<'a>(ir:    &'a IndexRead,
+                             terms: Vec<TermEntry>) -> HashSet<DocId>{
 
-    let terms: Vec<TermEntry> =
-        query_params.query_terms
-                    .iter()
+    let mut union : HashSet<DocId> = HashSet::new();
 
-                    // Look up the string terms into term ids
-                    .map    ( | s| find_term(ir, s) )
+    for term in terms {
+        let doc_ids : HashSet<DocId> = docids_only_for_term(ir, &term).collect();
+        union.extend(doc_ids);
+    }
 
-                    // Keep only the found term ids
-                    .filter ( |rt| rt.is_some() )
-                    .map    ( |rt| rt.unwrap() )
-                    .collect();
+    union
+}
+
+fn unscored_doc_id_intersection<'a>(ir:    &'a IndexRead,
+                                    mut terms: Vec<TermEntry>) -> HashSet<DocId>{
+
+    if terms.is_empty() {
+        return HashSet::new();
+    }
+
+    /* Start with rarest term and intersect doc_ids against more common ones */
+    terms.sort_by_key(|te| (te.doc_freq));
+    let mut intersection : HashSet<DocId> = HashSet::new();
+
+    let first_doc_ids = docids_only_for_term(ir, &terms[0]);
+    intersection.extend(first_doc_ids);
+
+    for other_term in &terms[1..] {
+        if intersection.is_empty() {
+            break;
+        }
+        let other_docids : HashSet<DocId> = docids_only_for_term(ir, &other_term).collect();
+        intersection.retain(|di| other_docids.contains(di));
+    }
+
+    intersection
+}
+
+fn run_query_bm25(out_scored:   &mut Vec<Scored>,
+                  ir:           &IndexRead,
+                  query_params: &QueryParams) -> () {
+
+    let terms =
+            collect_query_terms(ir, query_params);
 
     let scored_iter =
-        scored_iterator(ir, &terms, query_params);
+            scored_iterator_bm25(ir, &terms, query_params);
 
     match query_params.max_results {
 
@@ -93,11 +160,41 @@ fn run_query(out_scored:   &mut Vec<Scored>,
     }
 }
 
+fn collect_query_terms(ir:           &IndexRead,
+                       query_params: &QueryParams) -> Vec<TermEntry> {
+
+    use regex::Regex;
+
+    match query_params.mode {
+
+        Some(Mode::Regex) => {
+            query_params.query_terms
+                        .iter()
+                        // Parse strings as regexes
+                        .map ( |Term(t)| Regex::new(t).expect("invalid regex") )
+                        .flat_map ( |re| scan_terms_regex(ir, &re) )
+                        .collect()
+        },
+
+        None =>
+            query_params.query_terms
+                .iter()
+
+                // Look up the string terms into term ids
+                .map    ( | s| find_term(ir, s) )
+
+                // Keep only the found term ids
+                .filter ( |rt| rt.is_some() )
+                .map    ( |rt| rt.unwrap() )
+                .collect()
+    }
+}
+
 // TODO be able to score here while still streaming
 // So as to decide whether to include low-term-matched docs
-fn scored_iterator<'a>(ir:           &'a IndexRead,
-                       terms:        &'a Vec<TermEntry>,
-                       query_params: &'a QueryParams) -> impl Iterator <Item=Scored> + 'a {
+fn scored_iterator_bm25<'a>(ir:           &'a IndexRead,
+                            terms:        &'a Vec<TermEntry>,
+                            query_params: &'a QueryParams) -> impl Iterator <Item=Scored> + 'a {
 
     use std::collections::HashMap;
 
@@ -110,6 +207,7 @@ fn scored_iterator<'a>(ir:           &'a IndexRead,
          .map(|t| postings_list_for_term(ir, t))
          .kmerge_by(|a,b| a.doc_id <= b.doc_id) 
          .coalesce(|a,b| {
+             // This is for merging results from different terms
              // TODO can neaten
              if a.doc_id == b.doc_id {
                  let mut term_freqs = Vec::new();
@@ -126,7 +224,22 @@ fn scored_iterator<'a>(ir:           &'a IndexRead,
                      Err((a,b))
                  }})
          .filter(move |xs| xs.term_freqs.len() == num_query_terms)
-         .map(move |xs| rank_result(ir, &doc_freqs, xs))
+         .map(move |xs| rank_result_bm25(ir, &doc_freqs, xs))
+}
+
+fn docids_only_for_term<'a>(ir:   &'a IndexRead,
+                            term: &'a TermEntry) -> impl Iterator <Item=DocId> + 'a {
+
+    let deletions_vec = unpack_bits(ir);
+
+    let deletion_set = docids_for_bits(ir, deletions_vec);
+
+    let start =         term.offset   as usize;
+    let end   = start + term.doc_freq as usize;
+    let PostingsRead(posts) = ir.postings;
+    (start..end)
+        .map(move |i| DocId(posts[2 * i]))
+        .filter(move |doc_id| ! deletion_set.contains(doc_id) )
 }
 
 fn postings_list_for_term<'a>(ir:   &'a IndexRead,

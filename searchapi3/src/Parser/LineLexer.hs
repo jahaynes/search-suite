@@ -6,6 +6,8 @@ import Parser.Parser (Parser (..))
 
 import           Data.ByteString             (ByteString)
 import qualified Data.ByteString.Char8 as C8
+import qualified Data.Text as T
+import           Data.Text.Encoding (decodeUtf8)
 
 data LexState =
     LexState { _row   :: !Int
@@ -34,7 +36,7 @@ lexChar f = Parser go
             Right (LexState r' c' rest, first)
 
         | otherwise =
-            Left $ "Unsatisfied char f(" <> C8.pack (show first) <> ")"
+            Left $ "Unsatisfied char f(" <> T.pack (show first) <> ")"
 
         where
         first         = C8.head i
@@ -53,7 +55,7 @@ lexString bs = Parser go
             Right (LexState r' c' rest, bs)
 
         | otherwise =
-            Left $ "Expected: " <> bs
+            Left $ "Expected: " <> decodeUtf8 bs -- TODO not too happy about this decode
 
         where
         bsLength      = C8.length bs
