@@ -100,7 +100,7 @@ indexDocumentsImpl env writer metadataApi compactor registry collectionName unso
             -- Run indexer in tmp directory
             switch ti "Running indexer"
             let bin   = indexerBinary env
-                args  = if nDocs == 1
+                args  = if nDocs == 1 -- TODO why is this switch here
                             then ["index_fast", idxCmpDir]
                             else ["index_json", idxCmpDir]
                 stdin = case ds of

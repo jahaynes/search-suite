@@ -70,6 +70,7 @@ fn main() {
                       })
                     },
 
+    // TODO: still used?
     "index_json" => { let input_docs = docs_from_stdin();
 
                       let result: IndexResult;

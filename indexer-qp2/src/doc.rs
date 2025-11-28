@@ -69,6 +69,15 @@ pub fn mk_doc(url: Url,
     let mut term_frequencies = HashMap::new();
     let mut doc_len = 0;
 
+    let Url(str) = &url;
+
+    // Cheap & nasty way of including url terms in query.  TODO: De-duplicate or specialise logic
+    for url_term in normalise(str) {
+        let mut entry = term_frequencies.entry(url_term).or_insert(TermFreq(0));
+        entry += &mut TermFreq(1);
+        doc_len += 1;        
+    }
+
     for term in normalise(body) {
         let mut entry = term_frequencies.entry(term).or_insert(TermFreq(0));
         entry += &mut TermFreq(1);
