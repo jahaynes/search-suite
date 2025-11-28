@@ -29,16 +29,17 @@ import           System.Directory         (canonicalizePath, copyFile, createDir
     TODO use withLock and exception handling, rather than take/release?
 -}
 data Registry =
-    Registry { registerFromTmp          :: !(CollectionName -> Component -> IO ())
-             , registerInPlace          :: !(CollectionName -> Component -> STM ())
-             , releaseLockIO            :: !(Component -> IO ())
-             , takeLock                 :: !(Component -> STM ())
-             , unregister               :: !(CollectionName -> Component -> STM ())
-             , listCollections          :: !(IO (Set CollectionName))
-             , viewCollectionComponents :: !(CollectionName -> STM (Set Component))
+    Registry { registerFromTmp        :: !(CollectionName -> Component -> IO ())
+             , registerInPlace        :: !(CollectionName -> Component -> STM ())
+             , releaseLockIO          :: !(Component -> IO ())
+             , takeLock               :: !(Component -> STM ())
+             , unregister             :: !(CollectionName -> Component -> STM ())
+             , listCollections        :: !(STM (Set CollectionName))
+             , listComponents         :: !(CollectionName -> STM (Set Component))
+             , listUnlockedComponents :: !(CollectionName -> STM (Set Component))
 
-             , totalNumComponents       :: !(IO Int)
-             , totalLocksHeld           :: !(IO Int)
+             , totalNumComponents :: !(IO Int)
+             , totalLocksHeld     :: !(IO Int)
              }
 
 newtype Collections =
@@ -54,16 +55,17 @@ createRegistry :: Environment
 createRegistry env logger = do
     collections <- Collections <$> newTVarIO M.empty
     locks       <- Locks <$> STM.newIO
-    pure $ Registry { registerFromTmp          = registerFromTmpImpl env collections
-                    , registerInPlace          = registerInPlaceImpl collections
-                    , releaseLockIO            = releaseLockIOImpl locks logger
-                    , takeLock                 = takeLockImpl locks
-                    , unregister               = unregisterImpl collections
-                    , listCollections          = atomically $ listCollectionsImpl collections
-                    , viewCollectionComponents = viewCollectionComponentsImpl collections
+    pure $ Registry { registerFromTmp        = registerFromTmpImpl env collections
+                    , registerInPlace        = registerInPlaceImpl collections
+                    , releaseLockIO          = releaseLockIOImpl locks logger
+                    , takeLock               = takeLockImpl locks
+                    , unregister             = unregisterImpl collections
+                    , listCollections        = listCollectionsImpl collections
+                    , listComponents         = listComponentsImpl collections
+                    , listUnlockedComponents = listUnlockedComponentsImpl locks collections
 
-                    , totalNumComponents       = atomically $ totalNumComponentsImpl collections
-                    , totalLocksHeld           = atomically $ totalLocksHeldImpl locks
+                    , totalNumComponents = atomically $ totalNumComponentsImpl collections
+                    , totalLocksHeld     = atomically $ totalLocksHeldImpl locks
                     }
 
 registerFromTmpImpl :: Environment -> Collections -> CollectionName -> Component -> IO ()
@@ -128,9 +130,18 @@ unregisterImpl (Collections cs) collectionName component =
 listCollectionsImpl :: Collections -> STM (Set CollectionName)
 listCollectionsImpl (Collections cs) = M.keysSet <$> readTVar cs
 
-viewCollectionComponentsImpl :: Collections -> CollectionName -> STM (Set Component)
-viewCollectionComponentsImpl (Collections cs) collectionName =
+listComponentsImpl :: Collections -> CollectionName -> STM (Set Component)
+listComponentsImpl (Collections cs) collectionName =
     fromMaybe S.empty . M.lookup collectionName <$> readTVar cs
+
+listUnlockedComponentsImpl :: Locks -> Collections -> CollectionName -> STM (Set Component)
+listUnlockedComponentsImpl (Locks locks) cols collectionName = do
+    cmps   <- S.toList <$> listComponentsImpl cols collectionName
+    locked <- mapM (\c -> STM.lookup c locks) cmps
+    pure . S.fromList
+         . map fst
+         . filter (not . snd)
+         $ zip cmps locked
 
 totalNumComponentsImpl :: Collections -> STM Int
 totalNumComponentsImpl (Collections cs) =

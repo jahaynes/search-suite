@@ -126,7 +126,7 @@ withLocks reg collectionName f =
         y `deepseq` pure y
     where
     acquire = atomically $ do
-        components <- S.toList <$> viewCollectionComponents reg collectionName
+        components <- S.toList <$> listComponents reg collectionName
         mapM_ (takeLock reg) components
         pure components
     release = mapM_ (releaseLockIO reg)

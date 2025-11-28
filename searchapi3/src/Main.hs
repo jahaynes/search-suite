@@ -2,7 +2,7 @@
 
 module Main where
 
-import Compactor              (createCompactor)
+import Compactor              (Compactor (..), createCompactor)
 import Controllers.Controller (runController)
 import Environment            (Environment (..), loadEnvironment)
 import Importer               (Importer (importCollection), createImporter)
@@ -15,10 +15,11 @@ import Types                  (CollectionName, Logger (..), parseCollectionName)
 import WarcFileReader         (createWarcFileReader)
 import WarcFileWriter         (createWarcFileWriter)
 
-import Control.Monad         (filterM)
-import Data.ByteString.Char8 (ByteString, unpack)
-import System.Directory      (createDirectoryIfMissing, doesDirectoryExist, listDirectory)
-import Text.Printf           (printf)
+import Control.Concurrent.Async (async, waitAny)
+import Control.Monad            (filterM)
+import Data.ByteString.Char8    (ByteString, unpack)
+import System.Directory         (createDirectoryIfMissing, doesDirectoryExist, listDirectory)
+import Text.Printf              (printf)
 
 main :: IO ()
 main = do
@@ -50,13 +51,11 @@ main = do
 
     let importer = createImporter env
                                   registry
-                                  compactor
 
     let indexer = createIndexer env
                                 warcReader
                                 warcWriter
                                 metadataApi
-                                compactor
                                 registry
 
     fetcher <- createFetcher (proxySetting env)
@@ -73,14 +72,19 @@ main = do
 
     printf "Environment is: %s\n" (show env)
 
-    runController compactor
-                  env
-                  indexer
-                  fetcher
-                  queryProcessor
-                  warcReader
-                  registry
-                  (stdoutLogger ControllerLogger)
+    acpc <- async $ runCompactor compactor
+
+    actl <- async $ runController compactor
+                                  env
+                                  indexer
+                                  fetcher
+                                  queryProcessor
+                                  warcReader
+                                  registry
+                                  (stdoutLogger ControllerLogger)
+
+    (_, a) <- waitAny [acpc, actl]
+    putStrLn a
 
 findRegistrableCollections :: Environment -> IO [CollectionName]
 findRegistrableCollections env = do

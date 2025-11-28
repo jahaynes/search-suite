@@ -75,7 +75,7 @@ queryServer qp reg wfr = serveQuery
 
         paths <- map cmp_filePath
                . toList
-             <$> atomically (viewCollectionComponents reg cn)
+             <$> atomically (listComponents reg cn)
 
         mBodies <- forM paths $ \path ->
             let warcFile = path <> "/file.warc"

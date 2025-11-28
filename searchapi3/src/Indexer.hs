@@ -6,7 +6,6 @@ module Indexer ( Indexer (..)
                ) where
 
 import Api                 (IndexRequest (..), Doc (..))
-import Compactor           (Compactor (..))
 import Component
 
 -- TOO coupled to Warc
@@ -26,7 +25,7 @@ import WarcFileReader      (WarcFileReader (..))
 import WarcFileWriter      (WarcFileWriter (..))
 
 import           Control.Concurrent.STM           (atomically)
-import           Control.Monad                    (forM, void)
+import           Control.Monad                    (forM)
 import           Data.Aeson                       (decode, encode)
 import           Data.ByteString                  (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as L8
@@ -61,13 +60,12 @@ createIndexer :: Environment
               -> WarcFileReader
               -> WarcFileWriter
               -> MetadataApi
-              -> Compactor
               -> Registry
               -> Indexer
-createIndexer env wfr writer metadataApi cpc reg =
-    Indexer { indexDocuments     = indexDocumentsImpl env writer metadataApi cpc reg
-            , indexLocalFiles    = indexLocalFileImpl env writer metadataApi cpc reg
-            , indexLocalWarcFile = indexLocalWarcFileImpl env wfr writer metadataApi cpc reg
+createIndexer env wfr writer metadataApi reg =
+    Indexer { indexDocuments     = indexDocumentsImpl env writer metadataApi reg
+            , indexLocalFiles    = indexLocalFileImpl env writer metadataApi reg
+            , indexLocalWarcFile = indexLocalWarcFileImpl env wfr writer metadataApi reg
             , deleteDocument     = deleteDocumentImpl env reg
             , isDocDeleted       = isDocDeletedImpl env reg
             }
@@ -76,12 +74,11 @@ createIndexer env wfr writer metadataApi cpc reg =
 indexDocumentsImpl :: Environment
                    -> WarcFileWriter
                    -> MetadataApi
-                   -> Compactor
                    -> Registry
                    -> CollectionName
                    -> [Doc]
                    -> IO (Either String Int)
-indexDocumentsImpl env writer metadataApi compactor registry collectionName unsortedDocs = do
+indexDocumentsImpl env writer metadataApi registry collectionName unsortedDocs = do
 
     let ds = sort unsortedDocs
 
@@ -142,10 +139,6 @@ indexDocumentsImpl env writer metadataApi compactor registry collectionName unso
                                 component <- createComponent nDocs idxCmpDir
                                 registerFromTmp registry collectionName component
 
-                                -- Run the compactor
-                                switch ti "Compacting"
-                                void $ compact compactor collectionName
-
                                 dti <- done ti
 
                                 let ttime = total dti
@@ -159,12 +152,11 @@ indexDocumentsImpl env writer metadataApi compactor registry collectionName unso
 indexLocalFileImpl :: Environment
                    -> WarcFileWriter
                    -> MetadataApi
-                   -> Compactor
                    -> Registry
                    -> CollectionName
                    -> [FilePath]  -- TO Vector? or just json
                    -> IO (Either String ())
-indexLocalFileImpl env writer metadataApi compactor registry collectionName filePaths = do
+indexLocalFileImpl env writer metadataApi registry collectionName filePaths = do
     -- jsonify?
     -- Unnecessary packing
     -- safe-exceptions
@@ -172,7 +164,7 @@ indexLocalFileImpl env writer metadataApi compactor registry collectionName file
         t <- T.readFile fp
         pure $ Doc (pack fp) t
 
-    ei <- indexDocumentsImpl env writer metadataApi compactor registry collectionName unsortedDocs
+    ei <- indexDocumentsImpl env writer metadataApi registry collectionName unsortedDocs
 
     case ei of
         Left e -> pure $ Left e
@@ -185,12 +177,11 @@ indexLocalWarcFileImpl :: Environment
                        -> WarcFileReader
                        -> WarcFileWriter
                        -> MetadataApi
-                       -> Compactor
                        -> Registry
                        -> CollectionName
                        -> FilePath
                        -> IO (Either String ())
-indexLocalWarcFileImpl env warcFileReader writer metadataApi compactor registry collectionName warcFile =
+indexLocalWarcFileImpl env warcFileReader writer metadataApi registry collectionName warcFile =
 
     batchedRead warcFileReader
                 warcFile
@@ -202,7 +193,7 @@ indexLocalWarcFileImpl env warcFileReader writer metadataApi compactor registry 
 
         let ds' = V.mapMaybe toDoc ds -- TODO report failures
 
-        V.mapM_ (\d -> indexDocumentsImpl env writer metadataApi compactor registry collectionName [d]) ds' 
+        V.mapM_ (\d -> indexDocumentsImpl env writer metadataApi registry collectionName [d]) ds' 
 
         where
         toDoc :: WarcEntry -> Maybe Doc
@@ -233,7 +224,7 @@ deleteDocumentImpl :: Environment
                    -> IO (Either String ())
 deleteDocumentImpl env reg collectionName docUrl = do
     let bin = indexerBinary env
-    components <- S.toList <$> (atomically $ viewCollectionComponents reg collectionName)
+    components <- S.toList <$> (atomically $ listComponents reg collectionName)
     putStrLn $ "Deleting doc: " <> docUrl
     results <- forM components $ \cmp ->
         finally (isDeletedJob bin cmp)
@@ -260,7 +251,7 @@ isDocDeletedImpl :: Environment
                  -> IO (Either String (Map Text Int))
 isDocDeletedImpl env reg collectionName docUrl = do
     let bin = indexerBinary env
-    components <- S.toList <$> (atomically $ viewCollectionComponents reg collectionName)
+    components <- S.toList <$> (atomically $ listComponents reg collectionName)
     results <- forM components $ \cmp ->
         finally (deleteJob bin cmp)
                 (releaseLockIO reg cmp)

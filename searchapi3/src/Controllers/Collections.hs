@@ -30,7 +30,7 @@ collectionsServer :: Compactor
                   -> Registry
                   -> ServerT CollectionsApi IO 
 collectionsServer compactor env registry
-    = listCollections registry
+    = atomically (listCollections registry)
  :<|> deleteCollection env registry
  :<|> mergeInto compactor
  :<|> getCollectionDir env
@@ -42,7 +42,7 @@ deleteCollection :: Environment
 deleteCollection env registry collectionName@(CollectionName cn) = do
 
     cs <- atomically $ do
-        components <- viewCollectionComponents registry collectionName
+        components <- listComponents registry collectionName
         mapM_ (takeLock registry) components
         mapM_ (unregister registry collectionName) components
         pure components

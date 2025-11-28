@@ -3,7 +3,6 @@
 module Importer ( Importer (..) 
                 , createImporter ) where
 
-import Compactor 
 import Component
 import Environment ( Environment (..) )
 import Registry    ( Registry, registerInPlace )
@@ -13,7 +12,7 @@ import Types
 
 import Control.Concurrent.STM    (atomically)
 import Control.Exception.Safe    (catchIO)
-import Control.Monad             (unless, when)
+import Control.Monad             (unless)
 import Data.Aeson                (eitherDecodeStrict')
 import Data.ByteString.Char8     (ByteString, unpack)
 import Data.Either               (partitionEithers)
@@ -25,16 +24,15 @@ newtype Importer =
     Importer { importCollection :: CollectionName -> IO (Either ByteString ())
              }
 
-createImporter :: Environment -> Registry -> Compactor -> Importer
-createImporter env reg cpc = 
-    Importer { importCollection = importCollectionImpl env reg cpc}
+createImporter :: Environment -> Registry -> Importer
+createImporter env reg = 
+    Importer { importCollection = importCollectionImpl env reg }
 
 importCollectionImpl :: Environment
                      -> Registry
-                     -> Compactor
                      -> CollectionName
                      -> IO (Either ByteString ())
-importCollectionImpl env registry compactor collectionName = do
+importCollectionImpl env registry collectionName = do
 
     let name = getCollectionPath env collectionName
 
@@ -51,18 +49,9 @@ importCollectionImpl env registry compactor collectionName = do
                 mapM_ print failures
 
     mapM_ (atomically . registerInPlace registry collectionName) components
-
-    unless (null failures) loadingCompaction
-
     pure $ Right ()
 
     where
-    loadingCompaction = do
-      putStr "Loading compaction: "
-      progress <- compact compactor collectionName
-      print progress
-      when progress loadingCompaction
-
     loadComponent :: FilePath -> IO (Either String Component)
     loadComponent componentPath =
         let job = do let execparams = [ "num_docs"

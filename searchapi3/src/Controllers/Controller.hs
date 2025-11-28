@@ -55,8 +55,8 @@ runController :: Compactor
               -> WarcFileReader
               -> Registry
               -> (ByteString -> IO ())
-              -> IO ()
-runController compactor env indexer fetcher qp warcFileReader registry _logger =
+              -> IO String
+runController compactor env indexer fetcher qp warcFileReader registry _logger = do
 
     run 8081 . simpleCors
              . prometheus def 
@@ -68,6 +68,8 @@ runController compactor env indexer fetcher qp warcFileReader registry _logger =
             :<|> indexationServer fetcher indexer
             :<|> diagnosticServer registry
             :<|> serveDirectoryFileServer "frontend"
+
+    pure "Controller stopped unexpectedly"
 
     where
     searchApiWithDoc :: Proxy SearchApiWithDoc
