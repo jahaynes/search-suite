@@ -1,2 +1,2 @@
 # search-suite
-Collection of search engine tools
+It's a search engine
