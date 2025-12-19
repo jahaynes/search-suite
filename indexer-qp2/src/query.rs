@@ -263,17 +263,15 @@ fn postings_list_for_term<'a>(ir:   &'a IndexRead,
 fn unpack_bits(ir: &IndexRead) -> Vec<usize> {
     let mut deletions_vec = Vec::new();
     let DocDeletionsRead(deletions) = ir.doc_deletions;
-    let mut bit = 0;
-    for &deletion in deletions.iter() {
+    for (byte_idx, &deletion) in deletions.iter().enumerate() {
         if deletion != 0 {
-            for b in 0..7 {
+            for b in 0..8 {
                 let mask = 1 << b;
                 if mask & deletion != 0 {
-                    deletions_vec.push(bit + b);
+                    deletions_vec.push(byte_idx * 8 + b);
                 }
             }
         }
-        bit += 8;
     }
     deletions_vec
 }
