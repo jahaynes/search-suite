@@ -1,6 +1,8 @@
 
 type QueryUIState = {
     selectedCollection: string | null;
+    query: string | null;
+    maxresults: number;
 };
 
 type QueryResults = {
@@ -88,16 +90,11 @@ function renderResult(collectionName: string, result: QueryResult) {
 
 const fireSearch = async (state: QueryUIState) => {
 
-    const query: string =
-        document.querySelector<HTMLInputElement>('#search')?.value ?? "";
+    const collectionName: string | null = state.selectedCollection;
+    const query: string | null = state.query;
+    const maxResults: number = state.maxresults;
 
-    const maxResults: number =
-        parseInt(document.querySelector<HTMLInputElement>('#max_results')?.value ?? "10");
-
-    const collectionName: string | null =
-        state.selectedCollection;
-
-    if (!collectionName || query.trim().length == 0 || maxResults < 1) {
+    if (!collectionName || !query || query.trim().length == 0 || maxResults < 1) {
         return;
     }
 
@@ -108,7 +105,7 @@ const fireSearch = async (state: QueryUIState) => {
 
     await fetch(url, reqHeaders)
         .then(resp => resp.json())
-        .then((data : QueryResults) => {
+        .then((data: QueryResults) => {
             const resultList = document.querySelector<HTMLElement>("#results")!;
             resultList.innerHTML = '';
             for (let i = 0; i < data.results.length; i++) {
@@ -129,6 +126,10 @@ const displayCollections = async (state: QueryUIState, collectionNames: string[]
 
     for (const collectionName of collectionNames) {
 
+        if (!state.selectedCollection) {
+            state.selectedCollection = collectionName;
+        }
+
         const radioName = "radio" + collectionName;
 
         const radio = document.createElement("input");
@@ -136,6 +137,10 @@ const displayCollections = async (state: QueryUIState, collectionNames: string[]
         radio.setAttribute("type", "radio");
         radio.setAttribute("name", "collectionName");
         radio.setAttribute("value", collectionName)
+
+        if (state.selectedCollection === collectionName) {
+            radio.setAttribute("checked", "checked");
+        }
 
         const label = document.createElement("label");
         label.setAttribute("for", radioName);
@@ -154,21 +159,36 @@ const displayCollections = async (state: QueryUIState, collectionNames: string[]
 
 const onLoad = async (ev: Event) => {
 
-    const state =
-        { selectedCollection: null };
+    const params = new URLSearchParams(window.location.search);
 
-    document
-        .getElementById("search")!
-        .addEventListener("input",
-            () => fireSearch(state));
+    const p_maxresults = params.get('n');
+    const state: QueryUIState =
+    {
+        selectedCollection: params.get('c'),
+        query: params.get('q'),
+        maxresults: p_maxresults ? parseInt(p_maxresults) : 10
+    }
 
-    document
-        .getElementById("max_results")!
-        .addEventListener("input",
-            () => fireSearch(state));
+    const searchInput = document.getElementById("search")! as HTMLInputElement;
+    searchInput.value = state.query ?? "";
+    searchInput
+        .addEventListener("input", (e: Event) => {
+            const target = e.target as HTMLInputElement;
+            state.query = target.value;
+            fireSearch(state);
+        });
 
-    const url = "/collection"
-    await fetch(url, reqHeaders)
+    const maxResultsInput = document.getElementById("max_results")! as HTMLInputElement;
+    maxResultsInput.value = state.maxresults.toString();
+    maxResultsInput.addEventListener("input", (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        state.maxresults = parseInt(target.value) || 10;
+        fireSearch(state);
+    });
+
+    await fetch("/collection", reqHeaders)
         .then(resp => resp.json())
         .then(cns => displayCollections(state, cns));
+
+    await fireSearch(state);
 }
