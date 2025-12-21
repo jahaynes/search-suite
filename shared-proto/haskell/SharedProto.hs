@@ -1,44 +1,22 @@
 {-# LANGUAGE DeriveGeneric, DataKinds, OverloadedStrings #-}
 
-module SharedProto ( ser
-                   , example
-                   , InputDoc(..)
-                   , Input(..)
-                   , inputDocExample
-                   , inputExample
-                   , IndexResult(..)
-                   ) where
+module SharedProto  where
 
 import Data.ByteString
 import Data.ProtocolBuffers
-import Data.Int                      (Int32)
 import Data.Word                     (Word32, Word64)
 import Data.Text                     (Text)
 import GHC.Generics                  (Generic)
 import Data.Serialize
 
-data NewEvent =
-    NewEvent { someBytes      :: !(Required 1 (Value ByteString))
-             , someText       :: !(Required 2 (Value Text))
-             , someNum        :: !(Required 3 (Value Int32))
-             , metadataKeys   :: !(Repeated 4 (Value Text))
-             , metadataValues :: !(Repeated 5 (Value Text))
-             } deriving (Generic, Show)
-
-instance Encode NewEvent
-instance Decode NewEvent
-
-example :: NewEvent
-example =
-    NewEvent { someBytes      = putField ("foo" :: ByteString)
-             , someText       = putField ("bar" :: Text)
-             , someNum        = putField 234
-             , metadataKeys   = putField ["key1", "key2"]
-             , metadataValues = putField ["value1", "value2"]
-             }
+gf :: HasField a => a -> FieldType a
+gf = getField
 
 ser :: Encode a => a -> ByteString
 ser = runPut . encodeMessage
+
+deser :: Decode a => ByteString -> Either String a
+deser bs = runGet decodeMessage bs
 
 -- InputDoc and Input mirror the protobuf messages used by the indexer
 data InputDoc =
@@ -68,12 +46,17 @@ inputExample :: Input
 inputExample =
     Input { docs = putField [inputDocExample] }
 
+eg0, eg1, eg2 :: Input
+eg0 = Input { docs = putField [] }
+eg1 = Input { docs = putField [inputDocExample] }
+eg2 = Input { docs = putField [inputDocExample, inputDocExample] }
+
 
 -- IndexResult mirrors the indexer reply (num_docs, num_terms, ms_taken)
 data IndexResult =
     IndexResult { numDocs  :: !(Required 1 (Value Word32))
                 , numTerms :: !(Required 2 (Value Word32))
-                , msTaken  :: !(Required 3 (Value Word64))
+                , msTaken  :: !(Optional 3 (Value Word64))
                 } deriving (Generic, Show)
 
 instance Encode IndexResult

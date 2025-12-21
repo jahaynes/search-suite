@@ -10,6 +10,7 @@ import Errors.Errors       (Error)
 import Indexer             (Indexer (..))
 import Network.Fetcher     (Fetcher (fetch))
 import Page.Page
+import qualified SharedProto as SP
 import Types               (CollectionName)
 import Url                 (mkUrl, valText)
 
@@ -48,6 +49,9 @@ type IndexationApi = "indexDoc" :> Capture "col" CollectionName
                 :<|> "isDocDeleted" :> Capture "col" CollectionName
                                     :> ReqBody '[PlainText] String
                                     :> Post '[JSON] (Either String (Map Text Int))
+                
+                :<|> "test_proto" :> Capture "col" CollectionName
+                                  :> Post '[JSON] ()
 
 indexationApi :: Proxy IndexationApi
 indexationApi = Proxy
@@ -62,6 +66,7 @@ indexationServer fetcher indexer
  :<|> indexLocalWarcFile indexer
  :<|> deleteDocument indexer
  :<|> isDocDeleted indexer
+ :<|> testPath indexer
 
 -- TODO message
 fetchUrlLines :: Fetcher (ExceptT Error IO)

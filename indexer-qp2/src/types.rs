@@ -7,7 +7,7 @@ pub struct Url(pub String);
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash, Serialize)]
 pub struct DocId(pub u32);
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct TermFreq(pub u32);
 
 impl AddAssign for &mut TermFreq {

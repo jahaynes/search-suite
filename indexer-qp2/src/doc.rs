@@ -8,6 +8,7 @@ use rand::prelude::*;
 use serde::Serialize;
 use std::collections::HashMap;
 
+#[derive(Debug)]    // Iis this actually the right type since it doen'st have proto
 pub struct Doc {
     pub url:              Url,
     pub doc_id:           DocId,

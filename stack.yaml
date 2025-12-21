@@ -6,8 +6,9 @@ packages:
 - WebArchive
 - crawler
 - crawler-lib
-- util/filecrawler
 - searchapi3
+- shared-proto
+- util/filecrawler
 - util/warccrawler
 
 ghc-options:

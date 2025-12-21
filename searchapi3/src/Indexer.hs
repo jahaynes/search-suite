@@ -20,13 +20,14 @@ import Environment         (Environment (..))
 import IndexerTypes        (IndexerReply (..))
 import Registry            (Registry (..))
 import Metadata            (MetadataApi (generateMetadata))
+import qualified SharedProto as SP
 import TimingInfo
 import Types
 import WarcFileReader      (WarcFileReader (..))
 import WarcFileWriter      (WarcFileWriter (..))
 
 import           Control.Concurrent.STM           (atomically)
-import           Control.Monad                    (forM, void)
+import           Control.Monad                    (forM,forM_, void)
 import           Data.Aeson                       (decode, encode)
 import           Data.ByteString                  (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as L8
@@ -55,6 +56,7 @@ data Indexer =
             , indexLocalWarcFile :: !(CollectionName -> FilePath -> IO (Either String ()))
             , deleteDocument     :: !(CollectionName -> String -> IO (Either String ()))
             , isDocDeleted       :: !(CollectionName -> String -> IO (Either String (Map Text Int)))
+            , testPath           :: !(CollectionName -> IO ())
             }
 
 createIndexer :: Environment
@@ -70,7 +72,46 @@ createIndexer env wfr writer metadataApi cpc reg =
             , indexLocalWarcFile = indexLocalWarcFileImpl env wfr writer metadataApi cpc reg
             , deleteDocument     = deleteDocumentImpl env reg
             , isDocDeleted       = isDocDeletedImpl env reg
+            , testPath           = testPathImpl env
             }
+
+-- TODO test behaviour of 0 docs
+testPathImpl :: Environment -> CollectionName -> IO ()
+testPathImpl env collectionName = forM_ [SP.eg1] $ \eg -> do
+
+    idxCmpDir <- getCanonicalTemporaryDirectory >>= (`createTempDirectory` "idx-cmp")
+
+    let bin   = indexerBinary env
+        args  = ["test_proto", idxCmpDir]
+        stdin = L8.fromStrict . SP.ser $ eg    -- TODO see if lazy/strict is better
+        
+    (code, stdout, stderr) <- PL.readProcessWithExitCode bin args stdin
+
+    -- print (code, stdout, stderr)
+
+    print code
+    putStrLn "-----"
+    L8.putStrLn stderr
+    putStrLn "-----"
+    print ("STDOUT", stdout)
+    putStrLn "-----"
+
+    case SP.deser (L8.toStrict stdout) of
+        Left l -> print ("error was", l)
+        Right (r :: SP.IndexResult) -> do
+            print (SP.gf (SP.numDocs r))
+            print (SP.gf (SP.numTerms r))
+            print (SP.gf (SP.msTaken r))
+        
+    print ("STDOUT", stdout)
+
+{-
+data IndexResult =
+    IndexResult { numDocs  :: !(Required 1 (Value Word32))
+                , numTerms :: !(Required 2 (Value Word32))
+                , msTaken  :: !(Required 3 (Value Word64))
+                } deriving (Generic, Show)
+-}
 
 -- TODO exceptions
 indexDocumentsImpl :: Environment

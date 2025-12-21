@@ -45,6 +45,7 @@ use verify::*;
 
 use std::collections::HashMap;
 use std::env;
+use std::io::Write;
 use std::time::SystemTime;
 
 fn main() {
@@ -85,6 +86,36 @@ fn main() {
                       let serialized = serde_json::to_string(&result).unwrap();
                       println!("{}", serialized);
                     },
+
+    "test_proto" => { eprintln!("About to test proto");
+                      let input_docs = docs_from_protobuf_stdin();
+                      eprintln!("input_docs: {:?}", input_docs);
+                      
+                      let result: IndexResult = index(&args[2], input_docs, start_time);
+                      eprintln!("result: {:?}", result);
+
+                      /*
+                      let pb_result = shared_proto::IndexResult {
+                            num_docs: result.num_docs as u32,
+                            num_terms: result.num_terms as u32,
+                            ms_taken: result.ms_taken as u64,
+                      };
+                      */
+                      let pb_result = shared_proto::IndexResult {
+                            num_docs: 1,
+                            num_terms: 2,
+                            ms_taken: 1
+                      };
+
+                      use prost::Message;
+                      let mut buf = Vec::new();
+                      pb_result.encode(&mut buf).expect("Failed to encode IndexResult");
+                      
+                      eprintln!("rust success probably {:?}", buf);
+                      let stdout = std::io::stdout();
+                      stdout.lock().write_all(&buf).expect("Failed to write to stdout");
+                      eprintln!("rust wrote stdout, {:?}", buf);
+                    }
 
     "index_fast" => { let doc = doc_from_stdin();
                       let input_docs = vec!(doc);

@@ -5,6 +5,8 @@ use crate::types::*;
 
 use serde::Deserialize;
 use std::io::{Read, stdin};
+use prost::Message;
+use bytes::Bytes;
 
 #[derive(Deserialize)]
 pub struct Input { pub docs: Vec<InputDoc>
@@ -43,6 +45,21 @@ pub fn doc_from_stdin() -> Doc {
     let mut buffer = String::new();
     stdin().read_to_string(&mut buffer).unwrap();
     mk_doc(Url(url), &buffer)
+}
+
+// Read a protobuf-encoded `shared_proto::Input` from stdin and convert to Vec<Doc>
+pub fn docs_from_protobuf_stdin() -> Vec<Doc> {
+
+    let mut buf: Vec<u8> = Vec::new();
+    stdin().read_to_end(&mut buf).unwrap();
+
+    let pb_input = shared_proto::Input::decode(Bytes::from(buf)).expect("Failed to decode Input protobuf");
+
+    let mut docs = Vec::<Doc>::new();
+    for input_doc in pb_input.docs {
+        docs.push(mk_doc(Url(input_doc.url), &input_doc.content));
+    }
+    docs
 }
 
 #[derive(Debug)]
