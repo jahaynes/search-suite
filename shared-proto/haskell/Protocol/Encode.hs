@@ -11,23 +11,23 @@ import           Data.Vector               (Vector)
 import qualified Data.Vector as V
 
 cbor :: Encode a => a -> ByteString
-cbor = toStrictByteString . encode
+cbor = toStrictByteString . cborEncode
 
 lcbor :: Encode a => a -> L.ByteString
-lcbor = toLazyByteString . encode 
+lcbor = toLazyByteString . cborEncode 
 
 class Encode a where
-    encode :: a -> Encoding
+    cborEncode :: a -> Encoding
 
 instance Encode a => Encode (Vector a) where
-    encode xs = encodeListLen (fromIntegral $ V.length xs) <> mconcat (map encode $ V.toList xs)
+    cborEncode xs = encodeListLen (fromIntegral $ V.length xs) <> mconcat (map cborEncode $ V.toList xs)
 
 class Decode a where
-    decode :: Decoder s a
+    cborDecode :: Decoder s a
 
 unlcbor :: Decode a => L.ByteString -> a
 unlcbor bs =
-    case deserialiseFromBytes decode bs of
+    case deserialiseFromBytes cborDecode bs of
         Left l                        -> error $ show l
         Right (rest, a) | L.null rest -> a
                         | otherwise   -> error "Leftover in unlcbor"

@@ -3,8 +3,6 @@
 
 module IndexerTypes where
 
--- TODO remove
-
 import Data.Aeson   (FromJSON)
 import GHC.Generics (Generic)
 

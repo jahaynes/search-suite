@@ -18,11 +18,11 @@ data InputDoc =
              } deriving Show
 
 instance Encode InputDoc where
-    encode doc = mconcat [ encodeListLen 3
-                         , encodeString $ url doc
-                         , encodeString $ content doc
-                         , encodeString $ compression doc
-                         ]
+    cborEncode doc = mconcat [ encodeListLen 3
+                             , encodeString $ url doc
+                             , encodeString $ content doc
+                             , encodeString $ compression doc
+                             ]
 
 data IndexReply =
     IndexReply { num_docs  :: !Word32
@@ -31,14 +31,14 @@ data IndexReply =
                } deriving Show
 
 instance Encode IndexReply where
-    encode ir = mconcat [ encodeListLen 3
-                        , encodeWord32 $ num_docs ir
-                        , encodeWord32 $ num_terms ir
-                        , encodeWord64 $ ms_taken ir
-                        ]
+    cborEncode ir = mconcat [ encodeListLen 3
+                            , encodeWord32 $ num_docs ir
+                            , encodeWord32 $ num_terms ir
+                            , encodeWord64 $ ms_taken ir
+                            ]
 
 instance Decode IndexReply where
-    decode = do
+    cborDecode = do
         3 <- decodeListLen
         IndexReply <$> decodeWord32
                    <*> decodeWord32
@@ -49,4 +49,4 @@ newtype Input =
         deriving Show
 
 instance Encode Input where
-    encode (Input ds) = encode ds
+    cborEncode (Input ds) = cborEncode ds

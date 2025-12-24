@@ -8,35 +8,28 @@ module Indexer ( Indexer (..)
 import Api                 (IndexRequest (..), Doc (..))
 import Compactor           (Compactor (..))
 import Component
-
--- TOO coupled to Warc
-import Data.Warc.Body
+import Data.Warc.Body   -- TOO coupled to Warc
 import Data.Warc.Key
 import Data.Warc.Header
 import Data.Warc.Value
 import Data.Warc.WarcEntry (WarcEntry (..), decompress)
-
-import qualified Protocol.Encode as C
 import Environment         (Environment (..))
-
-import Protocol.Example
-import Protocol.Types as C
-
 import IndexerTypes        (IndexerReply (..))
-import Registry            (Registry (..))
 import Metadata            (MetadataApi (generateMetadata))
-
+import Protocol.Encode     (lcbor, unlcbor)
+import Protocol.Example    (inputDocExample, eg0, eg1, eg2)
+import Protocol.Types      (IndexReply)
+import Registry            (Registry (..))
 import TimingInfo
 import Types
 import WarcFileReader      (WarcFileReader (..))
 import WarcFileWriter      (WarcFileWriter (..))
 
 import           Control.Concurrent.STM           (atomically)
-import           Control.Monad                    (forM,forM_, void)
+import           Control.Monad                    (forM, forM_, void)
 import           Data.Aeson                       (decode, encode)
 import           Data.ByteString                  (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as L8
-import qualified Data.ByteString.Lazy as LBS
 import           Data.Either                      (lefts, rights)
 import           Data.List                        (sort)
 import           Data.Map.Strict
@@ -49,7 +42,6 @@ import qualified Data.Text.Lazy.Encoding    as LE
 import qualified Data.Text.Lazy             as LT
 import           Data.Vector                      (Vector)
 import qualified Data.Vector                as V
-import           Data.Word                        (Word32, Word64)
 import           Debug.Trace                      (trace)
 import           System.Exit
 import           System.Process.ByteString        (readProcessWithExitCode)
@@ -84,25 +76,18 @@ createIndexer env wfr writer metadataApi cpc reg =
 
 -- TODO test behaviour of 0 docs
 testPathImpl :: Environment -> CollectionName -> IO ()
-testPathImpl env collectionName = do
-    
+testPathImpl env collectionName = forM_ [eg0, eg1, eg2] $ \eg -> do
     idxCmpDir <- getCanonicalTemporaryDirectory >>= (`createTempDirectory` "idx-cmp")
-
     let bin   = indexerBinary env
         args  = ["test_proto", idxCmpDir]
-        stdin = C.lcbor (V.fromList [inputDocExample, inputDocExample])
-
+        stdin = lcbor eg
     -- TODO check
-    (_, stdout, stderr) <- PL.readProcessWithExitCode bin args stdin
-
+    (ExitSuccess, stdout, stderr) <- PL.readProcessWithExitCode bin args stdin
     L8.putStrLn stderr
-
-    let (r :: IndexReply) = C.unlcbor stdout
-
+    let (r :: IndexReply) = unlcbor stdout
     print r
-
     pure ()
-    
+   
 
 -- TODO exceptions
 indexDocumentsImpl :: Environment
@@ -248,10 +233,10 @@ indexLocalWarcFileImpl env warcFileReader writer metadataApi compactor registry 
                 _                             -> Nothing
 
             uri'  <- case decodeUtf8' uri of
-                         Left e -> trace (show (e, uri)) Nothing
+                         Left e -> trace (show (e, uri)) Nothing    -- TODO: remove trace
                          Right x -> Just x
             body' <- case decodeUtf8' body of
-                         Left e -> trace (show (e, uri)) Nothing
+                         Left e -> trace (show (e, uri)) Nothing    -- TODO: remove trace
                          Right x -> Just x
 
             pure $ Doc uri' body'
