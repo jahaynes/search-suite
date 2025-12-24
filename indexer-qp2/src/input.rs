@@ -3,10 +3,10 @@ use crate::normalise::*;
 use crate::terms::*;
 use crate::types::*;
 
-use std::io::{Read, stdin};
+use shared_proto::protocol::encode::UnCbor;
+use shared_proto::protocol::types::InputDoc;
 
-// use ::shared_proto::protocol::encode::{UnCbor};
-use ::shared_proto::protocol::types::{InputDoc, UnCbor};
+use std::io::{Read, stdin};
 
 #[derive(Debug)]
 pub enum Scoring {

@@ -41,6 +41,8 @@ use index_reader::*;
 use input::*;
 use query::*;
 use spelling_correction::*;
+use shared_proto::protocol::encode::Cbor;
+use shared_proto::protocol::types::IndexReply;
 use types::*;
 use verify::*;
 
@@ -88,28 +90,17 @@ fn main() {
                       println!("{}", serialized);
                     },
 
-    "test_proto" => { eprintln!("Rust: About to test proto");
-
-                      let input_docs = docs_from_protobuf_stdin();
-                      //eprintln!("input_docs: {:?}", input_docs);
-
+    "test_proto" => { let input_docs = docs_from_protobuf_stdin();
                       let result: IndexResult = index(&args[2], input_docs, start_time);
-                     // eprintln!("result: {:?}", result);
-
-                      panic!("libbing")
-                      /*
-                      let pb_result = shared_proto::protocol::IndexReply {
+                      // Consider sharing IndexResult/IndexReply
+                      let pb_result = IndexReply {
                             num_docs:  result.num_docs as u32,
                             num_terms: result.num_terms as u32,
                             ms_taken:  result.ms_taken as u64
                       };
-
                       let cbor_bytes = pb_result.cbor().expect("CBOR fail");
-
-                      eprintln!("rust success probably {:?}", cbor_bytes);
                       let stdout = std::io::stdout();
                       stdout.lock().write_all(&cbor_bytes).expect("Failed to write to stdout");
-                      eprintln!("rust wrote stdout, {:?}", cbor_bytes);  */
                     }
 
     "index_fast" => { let doc = doc_from_stdin();

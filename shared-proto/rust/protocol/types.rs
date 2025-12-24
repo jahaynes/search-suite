@@ -1,14 +1,8 @@
+use super::encode::{Cbor, UnCbor};
+
 use serde::Deserialize;
 
 use serde_cbor::{Error, to_vec};
-
-pub trait Cbor {
-    fn cbor(&self) -> Result<Vec<u8>, Error>;
-}
-
-pub trait UnCbor: Sized {
-    fn uncbor(bytes: &[u8]) -> Result<Self, Error>;
-}
 
 #[derive(Debug, Deserialize)]
 pub struct InputDoc {
