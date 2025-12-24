@@ -9,7 +9,6 @@ extern crate rand;
 extern crate serde;
 extern crate uuid;
 
-
 mod bk_tree;
 mod bytes;
 mod deletions;
