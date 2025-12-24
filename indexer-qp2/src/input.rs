@@ -3,20 +3,11 @@ use crate::normalise::*;
 use crate::terms::*;
 use crate::types::*;
 
-use serde::Deserialize;
+use shared_proto::*;
+// use serde::Deserialize;
 use std::io::{Read, stdin};
-use prost::Message;
 use bytes::Bytes;
-
-#[derive(Deserialize)]
-pub struct Input { pub docs: Vec<InputDoc>
-                 }
-
-#[derive(Deserialize)]
-pub struct InputDoc { pub url:         String
-                    , pub content:     String
-                    , pub compression: Option<String>
-                    }
+// use serde_cbor::{from_slice, to_vec};
 
 #[derive(Debug)]
 pub enum Scoring {
@@ -29,14 +20,7 @@ pub enum Mode {
 }
 
 pub fn docs_from_stdin() -> Vec<Doc> {
-    let mut buffer = String::new();
-    stdin().read_to_string(&mut buffer).unwrap();
-    let deserialized: Input = serde_json::from_str(&buffer).unwrap();
-    let mut docs = Vec::<Doc>::new();
-    for input_doc in deserialized.docs {
-        docs.push(mk_doc(Url(input_doc.url), &input_doc.content));
-    }
-    docs
+    panic!("retiring");
 }
 
 // Read a single doc from stdin to bypass the json encoding/decoding
@@ -50,16 +34,23 @@ pub fn doc_from_stdin() -> Doc {
 // Read a protobuf-encoded `shared_proto::Input` from stdin and convert to Vec<Doc>
 pub fn docs_from_protobuf_stdin() -> Vec<Doc> {
 
+    panic!("Fix output first")
+/*
+    use serde_cbor::{from_slice, to_vec};
+
     let mut buf: Vec<u8> = Vec::new();
     stdin().read_to_end(&mut buf).unwrap();
 
-    let pb_input = shared_proto::Input::decode(Bytes::from(buf)).expect("Failed to decode Input protobuf");
+    eprintln!("Buf read 1 was: {:?}", &buf);
+    eprintln!("Buf read 2 was: {:?}", &buf);
+
+    let pb_input: Input = from_slice(&buf).expect("decode");
 
     let mut docs = Vec::<Doc>::new();
     for input_doc in pb_input.docs {
         docs.push(mk_doc(Url(input_doc.url), &input_doc.content));
     }
-    docs
+    docs*/
 }
 
 #[derive(Debug)]

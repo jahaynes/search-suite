@@ -7,4 +7,5 @@ edition = "2021"
 path = "rust/shared_proto.rs"
 
 [dependencies]
-prost = "0.14.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_cbor = "0.11.2"

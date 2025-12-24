@@ -10,7 +10,9 @@ build-type:         Simple
 
 library
     ghc-options: -Wall -O2
-    exposed-modules:  SharedProto
-    build-depends:    base, bytestring, protobuf, cereal, text
+    exposed-modules:  Encode
+                      Example
+                      ProtocolTypes
+    build-depends:    base, bytestring, cborg, text, vector
     hs-source-dirs:   haskell
     default-language: Haskell2010

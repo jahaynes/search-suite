@@ -1,37 +1,38 @@
-// Protobuf representation of the JSON input used by the indexer (Input and InputDoc)
-#[derive(::prost::Message, Clone, PartialEq)]
+use serde::Deserialize;
+use serde::Serialize;
+
+use serde_cbor::{Error, from_slice, to_vec};
+
+/*
+#[derive(Debug, Deserialize)]
 pub struct InputDoc {
-    #[prost(string, tag = "1")]
-    pub url: String,
-
-    #[prost(string, tag = "2")]
+    pub compression: String,
     pub content: String,
-
-    // optional compression field (matches Option<String> in the JSON type)
-    #[prost(string, optional, tag = "3")]
-    pub compression: ::core::option::Option<String>,
+    pub url: String
 }
 
-#[derive(::prost::Message, Clone, PartialEq)]
+#[derive(Debug, Deserialize)]
 pub struct Input {
-    #[prost(message, repeated, tag = "1")]
-    pub docs: ::prost::alloc::vec::Vec<InputDoc>,
+    pub docs: Vec<InputDoc>
 }
+*/
 
-#[derive(::prost::Message, Clone, PartialEq)]
-pub struct IndexResult {
-    #[prost(uint32, tag = "1")]
+#[derive(Debug)]
+pub struct IndexReply {
     pub num_docs: u32,
-
-    #[prost(uint32, tag = "2")]
     pub num_terms: u32,
-
-    #[prost(uint64, tag = "3")]
-    pub ms_taken: u64,
+    pub ms_taken: u64
 }
 
+pub trait Cbor {
+    fn cbor(&self) -> Result<Vec<u8>, Error>;
+}
 
-
-cna't be 0
-try optional
-https://google.github.io/proto-lens/
+impl Cbor for IndexReply {
+    fn cbor(&self) -> Result<Vec<u8>, Error> {
+        to_vec(&( self.num_docs
+                , self.num_terms
+                , self.ms_taken
+                ))
+    }
+}

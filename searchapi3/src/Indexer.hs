@@ -16,11 +16,13 @@ import Data.Warc.Header
 import Data.Warc.Value
 import Data.Warc.WarcEntry (WarcEntry (..), decompress)
 
+import qualified Encode as C
 import Environment         (Environment (..))
-import IndexerTypes        (IndexerReply (..))
+import Example
+-- import IndexerTypes        (IndexerReply (..))
 import Registry            (Registry (..))
 import Metadata            (MetadataApi (generateMetadata))
-import qualified SharedProto as SP
+import ProtocolTypes
 import TimingInfo
 import Types
 import WarcFileReader      (WarcFileReader (..))
@@ -31,6 +33,7 @@ import           Control.Monad                    (forM,forM_, void)
 import           Data.Aeson                       (decode, encode)
 import           Data.ByteString                  (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as L8
+import qualified Data.ByteString.Lazy as LBS
 import           Data.Either                      (lefts, rights)
 import           Data.List                        (sort)
 import           Data.Map.Strict
@@ -43,6 +46,7 @@ import qualified Data.Text.Lazy.Encoding    as LE
 import qualified Data.Text.Lazy             as LT
 import           Data.Vector                      (Vector)
 import qualified Data.Vector                as V
+import           Data.Word                        (Word32, Word64)
 import           Debug.Trace                      (trace)
 import           System.Exit
 import           System.Process.ByteString        (readProcessWithExitCode)
@@ -77,14 +81,14 @@ createIndexer env wfr writer metadataApi cpc reg =
 
 -- TODO test behaviour of 0 docs
 testPathImpl :: Environment -> CollectionName -> IO ()
-testPathImpl env collectionName = forM_ [SP.eg1] $ \eg -> do
+testPathImpl env collectionName = forM_ [eg1] $ \eg -> do
 
     idxCmpDir <- getCanonicalTemporaryDirectory >>= (`createTempDirectory` "idx-cmp")
 
     let bin   = indexerBinary env
         args  = ["test_proto", idxCmpDir]
-        stdin = L8.fromStrict . SP.ser $ eg    -- TODO see if lazy/strict is better
-        
+        stdin = C.cbor eg
+
     (code, stdout, stderr) <- PL.readProcessWithExitCode bin args stdin
 
     -- print (code, stdout, stderr)
@@ -96,12 +100,18 @@ testPathImpl env collectionName = forM_ [SP.eg1] $ \eg -> do
     print ("STDOUT", stdout)
     putStrLn "-----"
 
-    case SP.deser (L8.toStrict stdout) of
-        Left l -> print ("error was", l)
-        Right (r :: SP.IndexResult) -> do
-            print (SP.gf (SP.numDocs r))
-            print (SP.gf (SP.numTerms r))
-            print (SP.gf (SP.msTaken r))
+    putStr "Haskell read stdout, "
+    print $ LBS.unpack stdout
+    let dummy = IndexReply { num_docs  = 33
+                           , num_terms = 22
+                           , ms_taken  = 11 }
+    putStr "Haskell would have written: "
+    print $ LBS.unpack (C.cbor dummy)
+
+
+    let (r :: IndexReply) = C.uncbor stdout
+
+    print r
         
     print ("STDOUT", stdout)
 
@@ -164,7 +174,7 @@ indexDocumentsImpl env writer metadataApi compactor registry collectionName unso
                     switch ti "Decoding indexer reply"
                     case decode stdout of
                         Nothing -> error "bad output"
-                        Just (IndexerReply docs' terms msTaken)
+                        Just (IndexReply docs' terms msTaken)
                             | docs' == 0 || terms == 0 -> pure . Left $ "No docs or terms: " ++ show ds
                             | otherwise -> do
 
