@@ -10,7 +10,6 @@ import Errors.Errors       (Error)
 import Indexer             (Indexer (..))
 import Network.Fetcher     (Fetcher (fetch))
 import Page.Page
-import qualified SharedProto as SP
 import Types               (CollectionName)
 import Url                 (mkUrl, valText)
 

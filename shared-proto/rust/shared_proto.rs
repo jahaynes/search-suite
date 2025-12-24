@@ -1,21 +1,38 @@
 use serde::Deserialize;
-use serde::Serialize;
 
 use serde_cbor::{Error, from_slice, to_vec};
 
-/*
+pub trait Cbor {
+    fn cbor(&self) -> Result<Vec<u8>, Error>;
+}
+
+pub trait UnCbor: Sized {
+    fn uncbor(bytes: &[u8]) -> Result<Self, Error>;
+}
+
 #[derive(Debug, Deserialize)]
 pub struct InputDoc {
-    pub compression: String,
+    pub url: String,
     pub content: String,
-    pub url: String
+    pub compression: String
+}
+
+impl UnCbor for InputDoc {
+    fn uncbor(bytes: &[u8]) -> Result<Self, Error> {
+        serde_cbor::from_slice(bytes)
+    }
+}
+
+impl UnCbor for Vec<InputDoc> {
+    fn uncbor(bytes: &[u8]) -> Result<Self, Error> {
+        serde_cbor::from_slice(bytes)
+    }
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Input {
     pub docs: Vec<InputDoc>
 }
-*/
 
 #[derive(Debug)]
 pub struct IndexReply {
@@ -24,10 +41,7 @@ pub struct IndexReply {
     pub ms_taken: u64
 }
 
-pub trait Cbor {
-    fn cbor(&self) -> Result<Vec<u8>, Error>;
-}
-
+// Can leave this auto defined ?
 impl Cbor for IndexReply {
     fn cbor(&self) -> Result<Vec<u8>, Error> {
         to_vec(&( self.num_docs

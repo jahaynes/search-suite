@@ -16,13 +16,16 @@ import Data.Warc.Header
 import Data.Warc.Value
 import Data.Warc.WarcEntry (WarcEntry (..), decompress)
 
-import qualified Encode as C
+import qualified Protocol.Encode as C
 import Environment         (Environment (..))
-import Example
--- import IndexerTypes        (IndexerReply (..))
+
+import Protocol.Example
+import Protocol.Types as C
+
+import IndexerTypes        (IndexerReply (..))
 import Registry            (Registry (..))
 import Metadata            (MetadataApi (generateMetadata))
-import ProtocolTypes
+
 import TimingInfo
 import Types
 import WarcFileReader      (WarcFileReader (..))
@@ -81,47 +84,25 @@ createIndexer env wfr writer metadataApi cpc reg =
 
 -- TODO test behaviour of 0 docs
 testPathImpl :: Environment -> CollectionName -> IO ()
-testPathImpl env collectionName = forM_ [eg1] $ \eg -> do
-
+testPathImpl env collectionName = do
+    
     idxCmpDir <- getCanonicalTemporaryDirectory >>= (`createTempDirectory` "idx-cmp")
 
     let bin   = indexerBinary env
         args  = ["test_proto", idxCmpDir]
-        stdin = C.cbor eg
+        stdin = C.lcbor (V.fromList [inputDocExample, inputDocExample])
 
-    (code, stdout, stderr) <- PL.readProcessWithExitCode bin args stdin
+    -- TODO check
+    (_, stdout, stderr) <- PL.readProcessWithExitCode bin args stdin
 
-    -- print (code, stdout, stderr)
-
-    print code
-    putStrLn "-----"
     L8.putStrLn stderr
-    putStrLn "-----"
-    print ("STDOUT", stdout)
-    putStrLn "-----"
 
-    putStr "Haskell read stdout, "
-    print $ LBS.unpack stdout
-    let dummy = IndexReply { num_docs  = 33
-                           , num_terms = 22
-                           , ms_taken  = 11 }
-    putStr "Haskell would have written: "
-    print $ LBS.unpack (C.cbor dummy)
-
-
-    let (r :: IndexReply) = C.uncbor stdout
+    let (r :: IndexReply) = C.unlcbor stdout
 
     print r
-        
-    print ("STDOUT", stdout)
 
-{-
-data IndexResult =
-    IndexResult { numDocs  :: !(Required 1 (Value Word32))
-                , numTerms :: !(Required 2 (Value Word32))
-                , msTaken  :: !(Required 3 (Value Word64))
-                } deriving (Generic, Show)
--}
+    pure ()
+    
 
 -- TODO exceptions
 indexDocumentsImpl :: Environment
@@ -174,7 +155,7 @@ indexDocumentsImpl env writer metadataApi compactor registry collectionName unso
                     switch ti "Decoding indexer reply"
                     case decode stdout of
                         Nothing -> error "bad output"
-                        Just (IndexReply docs' terms msTaken)
+                        Just (IndexerReply docs' terms msTaken)
                             | docs' == 0 || terms == 0 -> pure . Left $ "No docs or terms: " ++ show ds
                             | otherwise -> do
 

@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedLists, OverloadedStrings #-}
 
-module Example where
+module Protocol.Example where
 
-import ProtocolTypes
+import Protocol.Types
 
 eg0, eg1, eg2 :: Input
 eg0 = Input { docs = [] }

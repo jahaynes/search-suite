@@ -10,9 +10,9 @@ build-type:         Simple
 
 library
     ghc-options: -Wall -O2
-    exposed-modules:  Encode
-                      Example
-                      ProtocolTypes
+    exposed-modules:  Protocol.Encode
+                      Protocol.Example
+                      Protocol.Types
     build-depends:    base, bytestring, cborg, text, vector
     hs-source-dirs:   haskell
     default-language: Haskell2010

@@ -4,10 +4,7 @@ use crate::terms::*;
 use crate::types::*;
 
 use shared_proto::*;
-// use serde::Deserialize;
 use std::io::{Read, stdin};
-use bytes::Bytes;
-// use serde_cbor::{from_slice, to_vec};
 
 #[derive(Debug)]
 pub enum Scoring {
@@ -34,23 +31,19 @@ pub fn doc_from_stdin() -> Doc {
 // Read a protobuf-encoded `shared_proto::Input` from stdin and convert to Vec<Doc>
 pub fn docs_from_protobuf_stdin() -> Vec<Doc> {
 
-    panic!("Fix output first")
-/*
-    use serde_cbor::{from_slice, to_vec};
+    use shared_proto::UnCbor;
 
     let mut buf: Vec<u8> = Vec::new();
     stdin().read_to_end(&mut buf).unwrap();
 
-    eprintln!("Buf read 1 was: {:?}", &buf);
-    eprintln!("Buf read 2 was: {:?}", &buf);
+    let decoded: Vec<InputDoc> = Vec::uncbor(&buf).expect("cborg issue");
 
-    let pb_input: Input = from_slice(&buf).expect("decode");
-
+    // TODO: reconsider just passing through the actual type 
     let mut docs = Vec::<Doc>::new();
-    for input_doc in pb_input.docs {
+    for input_doc in decoded {
         docs.push(mk_doc(Url(input_doc.url), &input_doc.content));
     }
-    docs*/
+    docs
 }
 
 #[derive(Debug)]

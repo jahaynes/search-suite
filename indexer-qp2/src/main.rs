@@ -87,24 +87,25 @@ fn main() {
                       println!("{}", serialized);
                     },
 
-    "test_proto" => { eprintln!("About to test proto");
-                      //let input_docs = docs_from_protobuf_stdin();
+    "test_proto" => { eprintln!("Rust: About to test proto");
+
+                      let input_docs = docs_from_protobuf_stdin();
                       //eprintln!("input_docs: {:?}", input_docs);
 
-                     // let result: IndexResult = index(&args[2], input_docs, start_time);
+                      let result: IndexResult = index(&args[2], input_docs, start_time);
                      // eprintln!("result: {:?}", result);
 
                       /*
                       let pb_result = shared_proto::IndexResult {
-                            num_docs: result.num_docs as u32,
-                            num_terms: result.num_terms as u32,
-                            ms_taken: result.ms_taken as u64,
+                            num_docs: 
+                            num_terms: 
+                            ms_taken: 
                       };
                       */
                       let pb_result = shared_proto::IndexReply {
-                            num_docs: 33,
-                            num_terms: 22,
-                            ms_taken: 11
+                            num_docs:  result.num_docs as u32,
+                            num_terms: result.num_terms as u32,
+                            ms_taken:  result.ms_taken as u64
                       };
 
                       use shared_proto::{Cbor};
