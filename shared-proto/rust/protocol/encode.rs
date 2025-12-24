@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use serde_cbor::{Error, from_slice, to_vec};
+use serde_cbor::{Error, to_vec};
 
 pub trait Cbor {
     fn cbor(&self) -> Result<Vec<u8>, Error>;
@@ -41,7 +41,6 @@ pub struct IndexReply {
     pub ms_taken: u64
 }
 
-// Can leave this auto defined ?
 impl Cbor for IndexReply {
     fn cbor(&self) -> Result<Vec<u8>, Error> {
         to_vec(&( self.num_docs

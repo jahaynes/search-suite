@@ -3,8 +3,10 @@ use crate::normalise::*;
 use crate::terms::*;
 use crate::types::*;
 
-use shared_proto::*;
 use std::io::{Read, stdin};
+
+// use ::shared_proto::protocol::encode::{UnCbor};
+use ::shared_proto::protocol::types::{InputDoc, UnCbor};
 
 #[derive(Debug)]
 pub enum Scoring {
@@ -30,14 +32,9 @@ pub fn doc_from_stdin() -> Doc {
 
 // Read a protobuf-encoded `shared_proto::Input` from stdin and convert to Vec<Doc>
 pub fn docs_from_protobuf_stdin() -> Vec<Doc> {
-
-    use shared_proto::UnCbor;
-
     let mut buf: Vec<u8> = Vec::new();
     stdin().read_to_end(&mut buf).unwrap();
-
     let decoded: Vec<InputDoc> = Vec::uncbor(&buf).expect("cborg issue");
-
     // TODO: reconsider just passing through the actual type 
     let mut docs = Vec::<Doc>::new();
     for input_doc in decoded {

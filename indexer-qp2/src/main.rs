@@ -9,6 +9,7 @@ extern crate rand;
 extern crate serde;
 extern crate uuid;
 
+
 mod bk_tree;
 mod bytes;
 mod deletions;
@@ -95,27 +96,20 @@ fn main() {
                       let result: IndexResult = index(&args[2], input_docs, start_time);
                      // eprintln!("result: {:?}", result);
 
+                      panic!("libbing")
                       /*
-                      let pb_result = shared_proto::IndexResult {
-                            num_docs: 
-                            num_terms: 
-                            ms_taken: 
-                      };
-                      */
-                      let pb_result = shared_proto::IndexReply {
+                      let pb_result = shared_proto::protocol::IndexReply {
                             num_docs:  result.num_docs as u32,
                             num_terms: result.num_terms as u32,
                             ms_taken:  result.ms_taken as u64
                       };
-
-                      use shared_proto::{Cbor};
 
                       let cbor_bytes = pb_result.cbor().expect("CBOR fail");
 
                       eprintln!("rust success probably {:?}", cbor_bytes);
                       let stdout = std::io::stdout();
                       stdout.lock().write_all(&cbor_bytes).expect("Failed to write to stdout");
-                      eprintln!("rust wrote stdout, {:?}", cbor_bytes);  
+                      eprintln!("rust wrote stdout, {:?}", cbor_bytes);  */
                     }
 
     "index_fast" => { let doc = doc_from_stdin();
