@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings,
+{-# LANGUAGE LambdaCase,
+             OverloadedStrings,
              ScopedTypeVariables #-}
 
 module Indexer ( Indexer (..)
@@ -17,8 +18,7 @@ import Environment         (Environment (..))
 import IndexerTypes        (IndexerReply (..))
 import Metadata            (MetadataApi (generateMetadata))
 import Protocol.Encode     (lcbor, unlcbor)
-import Protocol.Example    (inputDocExample, eg0, eg1, eg2)
-import Protocol.Types      (IndexReply)
+import Protocol.Types      (IndexReply (..), Input (..), InputDoc (..))
 import Registry            (Registry (..))
 import TimingInfo
 import Types
@@ -26,7 +26,7 @@ import WarcFileReader      (WarcFileReader (..))
 import WarcFileWriter      (WarcFileWriter (..))
 
 import           Control.Concurrent.STM           (atomically)
-import           Control.Monad                    (forM, forM_, void)
+import           Control.Monad                    (forM, void)
 import           Data.Aeson                       (decode, encode)
 import           Data.ByteString                  (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as L8
@@ -55,7 +55,7 @@ data Indexer =
             , indexLocalWarcFile :: !(CollectionName -> FilePath -> IO (Either String ()))
             , deleteDocument     :: !(CollectionName -> String -> IO (Either String ()))
             , isDocDeleted       :: !(CollectionName -> String -> IO (Either String (Map Text Int)))
-            , testPath           :: !(CollectionName -> IO ())
+            , testPath           :: !(CollectionName -> IndexRequest -> IO (Either String Int))
             }
 
 createIndexer :: Environment
@@ -71,24 +71,62 @@ createIndexer env wfr writer metadataApi cpc reg =
             , indexLocalWarcFile = indexLocalWarcFileImpl env wfr writer metadataApi cpc reg
             , deleteDocument     = deleteDocumentImpl env reg
             , isDocDeleted       = isDocDeletedImpl env reg
-            , testPath           = testPathImpl env
+            , testPath           = testPathImpl env writer metadataApi cpc reg
             }
 
 -- TODO test behaviour of 0 docs
-testPathImpl :: Environment -> CollectionName -> IO ()
-testPathImpl env collectionName = forM_ [eg0, eg1, eg2] $ \eg -> do
+testPathImpl :: Environment -> WarcFileWriter -> MetadataApi -> Compactor -> Registry -> CollectionName -> IndexRequest -> IO (Either String Int)
+testPathImpl env writer metadataApi compactor registry collectionName (IndexRequest docs) = do
     idxCmpDir <- getCanonicalTemporaryDirectory >>= (`createTempDirectory` "idx-cmp")
     let bin   = indexerBinary env
         args  = ["test_proto", idxCmpDir]
-        stdin = lcbor eg
+        stdin = lcbor asInput
+    
     -- TODO check
-    (ExitSuccess, stdout, stderr) <- PL.readProcessWithExitCode bin args stdin
-    L8.putStrLn stderr
-    let (r :: IndexReply) = unlcbor stdout
-    print r
-    pure ()
-   
 
+    PL.readProcessWithExitCode bin args stdin >>= \case
+
+        -- TODO log
+        (ExitSuccess, stdout, stderr) -> do
+
+            let IndexReply nd _ _ = unlcbor stdout
+            
+            case fromIntegral nd of
+
+                0 ->
+                    pure $ Right 0 -- TODO log
+
+                nDocs -> do
+
+                    -- TODO functions
+                    -- Write out the warc file and offsets
+                    let destWarcFile = idxCmpDir <> "/" <> "file.warc"
+                        destOffsets  = idxCmpDir <> "/" <> "file.offs"
+                    writeWarcFile writer destWarcFile destOffsets docs
+
+                    -- Extract / write out metadata
+                    generateMetadata metadataApi idxCmpDir
+
+                    -- Import the tmp index into collection
+                    component <- createComponent nDocs idxCmpDir
+                    registerFromTmp registry collectionName component
+
+                    -- Run the compactor
+                    void $ compact compactor collectionName
+
+                    pure $ Right nDocs
+
+        -- TODO log
+        (ec, stdout, stderr) -> do
+            print ec
+            L8.putStrLn stdout
+            L8.putStrLn stderr
+            pure $ Left "Failed to index"
+    where
+    asInput :: Input
+    asInput  = Input . V.map (\(Doc u c) -> InputDoc u c "none") --TODO ugly
+                     $ V.fromList docs
+   
 -- TODO exceptions
 indexDocumentsImpl :: Environment
                    -> WarcFileWriter

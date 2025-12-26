@@ -10,6 +10,7 @@ import Errors.Errors       (Error)
 import Indexer             (Indexer (..))
 import Network.Fetcher     (Fetcher (fetch))
 import Page.Page
+-- import Protocol.Types      (IndexReply, InputDoc)
 import Types               (CollectionName)
 import Url                 (mkUrl, valText)
 
@@ -50,7 +51,8 @@ type IndexationApi = "indexDoc" :> Capture "col" CollectionName
                                     :> Post '[JSON] (Either String (Map Text Int))
                 
                 :<|> "test_proto" :> Capture "col" CollectionName
-                                  :> Post '[JSON] ()
+                                  :> ReqBody '[JSON] IndexRequest
+                                  :> Post '[JSON] (Either String Int)
 
 indexationApi :: Proxy IndexationApi
 indexationApi = Proxy
