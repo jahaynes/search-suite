@@ -1,13 +1,4 @@
-extern crate byteorder;
 extern crate edit_distance;
-extern crate flate2;
-extern crate intmap;
-extern crate itertools;
-extern crate memmap;
-extern crate num;
-extern crate rand;
-extern crate serde;
-extern crate uuid;
 
 mod bk_tree;
 mod bytes;
@@ -73,25 +64,8 @@ fn main() {
                       })
                     },
 
-    // TODO: still used?
-    "index_json" => { let input_docs = docs_from_stdin();
-
-                      let result: IndexResult;
-
-                      if !input_docs.is_empty() {
-                        result = index(&args[2], input_docs, start_time);
-                      } else {
-                        let ms_taken = SystemTime::now().duration_since(start_time).unwrap().as_millis();
-                        result = IndexResult { num_docs: 0, num_terms: 0, ms_taken: ms_taken };
-                      }
-                      // verify(&args[2]);
-                      let serialized = serde_json::to_string(&result).unwrap();
-                      println!("{}", serialized);
-                    },
-
-    "test_proto" => { let input_docs = docs_from_protobuf_stdin();
+    "index_docs" => { let input_docs = docs_from_protobuf_stdin();
                       let result: IndexResult = index(&args[2], input_docs, start_time);
-                      // Consider sharing IndexResult/IndexReply
                       let cbor_result = IndexReply {
                             num_docs:  result.num_docs as u32,
                             num_terms: result.num_terms as u32,
@@ -101,13 +75,6 @@ fn main() {
                       let stdout = std::io::stdout();
                       stdout.lock().write_all(&cbor_bytes).expect("Failed to write to stdout");
                     }
-
-    "index_fast" => { let doc = doc_from_stdin();
-                      let input_docs = vec!(doc);
-                      let result: IndexResult = index(&args[2], input_docs, start_time);
-                      let serialized = serde_json::to_string(&result).unwrap();
-                      println!("{}", serialized);
-                    },
 
     "merge"     => { let dest          = &args[2];
                      let src1          = &args[3];

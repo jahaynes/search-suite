@@ -15,31 +15,25 @@ import Data.Warc.Header
 import Data.Warc.Value
 import Data.Warc.WarcEntry (WarcEntry (..), decompress)
 import Environment         (Environment (..))
-import IndexerTypes        (IndexerReply (..))
 import Metadata            (MetadataApi (generateMetadata))
 import Protocol.Encode     (lcbor, unlcbor)
 import Protocol.Types      (IndexReply (..), Input (..), InputDoc (..))
 import Registry            (Registry (..))
-import TimingInfo
 import Types
 import WarcFileReader      (WarcFileReader (..))
 import WarcFileWriter      (WarcFileWriter (..))
 
 import           Control.Concurrent.STM           (atomically)
 import           Control.Monad                    (forM, void)
-import           Data.Aeson                       (decode, encode)
 import           Data.ByteString                  (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as L8
 import           Data.Either                      (lefts, rights)
-import           Data.List                        (sort)
 import           Data.Map.Strict
 import qualified Data.Map.Strict            as M
 import qualified Data.Set                   as S
 import           Data.Text                        (Text, pack)
 import qualified Data.Text.IO as T
 import           Data.Text.Encoding
-import qualified Data.Text.Lazy.Encoding    as LE
-import qualified Data.Text.Lazy             as LT
 import           Data.Vector                      (Vector)
 import qualified Data.Vector                as V
 import           Debug.Trace                      (trace)
@@ -50,12 +44,11 @@ import           System.IO.Temp                   (getCanonicalTemporaryDirector
 import           UnliftIO.Exception               (catchIO, finally)
 
 data Indexer =
-    Indexer { indexDocuments     :: !(CollectionName -> [Doc] -> IO (Either String Int))
+    Indexer { indexDocs          :: !(CollectionName -> IndexRequest -> IO (Either String Int))
             , indexLocalFiles    :: !(CollectionName -> [FilePath] -> IO (Either String ()))
             , indexLocalWarcFile :: !(CollectionName -> FilePath -> IO (Either String ()))
             , deleteDocument     :: !(CollectionName -> String -> IO (Either String ()))
             , isDocDeleted       :: !(CollectionName -> String -> IO (Either String (Map Text Int)))
-            , testPath           :: !(CollectionName -> IndexRequest -> IO (Either String Int))
             }
 
 createIndexer :: Environment
@@ -66,39 +59,35 @@ createIndexer :: Environment
               -> Registry
               -> Indexer
 createIndexer env wfr writer metadataApi cpc reg =
-    Indexer { indexDocuments     = indexDocumentsImpl env writer metadataApi cpc reg
+    Indexer { indexDocs          = indexDocsImpl env writer metadataApi cpc reg
             , indexLocalFiles    = indexLocalFileImpl env writer metadataApi cpc reg
             , indexLocalWarcFile = indexLocalWarcFileImpl env wfr writer metadataApi cpc reg
             , deleteDocument     = deleteDocumentImpl env reg
             , isDocDeleted       = isDocDeletedImpl env reg
-            , testPath           = testPathImpl env writer metadataApi cpc reg
             }
 
--- TODO test behaviour of 0 docs
-testPathImpl :: Environment -> WarcFileWriter -> MetadataApi -> Compactor -> Registry -> CollectionName -> IndexRequest -> IO (Either String Int)
-testPathImpl env writer metadataApi compactor registry collectionName (IndexRequest docs) = do
-    idxCmpDir <- getCanonicalTemporaryDirectory >>= (`createTempDirectory` "idx-cmp")
-    let bin   = indexerBinary env
-        args  = ["test_proto", idxCmpDir]
-        stdin = lcbor asInput
+indexDocsImpl :: Environment -> WarcFileWriter -> MetadataApi -> Compactor -> Registry -> CollectionName -> IndexRequest -> IO (Either String Int)
+indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest docs) = do
     
-    -- TODO check
+    idxCmpDir <- getCanonicalTemporaryDirectory >>= (`createTempDirectory` "idx-cmp")
+
+    let bin   = indexerBinary env
+        args  = ["index_docs", idxCmpDir]
+        stdin = lcbor asInput
 
     PL.readProcessWithExitCode bin args stdin >>= \case
 
         -- TODO log
-        (ExitSuccess, stdout, stderr) -> do
+        (ExitSuccess, stdout, stderr) ->
 
-            let IndexReply nd _ _ = unlcbor stdout
-            
+            let IndexReply nd _ _ = unlcbor stdout in
+
             case fromIntegral nd of
 
-                0 ->
-                    pure $ Right 0 -- TODO log
+                0 -> pure $ Right 0
 
                 nDocs -> do
 
-                    -- TODO functions
                     -- Write out the warc file and offsets
                     let destWarcFile = idxCmpDir <> "/" <> "file.warc"
                         destOffsets  = idxCmpDir <> "/" <> "file.offs"
@@ -126,90 +115,6 @@ testPathImpl env writer metadataApi compactor registry collectionName (IndexRequ
     asInput :: Input
     asInput  = Input . V.map (\(Doc u c) -> InputDoc u c "none") --TODO ugly
                      $ V.fromList docs
-   
--- TODO exceptions
-indexDocumentsImpl :: Environment
-                   -> WarcFileWriter
-                   -> MetadataApi
-                   -> Compactor
-                   -> Registry
-                   -> CollectionName
-                   -> [Doc]
-                   -> IO (Either String Int)
-indexDocumentsImpl env writer metadataApi compactor registry collectionName unsortedDocs = do
-
-    let ds = sort unsortedDocs
-
-    let nDocs = length ds
-
-    if nDocs == 0
-
-        then pure $ Right 0
-
-        else do
-
-            -- Create temp dir
-            ti <- start "Create temp dir"
-            idxCmpDir <- getCanonicalTemporaryDirectory >>= (`createTempDirectory` "idx-cmp")
-
-            -- Run indexer in tmp directory
-            switch ti "Running indexer"
-            let bin   = indexerBinary env
-                args  = if nDocs == 1 -- TODO why is this switch here
-                            then ["index_fast", idxCmpDir]
-                            else ["index_json", idxCmpDir]
-                stdin = case ds of
-                            [Doc u c] -> mconcat [ LE.encodeUtf8 $ LT.fromStrict u
-                                                 , "\n"
-                                                 , LE.encodeUtf8 $ LT.fromStrict c]
-                            _         -> encode $ IndexRequest ds
-
-            eOut <- catchIO (Right <$> PL.readProcessWithExitCode bin args stdin)
-                            (\ex -> pure . Left . show $ ex)
-
-            case eOut of 
-
-                Left e -> pure . Left . show $ e
-
-                Right (ExitSuccess, stdout, stderr) -> do
-
-                    L8.putStrLn stderr
-
-                    switch ti "Decoding indexer reply"
-                    case decode stdout of
-                        Nothing -> error "bad output"
-                        Just (IndexerReply docs' terms msTaken)
-                            | docs' == 0 || terms == 0 -> pure . Left $ "No docs or terms: " ++ show ds
-                            | otherwise -> do
-
-                                -- Also write out the warc file and offsets
-                                switch ti "Writing out warc file and offsets"
-                                let destWarcFile = idxCmpDir <> "/" <> "file.warc"
-                                    destOffsets  = idxCmpDir <> "/" <> "file.offs"
-                                writeWarcFile writer destWarcFile destOffsets ds
-
-                                -- Extract / write out metadata
-                                switch ti "Generating Metadata"
-                                generateMetadata metadataApi idxCmpDir
-
-                                -- Import the tmp index into collection
-                                switch ti "Importing index"
-                                component <- createComponent nDocs idxCmpDir
-                                registerFromTmp registry collectionName component
-
-                                -- Run the compactor
-                                switch ti "Compacting"
-                                void $ compact compactor collectionName
-
-                                dti <- done ti
-
-                                let ttime = total dti
-
-                                putStrLn $ "TimeInfo: " <> show ttime <> " - " <> show nDocs <> " - " <> show dti
-
-                                pure $ Right nDocs
-
-                Right (_, stdout, stderr) -> pure . Left . show $ (stdout, stderr)
 
 indexLocalFileImpl :: Environment
                    -> WarcFileWriter
@@ -227,7 +132,7 @@ indexLocalFileImpl env writer metadataApi compactor registry collectionName file
         t <- T.readFile fp
         pure $ Doc (pack fp) t
 
-    ei <- indexDocumentsImpl env writer metadataApi compactor registry collectionName unsortedDocs
+    ei <- indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest unsortedDocs)
 
     case ei of
         Left e -> pure $ Left e
@@ -257,7 +162,7 @@ indexLocalWarcFileImpl env warcFileReader writer metadataApi compactor registry 
 
         let ds' = V.mapMaybe toDoc ds -- TODO report failures
 
-        V.mapM_ (\d -> indexDocumentsImpl env writer metadataApi compactor registry collectionName [d]) ds' 
+        V.mapM_ (\d -> indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest [d])) ds' 
 
         where
         toDoc :: WarcEntry -> Maybe Doc

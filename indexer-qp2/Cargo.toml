@@ -9,7 +9,6 @@ shared-proto = { path = "../shared-proto" }
 
 byteorder = "1.5.0"
 edit-distance = "2.1.3"
-flate2 = "1.1.2"
 intmap = "3.1.2"
 itertools = "0.14.0"
 memmap = "0.7.0"
@@ -19,4 +18,3 @@ regex = "1.12.2"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.147"
 uuid = { version = "1.18.1", features = ["v4"] }
-

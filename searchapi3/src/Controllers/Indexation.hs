@@ -5,12 +5,11 @@
 
 module Controllers.Indexation where
 
-import Api                 (Doc (Doc), IndexRequest (docs))
+import Api                 (Doc (Doc), IndexRequest (IndexRequest))
 import Errors.Errors       (Error)
 import Indexer             (Indexer (..))
 import Network.Fetcher     (Fetcher (fetch))
 import Page.Page
--- import Protocol.Types      (IndexReply, InputDoc)
 import Types               (CollectionName)
 import Url                 (mkUrl, valText)
 
@@ -26,9 +25,9 @@ import Data.Text                         (Text)
 import Data.Text.Encoding                (decodeUtf8')
 import Servant
 
-type IndexationApi = "indexDoc" :> Capture "col" CollectionName
-                                :> ReqBody '[JSON] IndexRequest
-                                :> Post '[JSON] (Either String Int)
+type IndexationApi = "indexDocs" :> Capture "col" CollectionName
+                                 :> ReqBody '[JSON] IndexRequest
+                                 :> Post '[JSON] (Either String Int)
 
                 :<|> "indexPage" :> Capture "col" CollectionName
                                  :> ReqBody '[PlainText] String
@@ -49,10 +48,6 @@ type IndexationApi = "indexDoc" :> Capture "col" CollectionName
                 :<|> "isDocDeleted" :> Capture "col" CollectionName
                                     :> ReqBody '[PlainText] String
                                     :> Post '[JSON] (Either String (Map Text Int))
-                
-                :<|> "test_proto" :> Capture "col" CollectionName
-                                  :> ReqBody '[JSON] IndexRequest
-                                  :> Post '[JSON] (Either String Int)
 
 indexationApi :: Proxy IndexationApi
 indexationApi = Proxy
@@ -61,14 +56,14 @@ indexationServer :: Fetcher (ExceptT Error IO)
                  -> Indexer
                  -> ServerT IndexationApi IO 
 indexationServer fetcher indexer
-    = (\cn ir -> indexDocuments indexer cn (docs ir))
+    = indexDocs indexer
  :<|> fetchUrlLines fetcher indexer
  :<|> indexLocalFilesImpl indexer
  :<|> indexLocalWarcFile indexer
  :<|> deleteDocument indexer
  :<|> isDocDeleted indexer
- :<|> testPath indexer
 
+-- TODO move out of controller
 -- TODO message
 fetchUrlLines :: Fetcher (ExceptT Error IO)
               -> Indexer
@@ -101,7 +96,7 @@ fetchUrlLines fetcher indexer col strUrlLines = do
                     Right r -> do
                         let txtUrl = valText $ p_url r
                             Right body = decodeUtf8' $ p_body r
-                        _ <- indexDocuments indexer col [Doc txtUrl body]
+                        _ <- indexDocs indexer col (IndexRequest [Doc txtUrl body])
                         pure $ Right ()
 
 -- TODO use more efficient filepath - or json?

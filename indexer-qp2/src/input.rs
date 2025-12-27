@@ -18,19 +18,6 @@ pub enum Mode {
     Regex
 }
 
-pub fn docs_from_stdin() -> Vec<Doc> {
-    panic!("retiring");
-}
-
-// Read a single doc from stdin to bypass the json encoding/decoding
-pub fn doc_from_stdin() -> Doc {
-    let url = stdin().lines().next().unwrap().unwrap();
-    let mut buffer = String::new();
-    stdin().read_to_string(&mut buffer).unwrap();
-    mk_doc(Url(url), &buffer)
-}
-
-// Read a protobuf-encoded `shared_proto::Input` from stdin and convert to Vec<Doc>
 pub fn docs_from_protobuf_stdin() -> Vec<Doc> {
     let mut buf: Vec<u8> = Vec::new();
     stdin().read_to_end(&mut buf).unwrap();
