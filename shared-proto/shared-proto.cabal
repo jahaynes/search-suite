@@ -1,0 +1,17 @@
+cabal-version:      3.0
+
+name:               shared-proto
+version:            0.1.0.0
+license:            BSD-3-Clause
+author:             Your Name
+maintainer:         you@example.com
+category:           Codec
+build-type:         Simple
+
+library
+    ghc-options: -Wall -O2
+    exposed-modules:  Protocol.Encode
+                      Protocol.Types
+    build-depends:    base, bytestring, cborg, text, vector
+    hs-source-dirs:   haskell
+    default-language: Haskell2010

@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings,
+{-# LANGUAGE LambdaCase,
+             OverloadedStrings,
              ScopedTypeVariables #-}
 
 module Indexer ( Indexer (..)
@@ -8,38 +9,31 @@ module Indexer ( Indexer (..)
 import Api                 (IndexRequest (..), Doc (..))
 import Compactor           (Compactor (..))
 import Component
-
--- TOO coupled to Warc
-import Data.Warc.Body
+import Data.Warc.Body   -- TOO coupled to Warc
 import Data.Warc.Key
 import Data.Warc.Header
 import Data.Warc.Value
 import Data.Warc.WarcEntry (WarcEntry (..), decompress)
-
 import Environment         (Environment (..))
-import IndexerTypes        (IndexerReply (..))
-import Registry            (Registry (..))
 import Metadata            (MetadataApi (generateMetadata))
-import TimingInfo
+import Protocol.Encode     (lcbor, unlcbor)
+import Protocol.Types      (IndexReply (..), Input (..), InputDoc (..))
+import Registry            (Registry (..))
 import Types
 import WarcFileReader      (WarcFileReader (..))
 import WarcFileWriter      (WarcFileWriter (..))
 
 import           Control.Concurrent.STM           (atomically)
 import           Control.Monad                    (forM, void)
-import           Data.Aeson                       (decode, encode)
 import           Data.ByteString                  (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as L8
 import           Data.Either                      (lefts, rights)
-import           Data.List                        (sort)
 import           Data.Map.Strict
 import qualified Data.Map.Strict            as M
 import qualified Data.Set                   as S
 import           Data.Text                        (Text, pack)
 import qualified Data.Text.IO as T
 import           Data.Text.Encoding
-import qualified Data.Text.Lazy.Encoding    as LE
-import qualified Data.Text.Lazy             as LT
 import           Data.Vector                      (Vector)
 import qualified Data.Vector                as V
 import           Debug.Trace                      (trace)
@@ -50,7 +44,7 @@ import           System.IO.Temp                   (getCanonicalTemporaryDirector
 import           UnliftIO.Exception               (catchIO, finally)
 
 data Indexer =
-    Indexer { indexDocuments     :: !(CollectionName -> [Doc] -> IO (Either String Int))
+    Indexer { indexDocs          :: !(CollectionName -> IndexRequest -> IO (Either String Int))
             , indexLocalFiles    :: !(CollectionName -> [FilePath] -> IO (Either String ()))
             , indexLocalWarcFile :: !(CollectionName -> FilePath -> IO (Either String ()))
             , deleteDocument     :: !(CollectionName -> String -> IO (Either String ()))
@@ -65,96 +59,62 @@ createIndexer :: Environment
               -> Registry
               -> Indexer
 createIndexer env wfr writer metadataApi cpc reg =
-    Indexer { indexDocuments     = indexDocumentsImpl env writer metadataApi cpc reg
+    Indexer { indexDocs          = indexDocsImpl env writer metadataApi cpc reg
             , indexLocalFiles    = indexLocalFileImpl env writer metadataApi cpc reg
             , indexLocalWarcFile = indexLocalWarcFileImpl env wfr writer metadataApi cpc reg
             , deleteDocument     = deleteDocumentImpl env reg
             , isDocDeleted       = isDocDeletedImpl env reg
             }
 
--- TODO exceptions
-indexDocumentsImpl :: Environment
-                   -> WarcFileWriter
-                   -> MetadataApi
-                   -> Compactor
-                   -> Registry
-                   -> CollectionName
-                   -> [Doc]
-                   -> IO (Either String Int)
-indexDocumentsImpl env writer metadataApi compactor registry collectionName unsortedDocs = do
+indexDocsImpl :: Environment -> WarcFileWriter -> MetadataApi -> Compactor -> Registry -> CollectionName -> IndexRequest -> IO (Either String Int)
+indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest docs) = do
+    
+    idxCmpDir <- getCanonicalTemporaryDirectory >>= (`createTempDirectory` "idx-cmp")
 
-    let ds = sort unsortedDocs
+    let bin   = indexerBinary env
+        args  = ["index_docs", idxCmpDir]
+        stdin = lcbor asInput
 
-    let nDocs = length ds
+    PL.readProcessWithExitCode bin args stdin >>= \case
 
-    if nDocs == 0
+        -- TODO log
+        (ExitSuccess, stdout, stderr) ->
 
-        then pure $ Right 0
+            let IndexReply nd _ _ = unlcbor stdout in
 
-        else do
+            case fromIntegral nd of
 
-            -- Create temp dir
-            ti <- start "Create temp dir"
-            idxCmpDir <- getCanonicalTemporaryDirectory >>= (`createTempDirectory` "idx-cmp")
+                0 -> pure $ Right 0
 
-            -- Run indexer in tmp directory
-            switch ti "Running indexer"
-            let bin   = indexerBinary env
-                args  = if nDocs == 1 -- TODO why is this switch here
-                            then ["index_fast", idxCmpDir]
-                            else ["index_json", idxCmpDir]
-                stdin = case ds of
-                            [Doc u c] -> mconcat [ LE.encodeUtf8 $ LT.fromStrict u
-                                                 , "\n"
-                                                 , LE.encodeUtf8 $ LT.fromStrict c]
-                            _         -> encode $ IndexRequest ds
+                nDocs -> do
 
-            eOut <- catchIO (Right <$> PL.readProcessWithExitCode bin args stdin)
-                            (\ex -> pure . Left . show $ ex)
+                    -- Write out the warc file and offsets
+                    let destWarcFile = idxCmpDir <> "/" <> "file.warc"
+                        destOffsets  = idxCmpDir <> "/" <> "file.offs"
+                    writeWarcFile writer destWarcFile destOffsets docs
 
-            case eOut of 
+                    -- Extract / write out metadata
+                    generateMetadata metadataApi idxCmpDir
 
-                Left e -> pure . Left . show $ e
+                    -- Import the tmp index into collection
+                    component <- createComponent nDocs idxCmpDir
+                    registerFromTmp registry collectionName component
 
-                Right (ExitSuccess, stdout, stderr) -> do
+                    -- Run the compactor
+                    void $ compact compactor collectionName
 
-                    L8.putStrLn stderr
+                    pure $ Right nDocs
 
-                    switch ti "Decoding indexer reply"
-                    case decode stdout of
-                        Nothing -> error "bad output"
-                        Just (IndexerReply docs' terms msTaken)
-                            | docs' == 0 || terms == 0 -> pure . Left $ "No docs or terms: " ++ show ds
-                            | otherwise -> do
-
-                                -- Also write out the warc file and offsets
-                                switch ti "Writing out warc file and offsets"
-                                let destWarcFile = idxCmpDir <> "/" <> "file.warc"
-                                    destOffsets  = idxCmpDir <> "/" <> "file.offs"
-                                writeWarcFile writer destWarcFile destOffsets ds
-
-                                -- Extract / write out metadata
-                                switch ti "Generating Metadata"
-                                generateMetadata metadataApi idxCmpDir
-
-                                -- Import the tmp index into collection
-                                switch ti "Importing index"
-                                component <- createComponent nDocs idxCmpDir
-                                registerFromTmp registry collectionName component
-
-                                -- Run the compactor
-                                switch ti "Compacting"
-                                void $ compact compactor collectionName
-
-                                dti <- done ti
-
-                                let ttime = total dti
-
-                                putStrLn $ "TimeInfo: " <> show ttime <> " - " <> show nDocs <> " - " <> show dti
-
-                                pure $ Right nDocs
-
-                Right (_, stdout, stderr) -> pure . Left . show $ (stdout, stderr)
+        -- TODO log
+        (ec, stdout, stderr) -> do
+            print ec
+            L8.putStrLn stdout
+            L8.putStrLn stderr
+            pure $ Left "Failed to index"
+    where
+    asInput :: Input
+    asInput  = Input . V.map (\(Doc u c) -> InputDoc u c "none") --TODO ugly
+                     $ V.fromList docs
 
 indexLocalFileImpl :: Environment
                    -> WarcFileWriter
@@ -172,7 +132,7 @@ indexLocalFileImpl env writer metadataApi compactor registry collectionName file
         t <- T.readFile fp
         pure $ Doc (pack fp) t
 
-    ei <- indexDocumentsImpl env writer metadataApi compactor registry collectionName unsortedDocs
+    ei <- indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest unsortedDocs)
 
     case ei of
         Left e -> pure $ Left e
@@ -202,7 +162,7 @@ indexLocalWarcFileImpl env warcFileReader writer metadataApi compactor registry 
 
         let ds' = V.mapMaybe toDoc ds -- TODO report failures
 
-        V.mapM_ (\d -> indexDocumentsImpl env writer metadataApi compactor registry collectionName [d]) ds' 
+        V.mapM_ (\d -> indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest [d])) ds' 
 
         where
         toDoc :: WarcEntry -> Maybe Doc
@@ -216,10 +176,10 @@ indexLocalWarcFileImpl env warcFileReader writer metadataApi compactor registry 
                 _                             -> Nothing
 
             uri'  <- case decodeUtf8' uri of
-                         Left e -> trace (show (e, uri)) Nothing
+                         Left e -> trace (show (e, uri)) Nothing    -- TODO: remove trace
                          Right x -> Just x
             body' <- case decodeUtf8' body of
-                         Left e -> trace (show (e, uri)) Nothing
+                         Left e -> trace (show (e, uri)) Nothing    -- TODO: remove trace
                          Right x -> Just x
 
             pure $ Doc uri' body'

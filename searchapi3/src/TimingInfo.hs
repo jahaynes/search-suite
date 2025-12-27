@@ -1,4 +1,5 @@
-module TimingInfo (TimingInfo, start, switch, total, done) where
+-- TODO make use of this or remove
+module TimingInfo () where
 
 import           Data.IORef           (IORef, modifyIORef', newIORef, readIORef)
 import           Data.List            (foldl')

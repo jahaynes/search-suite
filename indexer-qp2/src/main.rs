@@ -1,13 +1,4 @@
-extern crate byteorder;
 extern crate edit_distance;
-extern crate flate2;
-extern crate intmap;
-extern crate itertools;
-extern crate memmap;
-extern crate num;
-extern crate rand;
-extern crate serde;
-extern crate uuid;
 
 mod bk_tree;
 mod bytes;
@@ -40,11 +31,14 @@ use index_reader::*;
 use input::*;
 use query::*;
 use spelling_correction::*;
+use shared_proto::protocol::encode::Cbor;
+use shared_proto::protocol::types::IndexReply;
 use types::*;
 use verify::*;
 
 use std::collections::HashMap;
 use std::env;
+use std::io::Write;
 use std::time::SystemTime;
 
 fn main() {
@@ -70,28 +64,17 @@ fn main() {
                       })
                     },
 
-    // TODO: still used?
-    "index_json" => { let input_docs = docs_from_stdin();
-
-                      let result: IndexResult;
-
-                      if !input_docs.is_empty() {
-                        result = index(&args[2], input_docs, start_time);
-                      } else {
-                        let ms_taken = SystemTime::now().duration_since(start_time).unwrap().as_millis();
-                        result = IndexResult { num_docs: 0, num_terms: 0, ms_taken: ms_taken };
-                      }
-                      // verify(&args[2]);
-                      let serialized = serde_json::to_string(&result).unwrap();
-                      println!("{}", serialized);
-                    },
-
-    "index_fast" => { let doc = doc_from_stdin();
-                      let input_docs = vec!(doc);
+    "index_docs" => { let input_docs = docs_from_protobuf_stdin();
                       let result: IndexResult = index(&args[2], input_docs, start_time);
-                      let serialized = serde_json::to_string(&result).unwrap();
-                      println!("{}", serialized);
-                    },
+                      let cbor_result = IndexReply {
+                            num_docs:  result.num_docs as u32,
+                            num_terms: result.num_terms as u32,
+                            ms_taken:  result.ms_taken as u64
+                      };
+                      let cbor_bytes = cbor_result.cbor().expect("CBOR fail");
+                      let stdout = std::io::stdout();
+                      stdout.lock().write_all(&cbor_bytes).expect("Failed to write to stdout");
+                    }
 
     "merge"     => { let dest          = &args[2];
                      let src1          = &args[3];

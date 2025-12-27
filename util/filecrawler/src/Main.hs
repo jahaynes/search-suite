@@ -70,10 +70,10 @@ processFile http filePath
     endsWith ext fp = map toLower ext == (reverse . map toLower . take (length ext) . reverse $ fp)
 
     plaintextFileTypes :: [String]
-    plaintextFileTypes = ["hs", "txt", "java"]
+    plaintextFileTypes = ["cs", "js", "ts", "tsx", "sql"]
 
     richFiletypes :: [String]
-    richFiletypes = ["pdf", "doc", "docx", "xls", "xlsx", "odt", "rtf", "epub", "mp3"]
+    richFiletypes = []
 
 processTika :: Manager -> FilePath -> IO (Maybe (FilePath, Text))
 processTika http filePath = do
@@ -117,7 +117,7 @@ send http fromHostName colName filePathsAndBodies = liftIO $ do
 
       let ir = IndexRequest [doc]
 
-      initialRequest <- parseRequest $ printf "http://127.0.0.1:8081/indexDoc/%s" colName
+      initialRequest <- parseRequest $ printf "http://127.0.0.1:8081/indexDocs/%s" colName
       let request = initialRequest { method = "POST"
                                    , requestHeaders = (hContentType, "application/json") : requestHeaders initialRequest
                                    , requestBody = RequestBodyLBS $ encode ir }

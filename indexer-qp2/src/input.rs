@@ -3,18 +3,10 @@ use crate::normalise::*;
 use crate::terms::*;
 use crate::types::*;
 
-use serde::Deserialize;
+use shared_proto::protocol::encode::UnCbor;
+use shared_proto::protocol::types::InputDoc;
+
 use std::io::{Read, stdin};
-
-#[derive(Deserialize)]
-pub struct Input { pub docs: Vec<InputDoc>
-                 }
-
-#[derive(Deserialize)]
-pub struct InputDoc { pub url:         String
-                    , pub content:     String
-                    , pub compression: Option<String>
-                    }
 
 #[derive(Debug)]
 pub enum Scoring {
@@ -26,23 +18,16 @@ pub enum Mode {
     Regex
 }
 
-pub fn docs_from_stdin() -> Vec<Doc> {
-    let mut buffer = String::new();
-    stdin().read_to_string(&mut buffer).unwrap();
-    let deserialized: Input = serde_json::from_str(&buffer).unwrap();
+pub fn docs_from_protobuf_stdin() -> Vec<Doc> {
+    let mut buf: Vec<u8> = Vec::new();
+    stdin().read_to_end(&mut buf).unwrap();
+    let decoded: Vec<InputDoc> = Vec::uncbor(&buf).expect("cborg issue");
+    // TODO: reconsider just passing through the actual type 
     let mut docs = Vec::<Doc>::new();
-    for input_doc in deserialized.docs {
+    for input_doc in decoded {
         docs.push(mk_doc(Url(input_doc.url), &input_doc.content));
     }
     docs
-}
-
-// Read a single doc from stdin to bypass the json encoding/decoding
-pub fn doc_from_stdin() -> Doc {
-    let url = stdin().lines().next().unwrap().unwrap();
-    let mut buffer = String::new();
-    stdin().read_to_string(&mut buffer).unwrap();
-    mk_doc(Url(url), &buffer)
 }
 
 #[derive(Debug)]
