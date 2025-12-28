@@ -12,7 +12,9 @@ common warnings
 
 library
     import:           warnings
-    exposed-modules:  MyLib
+    exposed-modules:  Capability.Environment
+                      Capability.Exception
+                      Search
     -- other-modules:
     -- other-extensions:
     build-depends:    base, transformers
@@ -27,4 +29,5 @@ test-suite search-lib-test
     main-is:          Main.hs
     build-depends:
         base,
-        search-lib
+        search-lib,
+        transformers
