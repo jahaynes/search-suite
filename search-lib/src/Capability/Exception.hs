@@ -1,4 +1,6 @@
 module Capability.Exception where
 
+import Data.Text (Text)
+
 class Exception m where
-    throw :: [String] -> m a
+    throw :: [Text] -> m a
