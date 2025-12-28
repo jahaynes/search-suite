@@ -17,7 +17,7 @@ library
                       Search
     -- other-modules:
     -- other-extensions:
-    build-depends:    base, transformers
+    build-depends:    base, text, transformers
     hs-source-dirs:   src
     default-language: Haskell2010
 
@@ -30,4 +30,4 @@ test-suite search-lib-test
     build-depends:
         base,
         search-lib,
-        transformers
+        transformers, string-interpolate, text

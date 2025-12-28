@@ -12,16 +12,17 @@ import Capability.Exception   (Exception (..))
 import           Control.Monad.Trans.Class  (lift)
 import           Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import           Control.Monad.Trans.Reader (ReaderT (..), ask)
+import           Data.Text                  (Text)
 
 newtype Search a =
-    Search { unSearch :: ExceptT [String] (ReaderT Env IO) a }
+    Search { unSearch :: ExceptT [Text] (ReaderT Env IO) a }
         deriving (Functor, Applicative, Monad)
       --  deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
 
 -- Does not force, or catch panics
 -- Do those as needed within individual capabilities
 -- Use throwE to signal failures
-runSearch :: Search a -> Env -> IO (Either [String] a)
+runSearch :: Search a -> Env -> IO (Either [Text] a)
 runSearch = runReaderT
           . runExceptT
           . unSearch
