@@ -117,7 +117,7 @@ send http fromHostName colName filePathsAndBodies = liftIO $ do
 
       let ir = IndexRequest [doc]
 
-      initialRequest <- parseRequest $ printf "http://127.0.0.1:8081/indexDoc/%s" colName
+      initialRequest <- parseRequest $ printf "http://127.0.0.1:8081/indexDocs/%s" colName
       let request = initialRequest { method = "POST"
                                    , requestHeaders = (hContentType, "application/json") : requestHeaders initialRequest
                                    , requestBody = RequestBodyLBS $ encode ir }
