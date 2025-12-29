@@ -1,0 +1,16 @@
+cabal-version:      3.0
+name:               warc
+version:            0.1.0.0
+license:            Apache-2.0
+author:             John Haynes
+maintainer:         john.andrew.haynes@gmail.com
+build-type:         Simple
+
+-- Try to depend on capabilities here instead
+library
+    ghc-options:      -Wall -O2
+    build-depends:    base, bytestring, cereal, directory, WebArchive, unliftio, util, vector
+    exposed-modules:  WarcFileReader
+                      WarcFileWriter
+    hs-source-dirs:   Warc
+    default-language: Haskell2010

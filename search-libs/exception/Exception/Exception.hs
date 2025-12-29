@@ -1,4 +1,4 @@
-module Capability.Exception where
+module Exception where
 
 import Data.Text (Text)
 

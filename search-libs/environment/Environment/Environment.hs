@@ -1,4 +1,4 @@
-module Capability.Environment where
+module Environment where
 
 data Env = Env
 

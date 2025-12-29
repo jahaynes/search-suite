@@ -1,13 +1,13 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Search ( Env (..)
-              , Search
-              , runSearch
-              , throw
-              ) where
+module Search.Search ( Env (..)
+                     , Search
+                     , runSearch
+                     , throw
+                     ) where
 
-import Capability.Environment (Environment (..), Env (..))
-import Capability.Exception   (Exception (..))
+import Environment (Environment (..), Env (..))
+import Exception   (Exception (..))
 
 import           Control.Monad.Trans.Class  (lift)
 import           Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)

@@ -173,7 +173,7 @@ mergeComponentFiles env wfw metadataApi indexerPath collectionName x y logger = 
                  -- Metrics needed
         job = do callProcess indexerPath mergeArgs
 
-                 interleaveWarcFiles wfw x y dest
+                 interleaveSortedWarcFilesAtPath wfw (path x) (path y) dest
 
                  mergeMetadata metadataApi (path x) (path y) dest
 
