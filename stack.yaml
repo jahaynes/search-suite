@@ -7,7 +7,10 @@ packages:
 - crawler
 - crawler-lib
 - searchapi3
-- search-lib
+- search-libs/environment
+- search-libs/exception
+- search-libs/util
+- search-libs/warc
 - shared-proto
 - util/filecrawler
 - util/warccrawler

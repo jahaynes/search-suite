@@ -1,38 +1,32 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module WarcFileReader  where
+module WarcFileReader where
 
+import           BinarySearch
 import           Data.Warc.Parse                   (fromByteStringRemainder {- :: L.ByteString -> Either ByteString (Int, WarcEntry, L.ByteString) -} )
 import           Data.Warc.WarcEntry               (WarcEntry (..))
 import           Data.Warc.Value
 import           Data.Warc.Header
 import           Data.Warc.Key
 
-
-import           Control.Exception.Safe            (catchIO)
 import           Data.ByteString                   (ByteString)
 import qualified Data.ByteString            as BS
 import qualified Data.ByteString.Char8      as C8
 import qualified Data.ByteString.Lazy       as LBS
 import qualified Data.ByteString.Lazy.Char8 as L8
 import           Data.Int                          (Int64)
-import           Data.Serialize hiding (flush)
+import           Data.Serialize                    (decode) -- really needed?
 import           Data.Word                         (Word64)
 import           Data.Vector                       (Vector)
 import qualified Data.Vector                as V
 import           System.Directory                  (getFileSize)
 import           System.IO
-import           Text.Printf                       (printf)
-import           Util.BinarySearch
+import           Text.Printf                       (printf) -- replace with logger
+import           UnliftIO.Exception                (bracket, catchAnyDeep)
 
 data WarcFileReader =
-
-    WarcFileReader { batchedRead :: !(FilePath
-                                 ->  (Vector WarcEntry -> IO ())
-                                 ->  IO (Either String ()))
-
+    WarcFileReader { batchedRead   :: !(FilePath -> (Vector WarcEntry -> IO ()) -> IO (Either String ()))
                    , findWarcEntry :: !(FilePath -> FilePath -> ByteString -> IO (Maybe WarcEntry))
-
                    }
 
 createWarcFileReader :: Int
@@ -45,35 +39,40 @@ createWarcFileReader batchSize logger =
 
 -- TODO do a cached-copy implementation here
 -- TODO use a tighter structure than (offs,fullwarc).  Perhaps (offs,urls-warcoffs,fullwarc))
--- TODO resourceT
+-- TODO bracket
 findWarcEntryImpl :: FilePath -> FilePath -> ByteString -> IO (Maybe WarcEntry)
 findWarcEntryImpl warcFile warcOffs url = do
 
-    hWarc <- openBinaryFile warcFile ReadMode
-    hOff <- openBinaryFile warcOffs ReadMode
-    fs <- hFileSize hOff
-    let (numOffsets, 0) = fs `divMod` 8
+    let acquire = do hWarc <- openBinaryFile warcFile ReadMode
+                     hOff  <- openBinaryFile warcOffs ReadMode
+                     pure (hWarc, hOff)
 
-    x <- binarySearchM (fromIntegral numOffsets) url $ \i -> do
+    let release (hWarc, hOff) = do hClose hWarc
+                                   hClose hOff
 
-        -- Find the right offset
-        hSeek hOff AbsoluteSeek (fromIntegral $ i * 8)
-        bsOff <- BS.hGetSome hOff 8
-        let Right off = decode bsOff :: Either String Word64
+    bracket acquire release $ \(hWarc, hOff) -> do
 
-        -- Seek to the offset
-        hSeek hWarc AbsoluteSeek (fromIntegral off)
-        warcData <- LBS.hGetContents hWarc
+        fs <- hFileSize hOff
+        let (numOffsets, 0) = fs `divMod` 8
 
-        -- Parse one entry and return its url
-        let Right (_, we@(WarcEntry header _), _) = fromByteStringRemainder warcData
-        let Just (StringValue recordId) = getValue (MandatoryKey WarcRecordId) header
-        pure (recordId, we)
+        mFound <- binarySearchM (fromIntegral numOffsets) url $ \i -> do
 
-    hClose hWarc
-    hClose hOff
+            -- Find the right offset
+            hSeek hOff AbsoluteSeek (fromIntegral $ i * 8)
+            bsOff <- BS.hGetSome hOff 8
+            let Right off = decode bsOff :: Either String Word64
 
-    pure (snd <$> x)
+            -- Seek to the offset
+            hSeek hWarc AbsoluteSeek (fromIntegral off)
+            -- TODO, stop using lazy byte strings? (LBS)
+            warcData <- LBS.hGetContents hWarc
+
+            -- Parse one entry and return its url
+            let Right (_, we@(WarcEntry header _), _) = fromByteStringRemainder warcData
+            let Just (StringValue recordId) = getValue (MandatoryKey WarcRecordId) header
+            pure (recordId, we)
+
+        pure (snd <$> mFound)
 
 batchedReadImpl :: Int
                 -> (ByteString -> IO ())
@@ -95,7 +94,7 @@ batchedReadImpl batchSize logger warcFile action = do
                          hClose h
                          pure $ Left errMsg
 
-    catchIO job handler
+    catchAnyDeep job handler
 
     where
     go fileSz szRead n acc contents
