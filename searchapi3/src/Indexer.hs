@@ -66,6 +66,7 @@ createIndexer env wfr writer metadataApi cpc reg =
             , isDocDeleted       = isDocDeletedImpl env reg
             }
 
+-- TODO Figure out whether docs need to be sorted, and make it part of the API
 indexDocsImpl :: Environment -> WarcFileWriter -> MetadataApi -> Compactor -> Registry -> CollectionName -> IndexRequest -> IO (Either String Int)
 indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest docs) = do
 
@@ -132,6 +133,7 @@ indexLocalFileImpl env writer metadataApi compactor registry collectionName file
         t <- T.readFile fp
         pure $ Doc (pack fp) t
 
+    -- TODO the merge process might assume sorted later.  problem?
     ei <- indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest unsortedDocs)
 
     case ei of
