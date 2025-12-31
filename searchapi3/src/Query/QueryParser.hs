@@ -4,9 +4,9 @@ module Query.QueryParser ( Clause (..)
                          , Op (..)
                          , parseQuery ) where
 
-import Parser.Combinators
-import Parser.LineLexer
-import Parser.Parser
+import Combinators
+import LineLexer
+import Parser
 
 import           Control.Applicative         ((<|>))
 import           Data.ByteString             (ByteString)

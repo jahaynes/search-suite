@@ -4,10 +4,10 @@
 
 module Controllers.Collections where
 
-import Compactor   (Compactor (mergeInto))
-import Environment (Environment (..))
-import Registry    (Registry (..))
-import Types       (CollectionName (..))
+import Compactor       (Compactor (mergeInto))
+import EnvironmentShim (Environment (..))
+import Registry        (Registry (..))
+import Types           (CollectionName (..))
 
 import Control.Concurrent.STM (atomically)
 import Data.Set               (Set)

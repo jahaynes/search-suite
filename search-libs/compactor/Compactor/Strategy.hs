@@ -1,7 +1,11 @@
-module CompactorStrategy ( fibSet, hybridStrategy, largestFibonacciStrategy, pairs ) where
+module Strategy ( fibSet
+                , hybridStrategy
+                , largestFibonacciStrategy
+                , pairs
+                ) where
 
-import           Component     ( Component )
-import           Types         ( numDocs )
+import           Component     (Component)
+import           Types         (numDocs)
 
 import           Data.IntSet                 (IntSet)
 import qualified Data.IntSet           as IS

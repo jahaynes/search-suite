@@ -4,19 +4,18 @@ module Compactor ( Compactor (..)
                  , createCompactor
                  ) where
 
-import           CompactorStrategy ( hybridStrategy )
-
 import           Component         ( Component (..)
                                    , createComponent )
 
-import           Environment       ( Environment (indexerBinary) )
+import           EnvironmentShim   ( Environment (indexerBinary), getCollectionPathImpl )
 
 import           Registry          ( Registry (..) )
 
 import           Metadata          ( MetadataApi (..) )
 
+import           Strategy          ( hybridStrategy )
+
 import           Types             ( CollectionName (..)
-                                   , getCollectionPath
                                    , numDocs
                                    , path )
 
@@ -134,7 +133,7 @@ mergeIntoImpl env reg wfw metadataApi logger dest src = do
         case mComponent of
 
             -- No components - remove directory
-            Nothing -> removeDirectoryRecursive (getCollectionPath env src)
+            Nothing -> removeDirectoryRecursive (getCollectionPathImpl env src)
 
             -- If successful
             Just component -> do
@@ -160,7 +159,7 @@ mergeComponentFiles :: Environment
 
 mergeComponentFiles env wfw metadataApi indexerPath collectionName x y logger = do
 
-    let cn = getCollectionPath env collectionName
+    let cn = getCollectionPathImpl env collectionName
     createDirectoryIfMissing True cn
     cmpName <- U.toString <$> U.nextRandom
     dest <- canonicalizePath $ concat [cn, "/", cmpName]

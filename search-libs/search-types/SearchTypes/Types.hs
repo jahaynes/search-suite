@@ -3,14 +3,14 @@
              OverloadedStrings #-}
 
 module Types ( CollectionName (..)
-             , getCollectionPath
+        --     , getCollectionPath
              , parseCollectionName
              , HasPath (..)
              , Logger (..)
              , NumDocs (..)
              ) where
 
-import Environment (Environment (..))
+-- import EnvironmentShim (Environment (..))
 
 import           Control.Monad.Fail (fail)
 import           Data.Aeson         (ToJSON)
@@ -45,8 +45,7 @@ instance FromHttpApiData CollectionName where
 instance Hashable CollectionName where
     hashWithSalt salt (CollectionName cn) = hashWithSalt salt cn
 
-getCollectionPath :: Environment -> CollectionName -> FilePath
-getCollectionPath env (CollectionName name) = collectionsDir env <> "/" <> name
+
 
 -- TODO dedupe
 parseCollectionName' :: Text -> Either Text CollectionName

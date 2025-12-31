@@ -8,37 +8,28 @@ extra-source-files:  CHANGELOG.md
 build-type:         Simple
 
 common deps
-  build-depends:       aeson, async, base, binary, bytestring, crawler-lib, WebArchive, cereal, containers, deepseq, directory, hashable, heaps, http-media, lens, process, process-extras, resourcet, safe, safe-exceptions, serialise, servant, servant-server, servant-swagger, servant-swagger-ui, shared-proto, split, stm, stm-containers, swagger2, tagsoup, temporary, text, time, transformers, unliftio, uuid, vector, wai-cors, wai-middleware-prometheus, warc, warp
+  build-depends:       aeson, async, base, binary, bytestring, crawler-lib, cereal, compactor, containers, deepseq, directory, environment, hashable, heaps, http-media, lens, parser, process, process-extras, resourcet, safe, safe-exceptions, search-types, serialise, servant, servant-server, servant-swagger, servant-swagger-ui, shared-proto, split, stm, stm-containers, swagger2, tagsoup, temporary, text, time, transformers, unliftio, util, uuid, vector, wai-cors, wai-middleware-prometheus, warc, warp, WebArchive
 
 library
   import:              deps
   ghc-options:         -Wall -O2
   exposed-modules:     Api,
                        Compactor,
-                       CompactorStrategy,
-                       Component,
                        Controllers.Collections,
                        Controllers.Controller,
                        Controllers.Diagnostic,
                        Controllers.Indexation,
                        Controllers.Mime,
                        Controllers.Query,
-                       Environment,
                        Importer,
                        ImporterTypes,
                        Indexer,
                        Metadata,
-                       Parser.Combinators,
-                       Parser.Parser,
-                       Parser.LineLexer,
                        Query.QueryParser,
                        Query.QueryParams,
                        Query.QueryProcessor,
                        Query.QueryProcessorTypes,
-                       Registry,
-                       TimingInfo,
-                       Types,
-                       Util.BinarySearch
+                       Registry
   hs-source-dirs:      src
   default-language:    Haskell2010
 
@@ -47,10 +38,6 @@ executable benchmarks
     ghc-options:      -Wall -threaded -O2
     build-depends:    searchapi3, criterion
     main-is:          Bench.hs
-    other-modules:    CompactorStrategy
-                      Component
-                      Environment
-                      Types
     hs-source-dirs:   src
     default-language: Haskell2010
 
@@ -60,30 +47,21 @@ executable searchapi3
     build-depends:    searchapi3
     other-modules:    Api,
                       Compactor,
-                      CompactorStrategy,
-                      Component,
                       Controllers.Collections,
                       Controllers.Controller,
                       Controllers.Diagnostic,
                       Controllers.Indexation,
                       Controllers.Mime,
                       Controllers.Query,
-                      Environment,
                       Importer,
                       ImporterTypes,
                       Indexer,
                       Metadata,
-                      Parser.Combinators,
-                      Parser.Parser,
-                      Parser.LineLexer,
                       Query.QueryParams,
                       Query.QueryParser,
                       Query.QueryProcessor,
                       Query.QueryProcessorTypes,
-                      Registry,
-                      TimingInfo,
-                      Types,
-                      Util.BinarySearch
+                      Registry
     main-is:          Main.hs
     hs-source-dirs:   src
     default-language: Haskell2010

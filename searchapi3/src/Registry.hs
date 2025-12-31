@@ -6,7 +6,7 @@ module Registry ( Registry (..)
                 ) where
 
 import Component
-import Environment (Environment (..))
+import EnvironmentShim (Environment (..), getCollectionPathImpl)
 import Types
 
 import           Control.Concurrent.STM   (STM, TVar, atomically, modifyTVar', newTVarIO, readTVar, retry)
@@ -73,10 +73,10 @@ registerFromTmpImpl env collections collectionName component = do
     atomically $ registerInPlaceImpl collections collectionName component'
     where
     moveDir = do    -- TODO name properly
-        createDirectoryIfMissing True (getCollectionPath env collectionName)
+        createDirectoryIfMissing True (getCollectionPathImpl env collectionName)
         from <- canonicalizePath $ path component
         uuid <- U.toString <$> U.nextRandom
-        let to = concat [getCollectionPath env collectionName, "/", uuid]
+        let to = concat [getCollectionPathImpl env collectionName, "/", uuid]
         
         -- renamePath from to -- struggles when paths are not on same device
         createDirectoryIfMissing True to
