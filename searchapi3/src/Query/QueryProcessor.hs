@@ -6,7 +6,7 @@ module Query.QueryProcessor ( QueryProcessor (..)
                             ) where
 
 import Component                 ( Component )
-import Environment               ( Environment (..) )
+import EnvironmentShim           ( Environment (..) )
 import Query.QueryParams         ( QueryParams (..) )
 import Query.QueryParser         ( Clause (..), Op (..) )
 import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) )

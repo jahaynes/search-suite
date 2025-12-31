@@ -4,7 +4,7 @@ module Main where
 
 import Compactor              (createCompactor)
 import Controllers.Controller (runController)
-import Environment            (Environment (..), loadEnvironment)
+import EnvironmentShim        (Environment (..), loadEnvironment)
 import Importer               (Importer (importCollection), createImporter)
 import Indexer                (createIndexer)
 import Network.Fetcher        (createFetcher)

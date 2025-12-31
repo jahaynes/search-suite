@@ -1,5 +1,5 @@
 cabal-version:      3.0
-name:               environment
+name:               parser
 version:            0.1.0.0
 license:            Apache-2.0
 author:             John Haynes
@@ -8,8 +8,9 @@ build-type:         Simple
 
 library
     ghc-options:      -Wall -O2
-    build-depends:    base, bytestring, directory, search-types, split
-    exposed-modules:  Environment
-                      EnvironmentShim
-    hs-source-dirs:   Environment
+    build-depends:    base, bytestring, text
+    exposed-modules:  Combinators
+                      LineLexer
+                      Parser
+    hs-source-dirs:   Parser
     default-language: Haskell2010

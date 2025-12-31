@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Parser.LineLexer where
+module LineLexer where
 
-import Parser.Parser (Parser (..))
+import Parser (Parser (..))
 
 import           Data.ByteString             (ByteString)
 import qualified Data.ByteString.Char8 as C8

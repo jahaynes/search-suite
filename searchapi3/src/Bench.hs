@@ -1,7 +1,7 @@
 module Main where
 
-import CompactorStrategy
 import Component
+import Strategy
 
 import           Control.DeepSeq
 import           Criterion.Main

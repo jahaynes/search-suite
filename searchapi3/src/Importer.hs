@@ -5,10 +5,9 @@ module Importer ( Importer (..)
 
 import Compactor 
 import Component
-import Environment ( Environment (..) )
-import Registry    ( Registry, registerInPlace )
-
+import EnvironmentShim ( Environment (..), getCollectionPathImpl )
 import ImporterTypes
+import Registry        ( Registry, registerInPlace )
 import Types
 
 import Control.Concurrent.STM    (atomically)
@@ -36,7 +35,7 @@ importCollectionImpl :: Environment
                      -> IO (Either ByteString ())
 importCollectionImpl env registry compactor collectionName = do
 
-    let name = getCollectionPath env collectionName
+    let name = getCollectionPathImpl env collectionName
 
     -- TODO better checking
     subdirs <- map (\p -> concat [name, "/", p])

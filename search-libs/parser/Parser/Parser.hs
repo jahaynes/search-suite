@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Parser.Parser where
+module Parser where
 
 import           Control.Applicative
 import           Data.Functor        ((<&>))

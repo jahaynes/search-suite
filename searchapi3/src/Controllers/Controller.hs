@@ -9,7 +9,7 @@ import Controllers.Collections
 import Controllers.Diagnostic
 import Controllers.Indexation
 import Controllers.Query
-import Environment             (Environment)
+import EnvironmentShim         (Environment)
 import Errors.Errors           (Error)
 import Indexer                 (Indexer)
 import Network.Fetcher         (Fetcher)

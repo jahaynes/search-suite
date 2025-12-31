@@ -7,12 +7,12 @@ module Metadata ( Metadata (..)
                 , MetadataApi (..)
                 , createMetadataApi ) where
 
+import           BinarySearch
 import           Data.Warc.Body
 import           Data.Warc.Header
 import           Data.Warc.Key
 import           Data.Warc.Value
 import           Data.Warc.WarcEntry ( WarcEntry (..), decompress)
-import           Util.BinarySearch
 import           WarcFileReader
 
 import           Codec.Serialise              (Serialise, deserialise, serialise)

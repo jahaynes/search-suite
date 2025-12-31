@@ -14,7 +14,7 @@ import Data.Warc.Key
 import Data.Warc.Header
 import Data.Warc.Value
 import Data.Warc.WarcEntry (WarcEntry (..), compress, decompress)
-import Environment         (Environment (..))
+import EnvironmentShim     (Environment (..))
 import Metadata            (MetadataApi (generateMetadata))
 import Protocol.Encode     (lcbor, unlcbor)
 import Protocol.Types      (IndexReply (..), Input (..), InputDoc (..))

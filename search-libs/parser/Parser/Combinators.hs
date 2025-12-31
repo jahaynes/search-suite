@@ -1,6 +1,6 @@
-module Parser.Combinators where
+module Combinators where
 
-import Parser.Parser
+import Parser
 
 import Control.Applicative (many)
 import Data.List.NonEmpty  (NonEmpty (..))
