@@ -1,45 +1,23 @@
 {-# LANGUAGE LambdaCase #-}
 
--- TODO exports
-module EnvironmentShim where
+module EnvironmentShim ( getCollectionPathImpl
+                       , getCollectionsPathImpl
+                       , getIndexerBinaryImpl
+                       , getProxySettingImpl
+                       ) where
 
 import Types (CollectionName (..))
 
-import Control.Monad         (unless)
 import Data.ByteString.Char8 (ByteString, pack)
 import Data.List.Split       (splitOn)
-import System.Directory      (createDirectoryIfMissing, doesFileExist, makeAbsolute)
+import System.Directory      (makeAbsolute)
 import System.Environment    (lookupEnv)
-import Text.Printf           (printf)
 import Text.Read             (readMaybe)
 
-
-data Environment =
-    Environment { collectionsDir :: !FilePath
-                , indexerBinary  :: !FilePath
-                , proxySetting   :: !(Maybe (ByteString, Int))
-                } deriving Show
-
-loadEnvironment :: IO Environment
-loadEnvironment = do
-
-    colnsDir <- getCollectionsPathImpl
-    createDirectoryIfMissing True colnsDir
-
-    idxbin <- getIndexerBinaryImpl
-    exists <- doesFileExist idxbin
-    unless exists $
-        error $ printf "FATAL: %s does not exist\n" idxbin
-
-    proxy <- getProxySettingImpl
-
-    pure Environment { collectionsDir = colnsDir
-                     , indexerBinary  = idxbin
-                     , proxySetting   = proxy
-                     }
-
-getCollectionPathImpl :: Environment -> CollectionName -> FilePath
-getCollectionPathImpl env (CollectionName name) = collectionsDir env <> "/" <> name
+getCollectionPathImpl :: CollectionName -> IO FilePath
+getCollectionPathImpl (CollectionName name) = do
+    colns <- getCollectionsPathImpl
+    pure $ colns <> "/" <> name
 
 getCollectionsPathImpl :: IO FilePath
 getCollectionsPathImpl =

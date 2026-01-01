@@ -5,7 +5,7 @@ module Importer ( Importer (..)
 
 import Compactor 
 import Component
-import EnvironmentShim ( Environment (..), getCollectionPathImpl )
+import EnvironmentShim ( getCollectionPathImpl, getIndexerBinaryImpl )
 import ImporterTypes
 import Registry        ( Registry, registerInPlace )
 import Types
@@ -24,18 +24,17 @@ newtype Importer =
     Importer { importCollection :: CollectionName -> IO (Either ByteString ())
              }
 
-createImporter :: Environment -> Registry -> Compactor -> Importer
-createImporter env reg cpc = 
-    Importer { importCollection = importCollectionImpl env reg cpc}
+createImporter :: Registry -> Compactor -> Importer
+createImporter reg cpc = 
+    Importer { importCollection = importCollectionImpl reg cpc}
 
-importCollectionImpl :: Environment
-                     -> Registry
+importCollectionImpl :: Registry
                      -> Compactor
                      -> CollectionName
                      -> IO (Either ByteString ())
-importCollectionImpl env registry compactor collectionName = do
+importCollectionImpl registry compactor collectionName = do
 
-    let name = getCollectionPathImpl env collectionName
+    name <- getCollectionPathImpl collectionName
 
     -- TODO better checking
     subdirs <- map (\p -> concat [name, "/", p])
@@ -63,12 +62,15 @@ importCollectionImpl env registry compactor collectionName = do
       when progress loadingCompaction
 
     loadComponent :: FilePath -> IO (Either String Component)
-    loadComponent componentPath =
+    loadComponent componentPath = do
+
+        bin <- getIndexerBinaryImpl
+
         let job = do let execparams = [ "num_docs"
                                       , componentPath
                                       ]
 
-                     (exitcode, stdout, stderr) <- readProcessWithExitCode (indexerBinary env) execparams ""
+                     (exitcode, stdout, stderr) <- readProcessWithExitCode bin execparams ""
 
                      case exitcode of
                        ExitSuccess ->
@@ -77,4 +79,4 @@ importCollectionImpl env registry compactor collectionName = do
                            Right r -> Right <$> createComponent (num_docs r) componentPath
                        _ -> pure $ Left (unpack stderr)
             handle ioe = pure $ Left (show ioe)
-        in catchIO job handle
+        catchIO job handle
