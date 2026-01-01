@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings
+{-# LANGUAGE LambdaCase
+           , OverloadedStrings
            , ScopedTypeVariables #-}
 
 module WarcFileWriter ( WarcFileWriter (..)
@@ -30,7 +31,7 @@ data WarcFileWriter =
 createWarcFileWriter :: WarcFileWriter
 createWarcFileWriter =
     WarcFileWriter { writeWarcFile                   = writeWarcFileImpl
-                   , interleaveSortedWarcFilesAtPath = interleaveSortedWarcFilesAtPathImpl
+                   , interleaveSortedWarcFilesAtPath = interleaveSortedWarcFilesAtPathImpl putStrLn -- TODO: better logger
                    }
 
 -- TODO compress?
@@ -58,8 +59,8 @@ writeWarcFileImpl destWarcFile destOffsets wes = do
             LBS.hPut warc (toLazyByteString we)
 
 -- TODO what is behaviour of exception during (partial) acquire?
-interleaveSortedWarcFilesAtPathImpl :: FilePath -> FilePath -> FilePath -> IO ()
-interleaveSortedWarcFilesAtPathImpl x y dest = do
+interleaveSortedWarcFilesAtPathImpl ::(String -> IO ()) -> FilePath -> FilePath -> FilePath -> IO ()
+interleaveSortedWarcFilesAtPathImpl tempLogger x y dest = do
 
     let sourceWarcX  = x    <> "/file.warc"
         sourceWarcY  = y    <> "/file.warc"
@@ -82,26 +83,34 @@ interleaveSortedWarcFilesAtPathImpl x y dest = do
         entriesX <- rights . fromByteString <$> LBS.hGetContents warcX
         entriesY <- rights . fromByteString <$> LBS.hGetContents warcY
 
-        forM_ (merge entriesX entriesY) $ \we -> do
+        forM_ (merge entriesX entriesY) $ \case
 
-            -- Record in file.offs the warc entry's position 
-            pos :: Word64 <- fromIntegral <$> hTell dWarc
-            BS.hPut dOffs (encode pos)
+            Left e -> tempLogger e
 
-            -- Write entry
-            LBS.hPut dWarc (toLazyByteString we)
+            Right we -> do
+
+                -- Record in file.offs the warc entry's position 
+                pos :: Word64 <- fromIntegral <$> hTell dWarc
+                BS.hPut dOffs (encode pos)
+
+                -- Write entry
+                LBS.hPut dWarc (toLazyByteString we)
+
 
     where
-    merge :: [WarcEntry] -> [WarcEntry] -> [WarcEntry]
-    merge xs [] = xs
-    merge [] ys = ys
+    merge :: [WarcEntry] -> [WarcEntry] -> [Either String WarcEntry]
+    merge xs [] = map Right xs
+    merge [] ys = map Right ys
     merge (ex@(WarcEntry headerX _):xs)
           (ey@(WarcEntry headerY _):ys) =
+        case getValue (MandatoryKey WarcRecordId) headerX of
+            Just (StringValue recordX) ->
+                case getValue (MandatoryKey WarcRecordId) headerY of
+                    Just (StringValue recordY) -> 
+                        case compare recordX recordY of
+                            LT -> Right ex : merge     xs (ey:ys)
+                            EQ -> Right ex : merge     xs     ys
+                            GT -> Right ey : merge (ex:xs)    ys
+                    _ -> Left "Bad WarcRecordId on RHS" : merge (ex:xs) ys
+            _ -> Left "Bad WarcRecordId on LHS" : merge xs (ey:ys)
 
-        let Just (StringValue recordX) = getValue (MandatoryKey WarcRecordId) headerX
-            Just (StringValue recordY) = getValue (MandatoryKey WarcRecordId) headerY
-
-        in case compare recordX recordY of
-            LT -> ex : merge     xs (ey:ys)
-            EQ -> ex : merge     xs     ys
-            GT -> ey : merge (ex:xs)    ys
