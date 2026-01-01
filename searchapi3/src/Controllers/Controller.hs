@@ -9,7 +9,6 @@ import Controllers.Collections
 import Controllers.Diagnostic
 import Controllers.Indexation
 import Controllers.Query
-import EnvironmentShim         (Environment)
 import Errors.Errors           (Error)
 import Indexer                 (Indexer)
 import Network.Fetcher         (Fetcher)
@@ -48,7 +47,6 @@ searchApiSwagger = toSwagger searchApi
     searchApi = Proxy
 
 runController :: Compactor
-              -> Environment
               -> Indexer
               -> Fetcher (ExceptT Error IO)
               -> QueryProcessor
@@ -56,14 +54,14 @@ runController :: Compactor
               -> Registry
               -> (ByteString -> IO ())
               -> IO ()
-runController compactor env indexer fetcher qp warcFileReader registry _logger =
+runController compactor indexer fetcher qp warcFileReader registry _logger =
 
     run 8081 . simpleCors
              . prometheus def 
              . serve searchApiWithDoc 
              . hoistServer searchApiWithDoc liftIO 
              $ swaggerSchemaUIServerT searchApiSwagger
-            :<|> collectionsServer compactor env registry
+            :<|> collectionsServer compactor registry
             :<|> queryServer qp registry warcFileReader
             :<|> indexationServer fetcher indexer
             :<|> diagnosticServer registry

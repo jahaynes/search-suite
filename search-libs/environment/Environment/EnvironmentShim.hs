@@ -8,7 +8,7 @@ import Types (CollectionName (..))
 import Control.Monad         (unless)
 import Data.ByteString.Char8 (ByteString, pack)
 import Data.List.Split       (splitOn)
-import System.Directory      (createDirectoryIfMissing, doesFileExist)
+import System.Directory      (createDirectoryIfMissing, doesFileExist, makeAbsolute)
 import System.Environment    (lookupEnv)
 import Text.Printf           (printf)
 import Text.Read             (readMaybe)
@@ -44,7 +44,7 @@ getCollectionPathImpl env (CollectionName name) = collectionsDir env <> "/" <> n
 getCollectionsPathImpl :: IO FilePath
 getCollectionsPathImpl =
     lookupEnv "COLLECTIONS_DIR" >>= \case
-        Just colnsDir -> pure colnsDir
+        Just colnsDir -> makeAbsolute colnsDir
         Nothing -> do
             putStrLn "COLLECTIONS_DIR undefined, defaulting to 'collections'"
             pure "collections"
