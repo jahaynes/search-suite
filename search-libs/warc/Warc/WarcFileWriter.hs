@@ -57,19 +57,6 @@ writeWarcFileImpl destWarcFile destOffsets wes = do
             -- Write entry
             LBS.hPut warc (toLazyByteString we)
 
-{- TODO lift this out
-fromDoc :: Doc -> WarcEntry
-fromDoc (Doc url content) =
-    let body = encodeUtf8 content
-        len  = C8.length body
-        url' = encodeUtf8 url
-        header = setValue (MandatoryKey WarcRecordId)  (Just $ StringValue url')
-               . setValue (MandatoryKey ContentLength) (Just $ IntValue len)
-               . setValue (MandatoryKey WarcType)      (Just $ StringValue "response")
-               $ WarcHeader (WarcVersion "1.0") []
-    in compress $ WarcEntry header (UncompressedBody body)
--}
-
 -- TODO what is behaviour of exception during (partial) acquire?
 interleaveSortedWarcFilesAtPathImpl :: FilePath -> FilePath -> FilePath -> IO ()
 interleaveSortedWarcFilesAtPathImpl x y dest = do
