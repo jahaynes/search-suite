@@ -6,7 +6,7 @@ module Query.QueryProcessor ( QueryProcessor (..)
                             ) where
 
 import Component                 ( Component )
-import EnvironmentShim           ( Environment (..) )
+import EnvironmentShim           ( getIndexerBinaryImpl )
 import Query.QueryParams         ( QueryParams (..) )
 import Query.QueryParser         ( Clause (..), Op (..) )
 import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) )
@@ -45,15 +45,14 @@ data QueryProcessor =
                    , runStructured :: !(CollectionName -> Clause -> IO (Either Text UnscoredResults))
                    }
 
-createQueryProcessor :: Environment
-                     -> Registry
+createQueryProcessor :: Registry
                      -> MetadataApi
                      -> (ByteString -> IO ())
                      -> QueryProcessor
-createQueryProcessor env reg metadataApi lg =
-    QueryProcessor { runQuery      = runQueryImpl env reg metadataApi lg
-                   , runSpelling   = runSpellingImpl env reg lg
-                   , runStructured = runStructuredImpl env reg lg
+createQueryProcessor reg metadataApi lg =
+    QueryProcessor { runQuery      = runQueryImpl reg metadataApi lg
+                   , runSpelling   = runSpellingImpl reg lg
+                   , runStructured = runStructuredImpl reg lg
                    }
 
 data ComponentResult = 
@@ -68,13 +67,12 @@ instance Ord ComponentResult where
 data Mode = Normal | Regex deriving Eq
 
 -- TODO, this can probably pushed into indexer-qp2
-runStructuredImpl :: Environment
-                  -> Registry
+runStructuredImpl :: Registry
                   -> (ByteString -> IO ())
                   -> CollectionName
                   -> Clause
                   -> IO (Either Text UnscoredResults)
-runStructuredImpl env reg logger collectionName@(CollectionName cn) clause =
+runStructuredImpl reg logger collectionName@(CollectionName cn) clause =
     withLocks reg collectionName $ \lockedComponents -> do
         rs <- go lockedComponents clause
         pure . Right $ UnscoredResults (S.size rs) rs
@@ -103,10 +101,13 @@ runStructuredImpl env reg logger collectionName@(CollectionName cn) clause =
         pure $ Left errMsg
     
     runUnscored mode lockedComponents q = do
-        (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> queryComponent env logger (execParams lc) (encodeUtf8 q))
+
+        bin <- getIndexerBinaryImpl
+
+        (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> queryComponent bin logger (execParams lc) (encodeUtf8 q))
         let errMsg = C8.unlines (map C8.pack bads)
         unless (null bads)
-                (logger errMsg)
+               (logger errMsg)
         pure $ if null goods
                 then Left $ unlines bads
                 else Right $ mconcat goods
@@ -131,14 +132,15 @@ withLocks reg collectionName f =
         pure components
     release = mapM_ (releaseLockIO reg)
 
-runSpellingImpl :: Environment
-                -> Registry
+runSpellingImpl :: Registry
                 -> (ByteString -> IO ())
                 -> CollectionName
                 -> Text
                 -> Maybe Int
                 -> IO (Either String SpellingSuggestions)
-runSpellingImpl env registry logger collectionName@(CollectionName cn) s mMaxDist =
+runSpellingImpl registry logger collectionName@(CollectionName cn) s mMaxDist = do
+
+    bin <- getIndexerBinaryImpl
 
     withLocks registry collectionName $ \lockedComponents -> do
 
@@ -151,7 +153,7 @@ runSpellingImpl env registry logger collectionName@(CollectionName cn) s mMaxDis
 
             else do
 
-                (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> spellingComponent lc)
+                (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> spellingComponent bin lc)
 
                 let errMsg = C8.unlines (map C8.pack bads)
                 unless (null bads)
@@ -162,14 +164,14 @@ runSpellingImpl env registry logger collectionName@(CollectionName cn) s mMaxDis
                            else Right . mconcat . map snd $ goods
 
     where
-    spellingComponent :: Component -> IO (Either String SpellingSuggestions)
-    spellingComponent cmp =
+    spellingComponent :: FilePath -> Component -> IO (Either String SpellingSuggestions)
+    spellingComponent bin cmp =
 
         let maxDist = fromMaybe 1 mMaxDist
 
             args = ["spelling", path cmp, show maxDist] ++ (map T.unpack $ T.words s) -- TODO better normalisation
 
-            job = do (exitcode, stdout, stderr) <- readProcessWithExitCode (indexerBinary env) args ""
+            job = do (exitcode, stdout, stderr) <- readProcessWithExitCode bin args ""
                      case exitcode of
                          ExitSuccess -> pure (SpellingSuggestions <$> eitherDecodeStrict' stdout)
                          _  -> do print $ "stdout was: " <> stdout
@@ -177,14 +179,13 @@ runSpellingImpl env registry logger collectionName@(CollectionName cn) s mMaxDis
             handle = pure . Left . show
         in catchAnyDeep job handle
 
-runQueryImpl :: Environment
-             -> Registry
+runQueryImpl :: Registry
              -> MetadataApi
              -> (ByteString -> IO ())
              -> CollectionName
              -> QueryParams
              -> IO (Either String QueryResults)
-runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) params =
+runQueryImpl registry metadataApi logger collectionName@(CollectionName cn) params =
 
     withLocks registry collectionName $ \lockedComponents -> do
 
@@ -198,7 +199,9 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
 
             else do
 
-                (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> queryComponent env logger (execParams lc) (query params))
+                bin <- getIndexerBinaryImpl
+
+                (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> queryComponent bin logger (execParams lc) (query params))
 
                 let errMsg = C8.unlines (map C8.pack bads)
                 unless (null bads)
@@ -277,12 +280,12 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
                                 -- Lesser (no change)
                                 else h'
 
-queryComponent :: (FromJSON a, NFData a) => Environment -> (ByteString -> IO ()) -> [String] -> ByteString -> IO (Either String a)
-queryComponent env logger execParams queryStr =
+queryComponent :: (FromJSON a, NFData a) => FilePath -> (ByteString -> IO ()) -> [String] -> ByteString -> IO (Either String a)
+queryComponent bin logger execParams queryStr =
 
     let job = do logExecution
 
-                 (exitcode, stdout, stderr) <- readProcessWithExitCode (indexerBinary env) execParams queryStr
+                 (exitcode, stdout, stderr) <- readProcessWithExitCode bin execParams queryStr
 
                  case exitcode of
 
@@ -307,6 +310,6 @@ queryComponent env logger execParams queryStr =
 
     logExecution :: IO ()
     logExecution = logger . C8.pack $ unwords [ "Running binary: "
-                                              , show (indexerBinary env)
+                                              , show bin
                                               , show execParams
                                               ]

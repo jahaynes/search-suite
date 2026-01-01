@@ -6,7 +6,7 @@ module Registry ( Registry (..)
                 ) where
 
 import Component
-import EnvironmentShim (Environment (..), getCollectionPathImpl)
+import EnvironmentShim (getCollectionPathImpl)
 import Types
 
 import           Control.Concurrent.STM   (STM, TVar, atomically, modifyTVar', newTVarIO, readTVar, retry)
@@ -47,14 +47,13 @@ newtype Collections =
 newtype Locks =
     Locks (STM.Set Component)
 
-createRegistry :: Environment
-               -> (ByteString -> IO ())
+createRegistry :: (ByteString -> IO ())
                -> IO Registry
-createRegistry env logger = do
+createRegistry logger = do
     collections <- Collections <$> newTVarIO M.empty
     locks       <- Locks <$> STM.newIO
     pure $ Registry { listCollections          = atomically $ listCollectionsImpl collections
-                    , registerFromTmp          = registerFromTmpImpl env collections
+                    , registerFromTmp          = registerFromTmpImpl collections
                     , registerInPlace          = registerInPlaceImpl collections
                     , releaseLockIO            = releaseLockIOImpl locks logger
                     , takeLock                 = takeLockImpl locks
@@ -64,17 +63,18 @@ createRegistry env logger = do
                     , viewCollectionComponents = viewCollectionComponentsImpl collections
                     }
 
-registerFromTmpImpl :: Environment -> Collections -> CollectionName -> Component -> IO ()
-registerFromTmpImpl env collections collectionName component = do
+registerFromTmpImpl :: Collections -> CollectionName -> Component -> IO ()
+registerFromTmpImpl collections collectionName component = do
     to <- moveDir
     component' <- createComponent (numDocs component) to
     atomically $ registerInPlaceImpl collections collectionName component'
     where
     moveDir = do    -- TODO name properly
-        createDirectoryIfMissing True (getCollectionPathImpl env collectionName)
+        colnPath <- getCollectionPathImpl collectionName
+        createDirectoryIfMissing True colnPath
         from <- canonicalizePath $ path component
         uuid <- U.toString <$> U.nextRandom
-        let to = concat [getCollectionPathImpl env collectionName, "/", uuid]
+        let to = concat [colnPath, "/", uuid]
         
         -- renamePath from to -- struggles when paths are not on same device
         createDirectoryIfMissing True to

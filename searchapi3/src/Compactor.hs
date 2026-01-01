@@ -7,7 +7,7 @@ module Compactor ( Compactor (..)
 import           Component         ( Component (..)
                                    , createComponent )
 
-import           EnvironmentShim   ( Environment (indexerBinary), getCollectionPathImpl )
+import           EnvironmentShim   (getCollectionPathImpl, getIndexerBinaryImpl)
 
 import           Registry          ( Registry (..) )
 
@@ -37,15 +37,14 @@ data Compactor =
               , mergeInto :: CollectionName -> CollectionName -> IO ()
               }
 
-createCompactor :: Environment
-                -> Registry
+createCompactor :: Registry
                 -> WarcFileWriter
                 -> MetadataApi
                 -> (ByteString -> IO ())
                 -> Compactor
-createCompactor env registry wfw metadataApi logger =
-    Compactor { compact   = compactImpl   env registry wfw metadataApi logger
-              , mergeInto = mergeIntoImpl env registry wfw metadataApi logger
+createCompactor registry wfw metadataApi logger =
+    Compactor { compact   = compactImpl registry wfw metadataApi logger
+              , mergeInto = mergeIntoImpl registry wfw metadataApi logger
               }
 
 chooseAndLockComponents :: Registry
@@ -60,22 +59,23 @@ chooseAndLockComponents registry collectionName = do
             takeLock registry y
             pure $ Just (x, y)
 
-compactImpl :: Environment
-            -> Registry
+compactImpl :: Registry
             -> WarcFileWriter
             -> MetadataApi
             -> (ByteString -> IO ())
             -> CollectionName
             -> IO Bool
-compactImpl env registry wfw metadataApi logger collectionName@(CollectionName cn) =
+compactImpl registry wfw metadataApi logger collectionName@(CollectionName cn) = do
 
-     bracket (atomically $ chooseAndLockComponents registry collectionName)
+    bin <- getIndexerBinaryImpl
 
-             (\mLocked -> case mLocked of
+    bracket (atomically $ chooseAndLockComponents registry collectionName)
+
+            (\mLocked -> case mLocked of
                              Nothing -> pure ()
                              Just (x, y) -> mapM_ (releaseLockIO registry) [x, y])
 
-             (\mLocked -> case mLocked of
+            (\mLocked -> case mLocked of
 
                              Nothing -> pure False
 
@@ -83,7 +83,7 @@ compactImpl env registry wfw metadataApi logger collectionName@(CollectionName c
 
                                  logger $ "Took locks: " <> C8.pack (show (cmp_filePath x)) <> " " <> C8.pack (show (cmp_filePath y))
 
-                                 mergeResult <- mergeComponentFiles env wfw metadataApi (indexerBinary env) collectionName x y logger
+                                 mergeResult <- mergeComponentFiles wfw metadataApi bin collectionName x y logger
 
                                  case mergeResult of
 
@@ -105,15 +105,14 @@ compactImpl env registry wfw metadataApi logger collectionName@(CollectionName c
 -- TODO (critical - old directory can be removed on failure)
     -- Components are left in mem?
 -- TODO logging and exceptions
-mergeIntoImpl :: Environment
-              -> Registry
+mergeIntoImpl :: Registry
               -> WarcFileWriter
               -> MetadataApi
               -> (ByteString -> IO ())
               -> CollectionName
               -> CollectionName
               -> IO ()
-mergeIntoImpl env reg wfw metadataApi logger dest src = do
+mergeIntoImpl reg wfw metadataApi logger dest src = do
 
     -- Check it has at least one component
     components <- atomically $ viewCollectionComponents reg src
@@ -133,7 +132,9 @@ mergeIntoImpl env reg wfw metadataApi logger dest src = do
         case mComponent of
 
             -- No components - remove directory
-            Nothing -> removeDirectoryRecursive (getCollectionPathImpl env src)
+            Nothing ->
+                getCollectionPathImpl src >>=
+                    removeDirectoryRecursive
 
             -- If successful
             Just component -> do
@@ -142,13 +143,12 @@ mergeIntoImpl env reg wfw metadataApi logger dest src = do
                 registerFromTmp reg dest component
 
                 -- Compact
-                _ <- compactImpl env reg wfw metadataApi logger dest
+                _ <- compactImpl reg wfw metadataApi logger dest
 
                 -- Keep going
                 loop
 
-mergeComponentFiles :: Environment
-                    -> WarcFileWriter
+mergeComponentFiles :: WarcFileWriter
                     -> MetadataApi
                     -> FilePath
                     -> CollectionName
@@ -157,9 +157,9 @@ mergeComponentFiles :: Environment
                     -> (ByteString -> IO ())
                     -> IO (Either ByteString Component)
 
-mergeComponentFiles env wfw metadataApi indexerPath collectionName x y logger = do
+mergeComponentFiles wfw metadataApi indexerPath collectionName x y logger = do
 
-    let cn = getCollectionPathImpl env collectionName
+    cn <- getCollectionPathImpl collectionName
     createDirectoryIfMissing True cn
     cmpName <- U.toString <$> U.nextRandom
     dest <- canonicalizePath $ concat [cn, "/", cmpName]

@@ -4,7 +4,7 @@ module Main where
 
 import Compactor              (createCompactor)
 import Controllers.Controller (runController)
-import EnvironmentShim        (Environment (..), loadEnvironment)
+import EnvironmentShim        (getCollectionsPathImpl, getProxySettingImpl)
 import Importer               (Importer (importCollection), createImporter)
 import Indexer                (createIndexer)
 import Network.Fetcher        (createFetcher)
@@ -23,12 +23,9 @@ import Text.Printf           (printf)
 main :: IO ()
 main = do
 
-    env <- loadEnvironment
-
     let logger = stdoutLogger
 
-    registry <- createRegistry env
-                               (logger RegistryLogger)
+    registry <- createRegistry (logger RegistryLogger)
 
     let warcReader = createWarcFileReader 128
                                           (logger WarcFileReaderLogger)
@@ -37,19 +34,16 @@ main = do
 
     let metadataApi = createMetadataApi warcReader
 
-    let queryProcessor = createQueryProcessor env
-                                              registry
+    let queryProcessor = createQueryProcessor registry
                                               metadataApi
                                               (logger QueryProcessorLogger)
 
-    let compactor = createCompactor env
-                                    registry
+    let compactor = createCompactor registry
                                     warcWriter
                                     metadataApi
                                     (logger CompactorLogger)
 
-    let importer = createImporter env
-                                  registry
+    let importer = createImporter registry
                                   compactor
 
     let indexer = createIndexer warcReader
@@ -58,9 +52,9 @@ main = do
                                 compactor
                                 registry
 
-    fetcher <- createFetcher (proxySetting env)
+    fetcher <- createFetcher =<< getProxySettingImpl
 
-    collections <- findRegistrableCollections env
+    collections <- findRegistrableCollections
 
     if null collections
         then putStrLn "No existing collections found"
@@ -78,9 +72,9 @@ main = do
                   registry
                   (stdoutLogger ControllerLogger)
 
-findRegistrableCollections :: Environment -> IO [CollectionName]
-findRegistrableCollections env = do
-    let collectionsPath = collectionsDir env
+findRegistrableCollections :: IO [CollectionName]
+findRegistrableCollections = do
+    collectionsPath <- getCollectionsPathImpl
     createDirectoryIfMissing True collectionsPath
     collectionFiles <- listDirectory collectionsPath
     collections     <- filterM (\c -> doesDirectoryExist (collectionsPath <> "/" <> c)) collectionFiles
@@ -88,3 +82,28 @@ findRegistrableCollections env = do
 
 stdoutLogger :: Logger -> ByteString -> IO ()
 stdoutLogger logger msg = putStrLn $ printf "%s: %s" (show logger) (unpack msg)
+
+{-
+
+    Restore these preflight checks somewhere
+
+loadEnvironment :: IO Environment
+loadEnvironment = do
+
+    colnsDir <- getCollectionsPathImpl
+    createDirectoryIfMissing True colnsDir
+
+    idxbin <- getIndexerBinaryImpl
+    exists <- doesFileExist idxbin
+    unless exists $
+        error $ printf "FATAL: %s does not exist\n" idxbin
+
+    proxy <- getProxySettingImpl
+
+    pure Environment { collectionsDir = colnsDir
+                     , indexerBinary  = idxbin
+                     , proxySetting   = proxy
+                     }
+
+
+-}
