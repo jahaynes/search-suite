@@ -5,7 +5,7 @@ license:             BSD-3-Clause
 license-file:        LICENSE
 author:              John Haynes
 extra-source-files:  CHANGELOG.md
-build-type:         Simple
+build-type:          Simple
 
 common deps
   build-depends:       aeson, async, base, binary, bytestring, crawler-lib, cereal, compactor, containers, deepseq, directory, environment, hashable, heaps, http-media, lens, parser, process, process-extras, resourcet, safe, safe-exceptions, search-types, serialise, servant, servant-server, servant-swagger, servant-swagger-ui, shared-proto, split, stm, stm-containers, swagger2, tagsoup, temporary, text, time, transformers, unliftio, util, uuid, vector, wai-cors, wai-middleware-prometheus, warc, warp, WebArchive
