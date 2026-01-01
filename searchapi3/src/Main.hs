@@ -52,8 +52,7 @@ main = do
                                   registry
                                   compactor
 
-    let indexer = createIndexer env
-                                warcReader
+    let indexer = createIndexer warcReader
                                 warcWriter
                                 metadataApi
                                 compactor

@@ -29,16 +29,15 @@ import           System.Directory         (canonicalizePath, copyFile, createDir
     TODO use withLock and exception handling, rather than take/release?
 -}
 data Registry =
-    Registry { registerFromTmp          :: !(CollectionName -> Component -> IO ())
+    Registry { listCollections          :: !(IO (Set CollectionName))
+             , registerFromTmp          :: !(CollectionName -> Component -> IO ())
              , registerInPlace          :: !(CollectionName -> Component -> STM ())
              , releaseLockIO            :: !(Component -> IO ())
              , takeLock                 :: !(Component -> STM ())
-             , unregister               :: !(CollectionName -> Component -> STM ())
-             , listCollections          :: !(IO (Set CollectionName))
-             , viewCollectionComponents :: !(CollectionName -> STM (Set Component))
-
              , totalNumComponents       :: !(IO Int)
              , totalLocksHeld           :: !(IO Int)
+             , unregister               :: !(CollectionName -> Component -> STM ())
+             , viewCollectionComponents :: !(CollectionName -> STM (Set Component))
              }
 
 newtype Collections =
@@ -54,16 +53,15 @@ createRegistry :: Environment
 createRegistry env logger = do
     collections <- Collections <$> newTVarIO M.empty
     locks       <- Locks <$> STM.newIO
-    pure $ Registry { registerFromTmp          = registerFromTmpImpl env collections
+    pure $ Registry { listCollections          = atomically $ listCollectionsImpl collections
+                    , registerFromTmp          = registerFromTmpImpl env collections
                     , registerInPlace          = registerInPlaceImpl collections
                     , releaseLockIO            = releaseLockIOImpl locks logger
                     , takeLock                 = takeLockImpl locks
-                    , unregister               = unregisterImpl collections
-                    , listCollections          = atomically $ listCollectionsImpl collections
-                    , viewCollectionComponents = viewCollectionComponentsImpl collections
-
                     , totalNumComponents       = atomically $ totalNumComponentsImpl collections
                     , totalLocksHeld           = atomically $ totalLocksHeldImpl locks
+                    , unregister               = unregisterImpl collections
+                    , viewCollectionComponents = viewCollectionComponentsImpl collections
                     }
 
 registerFromTmpImpl :: Environment -> Collections -> CollectionName -> Component -> IO ()
@@ -101,9 +99,8 @@ releaseLockIOImpl :: Locks
                   -> (ByteString -> IO ())
                   -> Component
                   -> IO ()
-releaseLockIOImpl locks logger component = do
-    x <- atomically $ releaseLock locks component
-    case x of
+releaseLockIOImpl locks logger component =
+    (atomically $ releaseLock locks component) >>= \case
         Left err -> logger err
         Right _  -> pure ()
 
