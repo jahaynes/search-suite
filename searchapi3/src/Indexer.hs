@@ -14,7 +14,7 @@ import Data.Warc.Key
 import Data.Warc.Header
 import Data.Warc.Value
 import Data.Warc.WarcEntry (WarcEntry (..), compress, decompress)
-import EnvironmentShim     (Environment (..))
+import EnvironmentShim
 import Metadata            (MetadataApi (generateMetadata))
 import Protocol.Encode     (lcbor, unlcbor)
 import Protocol.Types      (IndexReply (..), Input (..), InputDoc (..))
@@ -52,29 +52,28 @@ data Indexer =
             , isDocDeleted       :: !(CollectionName -> String -> IO (Either String (Map Text Int)))
             }
 
-createIndexer :: Environment
-              -> WarcFileReader
+createIndexer :: WarcFileReader
               -> WarcFileWriter
               -> MetadataApi
               -> Compactor
               -> Registry
               -> Indexer
-createIndexer env wfr writer metadataApi cpc reg =
-    Indexer { indexDocs          = indexDocsImpl env writer metadataApi cpc reg
-            , indexLocalFiles    = indexLocalFileImpl env writer metadataApi cpc reg
-            , indexLocalWarcFile = indexLocalWarcFileImpl env wfr writer metadataApi cpc reg
-            , deleteDocument     = deleteDocumentImpl env reg
-            , isDocDeleted       = isDocDeletedImpl env reg
+createIndexer wfr writer metadataApi cpc reg =
+    Indexer { indexDocs          = indexDocsImpl writer metadataApi cpc reg
+            , indexLocalFiles    = indexLocalFileImpl writer metadataApi cpc reg
+            , indexLocalWarcFile = indexLocalWarcFileImpl wfr writer metadataApi cpc reg
+            , deleteDocument     = deleteDocumentImpl reg
+            , isDocDeleted       = isDocDeletedImpl reg
             }
 
 -- TODO Figure out whether docs need to be sorted, and make it part of the API
-indexDocsImpl :: Environment -> WarcFileWriter -> MetadataApi -> Compactor -> Registry -> CollectionName -> IndexRequest -> IO (Either String Int)
-indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest docs) = do
+indexDocsImpl :: WarcFileWriter -> MetadataApi -> Compactor -> Registry -> CollectionName -> IndexRequest -> IO (Either String Int)
+indexDocsImpl writer metadataApi compactor registry collectionName (IndexRequest docs) = do
 
     idxCmpDir <- getCanonicalTemporaryDirectory >>= (`createTempDirectory` "idx-cmp")
 
-    let bin   = indexerBinary env
-        args  = ["index_docs", idxCmpDir]
+    bin <- getIndexerBinaryImpl
+    let args  = ["index_docs", idxCmpDir]
         stdin = lcbor asInput
 
     PL.readProcessWithExitCode bin args stdin >>= \case
@@ -118,7 +117,7 @@ indexDocsImpl env writer metadataApi compactor registry collectionName (IndexReq
     asInput  = Input . V.map (\(Doc u c) -> InputDoc u c "none") --TODO ugly
                      $ V.fromList docs
 
--- write place for this?
+-- right place for this?
 fromDoc :: Doc -> WarcEntry
 fromDoc (Doc url content) =
     let body = encodeUtf8 content
@@ -130,15 +129,14 @@ fromDoc (Doc url content) =
                $ WarcHeader (WarcVersion "1.0") []
     in compress $ WarcEntry header (UncompressedBody body)
 
-indexLocalFileImpl :: Environment
-                   -> WarcFileWriter
+indexLocalFileImpl :: WarcFileWriter
                    -> MetadataApi
                    -> Compactor
                    -> Registry
                    -> CollectionName
                    -> [FilePath]  -- TO Vector? or just json
                    -> IO (Either String ())
-indexLocalFileImpl env writer metadataApi compactor registry collectionName filePaths = do
+indexLocalFileImpl writer metadataApi compactor registry collectionName filePaths = do
     -- jsonify?
     -- Unnecessary packing
     -- safe-exceptions
@@ -147,7 +145,7 @@ indexLocalFileImpl env writer metadataApi compactor registry collectionName file
         pure $ Doc (pack fp) t
 
     -- TODO the merge process might assume sorted later.  problem?
-    ei <- indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest unsortedDocs)
+    ei <- indexDocsImpl writer metadataApi compactor registry collectionName (IndexRequest unsortedDocs)
 
     case ei of
         Left e -> pure $ Left e
@@ -156,8 +154,7 @@ indexLocalFileImpl env writer metadataApi compactor registry collectionName file
             pure $ Right ()
 
 -- TODO unnecessary encoding/decoding?
-indexLocalWarcFileImpl :: Environment
-                       -> WarcFileReader
+indexLocalWarcFileImpl :: WarcFileReader
                        -> WarcFileWriter
                        -> MetadataApi
                        -> Compactor
@@ -165,7 +162,7 @@ indexLocalWarcFileImpl :: Environment
                        -> CollectionName
                        -> FilePath
                        -> IO (Either String ())
-indexLocalWarcFileImpl env warcFileReader writer metadataApi compactor registry collectionName warcFile =
+indexLocalWarcFileImpl warcFileReader writer metadataApi compactor registry collectionName warcFile =
 
     batchedRead warcFileReader
                 warcFile
@@ -177,7 +174,7 @@ indexLocalWarcFileImpl env warcFileReader writer metadataApi compactor registry 
 
         let ds' = V.mapMaybe toDoc ds -- TODO report failures
 
-        V.mapM_ (\d -> indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest [d])) ds'
+        V.mapM_ (\d -> indexDocsImpl writer metadataApi compactor registry collectionName (IndexRequest [d])) ds'
 
         where
         toDoc :: WarcEntry -> Maybe Doc
@@ -201,13 +198,12 @@ indexLocalWarcFileImpl env warcFileReader writer metadataApi compactor registry 
 
 {- Instead of a complicated locking mechanism,
    this just takes write locks one-by-one and send delete everywhere -}
-deleteDocumentImpl :: Environment
-                   -> Registry
+deleteDocumentImpl :: Registry
                    -> CollectionName
                    -> String
                    -> IO (Either String ())
-deleteDocumentImpl env reg collectionName docUrl = do
-    let bin = indexerBinary env
+deleteDocumentImpl reg collectionName docUrl = do
+    bin <- getIndexerBinaryImpl
     components <- S.toList <$> (atomically $ viewCollectionComponents reg collectionName)
     putStrLn $ "Deleting doc: " <> docUrl
     results <- forM components $ \cmp ->
@@ -228,13 +224,12 @@ deleteDocumentImpl env reg collectionName docUrl = do
             catchIO (Right <$> readProcessWithExitCode bin args "")
                     (\ex -> pure . Left . show $ ex)
 
-isDocDeletedImpl :: Environment
-                 -> Registry
+isDocDeletedImpl :: Registry
                  -> CollectionName
                  -> String
                  -> IO (Either String (Map Text Int))
-isDocDeletedImpl env reg collectionName docUrl = do
-    let bin = indexerBinary env
+isDocDeletedImpl reg collectionName docUrl = do
+    bin <- getIndexerBinaryImpl
     components <- S.toList <$> (atomically $ viewCollectionComponents reg collectionName)
     results <- forM components $ \cmp ->
         finally (deleteJob bin cmp)

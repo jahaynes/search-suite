@@ -1,0 +1,14 @@
+cabal-version:      3.0
+name:               benchmark
+version:            0.1.0.0
+license:            Apache-2.0
+author:             John Haynes
+maintainer:         john.andrew.haynes@gmail.com
+build-type:         Simple
+
+executable benchmark
+    ghc-options:      -Wall -threaded -O2
+    build-depends:    base, compactor, containers, criterion, deepseq, search-types
+    main-is:          Benchmark.hs
+    hs-source-dirs:   Benchmark
+    default-language: Haskell2010
