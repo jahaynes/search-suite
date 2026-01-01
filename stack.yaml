@@ -4,12 +4,12 @@ local-bin-path: ./bin
 
 packages:
 - benchmark
+- capabilities/exception
 - crawler
 - crawler-lib
 - searchapi3
 - search-libs/compactor
 - search-libs/environment
-- search-libs/exception
 - search-libs/parser
 - search-libs/search
 - search-libs/search-types
