@@ -5,6 +5,7 @@ local-bin-path: ./bin
 packages:
 - benchmark
 - capabilities/exception
+- capabilities/file
 - crawler
 - crawler-lib
 - searchapi3
