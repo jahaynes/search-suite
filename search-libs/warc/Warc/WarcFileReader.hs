@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module WarcFileReader where
+module WarcFileReader ( WarcFileReader (..)
+                      , createWarcFileReader
+                      ) where
 
 import           BinarySearch
 import           Data.Warc.Parse                   (fromByteStringRemainder {- :: L.ByteString -> Either ByteString (Int, WarcEntry, L.ByteString) -} )
