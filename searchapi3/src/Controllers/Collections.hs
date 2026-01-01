@@ -5,14 +5,14 @@
 module Controllers.Collections where
 
 import Compactor       (Compactor (mergeInto))
-import EnvironmentShim (Environment (..))
+import EnvironmentShim (getCollectionsPathImpl)
 import Registry        (Registry (..))
 import Types           (CollectionName (..))
 
 import Control.Concurrent.STM (atomically)
 import Data.Set               (Set)
 import Servant
-import System.Directory       (makeAbsolute, removeDirectoryRecursive)
+import System.Directory       (removeDirectoryRecursive)
 
 type CollectionsApi = "collection" :> Get '[JSON] (Set CollectionName)
 
@@ -26,20 +26,18 @@ type CollectionsApi = "collection" :> Get '[JSON] (Set CollectionName)
                  :<|> "collection-dir" :> Get '[JSON] FilePath
 
 collectionsServer :: Compactor
-                  -> Environment
                   -> Registry
                   -> ServerT CollectionsApi IO 
-collectionsServer compactor env registry
+collectionsServer compactor registry
     = listCollections registry
- :<|> deleteCollection env registry
+ :<|> deleteCollection registry
  :<|> mergeInto compactor
- :<|> getCollectionDir env
+ :<|> getCollectionsPathImpl -- TODO not-impl
 
-deleteCollection :: Environment
-                 -> Registry
+deleteCollection :: Registry
                  -> CollectionName
                  -> IO ()
-deleteCollection env registry collectionName@(CollectionName cn) = do
+deleteCollection registry collectionName@(CollectionName cn) = do
 
     cs <- atomically $ do
         components <- viewCollectionComponents registry collectionName
@@ -47,15 +45,10 @@ deleteCollection env registry collectionName@(CollectionName cn) = do
         mapM_ (unregister registry collectionName) components
         pure components
 
-    let collectionPath = collectionsDir env <> "/" <> cn
+    cd <- getCollectionsPathImpl -- TODO not-impl
+
+    let collectionPath = cd <> "/" <> cn
 
     removeDirectoryRecursive collectionPath
 
     mapM_ (releaseLockIO registry) cs
-
-getCollectionDir :: Environment -> IO FilePath
-getCollectionDir env =
-    fix <$> (makeAbsolute $ collectionsDir env)
-    where
-    fix path | null path || last path /= '/' = path ++ "/"
-             | otherwise                     = path

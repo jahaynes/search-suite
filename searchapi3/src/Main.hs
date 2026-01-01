@@ -71,10 +71,7 @@ main = do
 
     mapM_ (importCollection importer) collections
 
-    printf "Environment is: %s\n" (show env)
-
     runController compactor
-                  env
                   indexer
                   fetcher
                   queryProcessor
