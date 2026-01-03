@@ -53,8 +53,8 @@ interleaveSortedWarcFilesAtPathImpl ::(String -> IO ()) -> FilePath -> FilePath 
 interleaveSortedWarcFilesAtPathImpl tempLogger x y dest = runResourceT $ do
     warcX <- openForReading (x <> "/file.warc")
     warcY <- openForReading (y <> "/file.warc")
-    dOffs <- openForWriting (dest <> "/file.warc")
-    dWarc <- openForWriting (dest <> "/file.offs")
+    dOffs <- openForWriting (dest <> "/file.offs")
+    dWarc <- openForWriting (dest <> "/file.warc")
     liftIO $ do
         entriesX <- rights . fromByteString <$> LBS.hGetContents warcX
         entriesY <- rights . fromByteString <$> LBS.hGetContents warcY
