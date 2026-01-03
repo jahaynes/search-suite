@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Query.QueryParser ( Clause (..)
-                         , Op (..)
-                         , parseQuery ) where
+module QueryParser ( Clause (..)
+                   , Op (..)
+                   , parseQuery ) where
 
 import Combinators
 import LineLexer

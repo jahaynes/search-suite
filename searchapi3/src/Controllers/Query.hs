@@ -8,10 +8,10 @@ module Controllers.Query (QueryApi, queryServer) where
 import Component                 (Component (cmp_filePath))
 import Data.Warc.Body
 import Data.Warc.WarcEntry
-import Query.QueryParams         (QueryParams (QueryParams))
-import Query.QueryParser
-import Query.QueryProcessor      (QueryProcessor (..))
-import Query.QueryProcessorTypes (QueryResults, SpellingSuggestions, UnscoredResults)
+import QueryParams               (QueryParams (QueryParams))
+import QueryParser
+import QueryProcessor            (QueryProcessor (..))
+import QueryProcessorTypes       (QueryResults, SpellingSuggestions, UnscoredResults)
 import Registry                  (Registry (..))
 import Types                     (CollectionName)
 import WarcFileReader            (WarcFileReader (..))

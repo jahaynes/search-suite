@@ -2,7 +2,9 @@
            , DeriveGeneric
            , OverloadedStrings #-}
 
-module Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) ) where
+-- TODO (this probably belongs split between web and shared-proto)
+
+module QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) ) where
 
 import           Control.DeepSeq            (NFData)
 import           Control.Lens
