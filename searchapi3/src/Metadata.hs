@@ -13,6 +13,7 @@ import           Data.Warc.Header
 import           Data.Warc.Key
 import           Data.Warc.Value
 import           Data.Warc.WarcEntry ( WarcEntry (..), decompress)
+import           File
 import           WarcFileReader
 
 import           Codec.Serialise              (Serialise, deserialise, serialise)
@@ -91,43 +92,29 @@ lookupMetadataImpl fp url = do
     pure (snd <$> meta)
 
 generateMetadataImpl :: WarcFileReader -> FilePath -> IO ()
-generateMetadataImpl wfr x = do
+generateMetadataImpl wfr x = runResourceT $ do
 
-    -- Input
-    let warcFile = x <> "/file.warc"
+    handleOffsets <- openForWriting (x <> "/metadata.off")
+    handleDest    <- openForWriting (x <> "/metadata.txt")
 
-    -- Output
-    let metadataOffs = x <> "/metadata.off"
-    let metadataFile = x <> "/metadata.txt"
+    liftIO $ do
 
-    runResourceT $ do
+        batchedRead wfr (x <> "/file.warc") $ \wes ->
+            forM_ wes $ \we@(WarcEntry headers _) -> do
 
-        (_, handleOffsets) <- allocate
-            (openBinaryFile metadataOffs WriteMode)
-            hClose
+                -- Record in file.offs the metadata's position 
+                pos :: Word64 <- fromIntegral <$> hTell handleDest
+                LBS.hPut handleOffsets (encode pos)
 
-        (_, handleDest) <- allocate
-            (openBinaryFile metadataFile WriteMode)
-            hClose
+                -- Write metadata entry
+                let Just (StringValue uri) = getValue (MandatoryKey WarcRecordId) headers
+                let Metadata mm = scrapeMetadata we
+                let metadata = Metadata $ M.insert "uri" (decodeUtf8 uri) mm
+                LBS.hPut handleDest . serialise $ metadata
 
-        liftIO $ do
-
-            batchedRead wfr warcFile $ \wes ->
-                forM_ wes $ \we@(WarcEntry headers _) -> do
-
-                    -- Record in file.offs the metadata's position 
-                    pos :: Word64 <- fromIntegral <$> hTell handleDest
-                    LBS.hPut handleOffsets (encode pos)
-
-                    -- Write metadata entry
-                    let Just (StringValue uri) = getValue (MandatoryKey WarcRecordId) headers
-                    let Metadata mm = scrapeMetadata we
-                    let metadata = Metadata $ M.insert "uri" (decodeUtf8 uri) mm
-                    LBS.hPut handleDest . serialise $ metadata
-
-            -- Write final offset
-            pos :: Word64 <- fromIntegral <$> hTell handleDest
-            LBS.hPut handleOffsets (encode pos)
+        -- Write final offset
+        pos :: Word64 <- fromIntegral <$> hTell handleDest
+        LBS.hPut handleOffsets (encode pos)
 
 -- all metadata must have uri
 uriOf :: Metadata -> Text
