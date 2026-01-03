@@ -10,7 +10,10 @@ import           Data.Warc.WarcEntry               (WarcEntry (..))
 import           Data.Warc.Value
 import           Data.Warc.Header
 import           Data.Warc.Key
+import           File
 
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Resource
 import           Data.ByteString                   (ByteString)
 import qualified Data.ByteString            as BS
 import qualified Data.ByteString.Char8      as C8
@@ -21,13 +24,12 @@ import           Data.Serialize                    (decode) -- really needed?
 import           Data.Word                         (Word64)
 import           Data.Vector                       (Vector)
 import qualified Data.Vector                as V
-import           System.Directory                  (getFileSize)
 import           System.IO
 import           Text.Printf                       (printf) -- replace with logger
-import           UnliftIO.Exception                (bracket, catchAnyDeep)
+import           UnliftIO.Exception                (catchAnyDeep)
 
 data WarcFileReader =
-    WarcFileReader { batchedRead   :: !(FilePath -> (Vector WarcEntry -> IO ()) -> IO (Either String ()))
+    WarcFileReader { batchedRead   :: !(FilePath -> (Vector WarcEntry -> IO ()) -> ResourceT IO (Either String ()))
                    , findWarcEntry :: !(FilePath -> FilePath -> ByteString -> IO (Maybe WarcEntry))
                    }
 
@@ -43,16 +45,12 @@ createWarcFileReader batchSize logger =
 -- TODO use a tighter structure than (offs,fullwarc).  Perhaps (offs,urls-warcoffs,fullwarc))
 -- TODO bracket
 findWarcEntryImpl :: FilePath -> FilePath -> ByteString -> IO (Maybe WarcEntry)
-findWarcEntryImpl warcFile warcOffs url = do
+findWarcEntryImpl warcFile warcOffs url = runResourceT $ do
 
-    let acquire = do hWarc <- openBinaryFile warcFile ReadMode
-                     hOff  <- openBinaryFile warcOffs ReadMode
-                     pure (hWarc, hOff)
+    hWarc <- openForReading warcFile
+    hOff  <- openForReading warcOffs
 
-    let release (hWarc, hOff) = do hClose hWarc
-                                   hClose hOff
-
-    bracket acquire release $ \(hWarc, hOff) -> do
+    liftIO $ do
 
         fs <- hFileSize hOff
         let (numOffsets, 0) = fs `divMod` 8
@@ -76,27 +74,26 @@ findWarcEntryImpl warcFile warcOffs url = do
 
         pure (snd <$> mFound)
 
+-- TODO this could become conduit
 batchedReadImpl :: Int
                 -> (ByteString -> IO ())
                 -> FilePath
                 -> (Vector WarcEntry -> IO ())
-                -> IO (Either String ())
+                -> ResourceT IO (Either String ())
 batchedReadImpl batchSize logger warcFile action = do
 
-    sz <- fromIntegral <$> getFileSize warcFile
-    h <- openFile warcFile ReadMode
+    h <- openForReading warcFile
 
-    let job = do contents <- L8.hGetContents h
+    let job = do sz <- fromIntegral <$> hFileSize h
+                 contents <- L8.hGetContents h
                  go sz 0 0 [] contents
-                 hClose h
                  pure $ Right ()
 
         handler ioe = do let errMsg = show ioe
                          logger $ C8.pack errMsg
-                         hClose h
                          pure $ Left errMsg
 
-    catchAnyDeep job handler
+    liftIO $ catchAnyDeep job handler
 
     where
     go fileSz szRead n acc contents
