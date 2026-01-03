@@ -25,6 +25,7 @@ import WarcFileWriter      (WarcFileWriter (..))
 
 import           Control.Concurrent.STM           (atomically)
 import           Control.Monad                    (forM, void)
+import           Control.Monad.Trans.Resource
 import           Data.ByteString                  (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy.Char8 as L8
@@ -164,9 +165,9 @@ indexLocalWarcFileImpl :: WarcFileReader
                        -> IO (Either String ())
 indexLocalWarcFileImpl warcFileReader writer metadataApi compactor registry collectionName warcFile =
 
-    batchedRead warcFileReader
-                warcFile
-                newIndexify
+    runResourceT $ batchedRead warcFileReader
+                               warcFile
+                               newIndexify
 
     where
     newIndexify :: Vector WarcEntry -> IO ()
