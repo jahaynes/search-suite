@@ -16,6 +16,7 @@ packages:
 - search-libs/search-types
 - search-libs/util
 - search-libs/warc
+- search-web
 - shared-proto
 - util/filecrawler
 - util/warccrawler
