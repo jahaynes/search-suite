@@ -12,7 +12,7 @@ import Controllers.Query
 import Errors.Errors           (Error)
 import Indexer                 (Indexer)
 import Network.Fetcher         (Fetcher)
-import Query.QueryProcessor    (QueryProcessor)
+import QueryProcessor          (QueryProcessor)
 import Registry                (Registry)
 import WarcFileReader          (WarcFileReader (..))
 

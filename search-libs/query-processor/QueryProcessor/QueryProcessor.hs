@@ -1,15 +1,15 @@
 {-# LANGUAGE OverloadedStrings
            , ScopedTypeVariables #-}
 
-module Query.QueryProcessor ( QueryProcessor (..)
-                            , createQueryProcessor
-                            ) where
+module QueryProcessor ( QueryProcessor (..)
+                      , createQueryProcessor
+                      ) where
 
 import Component                 ( Component )
 import EnvironmentShim           ( getIndexerBinaryImpl )
-import Query.QueryParams         ( QueryParams (..) )
-import Query.QueryParser         ( Clause (..), Op (..) )
-import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) )
+import QueryParams               ( QueryParams (..) )
+import QueryParser               ( Clause (..), Op (..) )
+import QueryProcessorTypes       ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) )
 import Registry                  ( Registry (..) )
 import Metadata                  ( Metadata (..), MetadataApi (..) )
 import Types

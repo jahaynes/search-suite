@@ -8,7 +8,10 @@ build-type:         Simple
 
 library
     ghc-options:      -Wall -O2
-    build-depends:    base, containers, search-types
-    exposed-modules:  Strategy
+    build-depends:    base, bytestring, containers, directory, environment, metadata, process, registry, safe-exceptions, search-types, stm, unliftio, uuid, warc
+    exposed-modules:  Compactor
+                      Strategy
     hs-source-dirs:   Compactor
     default-language: Haskell2010
+
+-- TODO unexpose strategy?

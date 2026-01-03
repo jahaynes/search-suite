@@ -1,0 +1,14 @@
+cabal-version:      3.0
+name:               registry
+version:            0.1.0.0
+license:            Apache-2.0
+author:             John Haynes
+maintainer:         john.andrew.haynes@gmail.com
+build-type:         Simple
+
+library
+    ghc-options:      -Wall -O2
+    build-depends:    base, bytestring, containers, directory, environment, search-types, stm, stm-containers, uuid
+    exposed-modules:  Registry
+    hs-source-dirs:   Registry
+    default-language: Haskell2010

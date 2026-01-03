@@ -6,7 +6,7 @@ module Importer ( Importer (..)
 import Compactor 
 import Component
 import EnvironmentShim ( getCollectionPathImpl, getIndexerBinaryImpl )
-import ImporterTypes
+import Protocol.ImporterTypes
 import Registry        ( Registry, registerInPlace )
 import Types
 

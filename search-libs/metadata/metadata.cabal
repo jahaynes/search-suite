@@ -1,0 +1,14 @@
+cabal-version:      3.0
+name:               metadata
+version:            0.1.0.0
+license:            Apache-2.0
+author:             John Haynes
+maintainer:         john.andrew.haynes@gmail.com
+build-type:         Simple
+
+library
+    ghc-options:      -Wall -O2
+    build-depends:    base, binary, bytestring, containers, file, resourcet, serialise, tagsoup, text, util, warc, WebArchive
+    exposed-modules:  Metadata
+    hs-source-dirs:   Metadata
+    default-language: Haskell2010
