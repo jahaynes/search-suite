@@ -13,8 +13,6 @@ import Data.Warc.Common
 import Data.Warc.Key
 import Data.Warc.Shared
 
-import Data.Monoid ((<>))
-
 data Date = Date 
           { year  :: {-# UNPACK #-} !Int
           , month :: {-# UNPACK #-} !Int 
