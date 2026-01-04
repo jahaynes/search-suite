@@ -37,6 +37,7 @@ setValue key (Just val) (WarcHeader ver headers) = WarcHeader ver (go headers)
         | key == k  = HeaderLine key val : hs
         | otherwise = h : go hs 
 
+buildEq :: (ToBuilder a, ToBuilder b) => a -> b -> Bool
 buildEq a b = (toLazyByteString . toBuilder) a == (toLazyByteString . toBuilder) b  --TODO
 
 warcHeader :: Parser WarcHeader

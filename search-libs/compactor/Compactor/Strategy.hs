@@ -15,9 +15,9 @@ import           Data.Set                    (Set)
 import qualified Data.Set              as S
 
 fibSet :: IntSet
-fibSet = IS.fromAscList $! take 100 (tail fibs)
+fibSet = IS.fromAscList $! take 100 (drop 1 fibs)
     where
-    fibs = 0 : 1 : zipWith (+) fibs (tail fibs)
+    fibs = 0 : 1 : zipWith (+) fibs (drop 1 fibs)
 
 hybridStrategy :: Set Component
                -> Maybe (String, Component, Component)

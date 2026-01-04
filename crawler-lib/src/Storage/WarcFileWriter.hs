@@ -13,7 +13,6 @@ import Page.Page            (Page (..))
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM
-import           Control.Concurrent.STM.TBQueue      (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as Q
 import           Control.Monad                       (filterM, replicateM_)
 import qualified Data.ByteString.Char8 as C8

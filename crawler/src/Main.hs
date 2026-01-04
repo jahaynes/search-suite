@@ -10,7 +10,7 @@ import           Page.Page
 import           Page.Scrape
 import qualified Pipeline.AllowedUrls      as A
 import qualified Pipeline.Processor        as P
-import qualified Pipeline.TimedFrontier    as TF
+-- import qualified Pipeline.TimedFrontier    as TF
 import qualified Pipeline.SqlTimedFrontier as STF
 import qualified Reporter.Reporter         as R
 import qualified Client.SearchApiClient    as C
