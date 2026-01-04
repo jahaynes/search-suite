@@ -16,10 +16,8 @@ executable warccrawler
                        bytestring,
                        http-client,
                        http-types,
-                       safe-exceptions,
                        split,
                        text,
-                       transformers,
                        WebArchive
   hs-source-dirs:      src
   default-language:    Haskell2010

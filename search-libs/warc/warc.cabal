@@ -9,7 +9,15 @@ build-type:         Simple
 -- Try to depend on capabilities here instead
 library
     ghc-options:      -Wall -O2
-    build-depends:    base, bytestring, cereal, directory, file, resourcet, unliftio, util, vector, WebArchive
+    build-depends:    base,
+                      bytestring,
+                      cereal,
+                      file,
+                      resourcet,
+                      unliftio,
+                      util,
+                      vector,
+                      WebArchive
     exposed-modules:  WarcFileReader
                       WarcFileWriter
     hs-source-dirs:   Warc
