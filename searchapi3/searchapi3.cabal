@@ -8,7 +8,7 @@ extra-source-files:  CHANGELOG.md
 build-type:          Simple
 
 common deps
-  build-depends:       aeson, async, base, binary, bytestring, crawler-lib, cereal, compactor, containers, deepseq, directory, environment, file, hashable, heaps, http-media, lens, metadata, parser, process, process-extras, query-processor, registry, resourcet, safe, safe-exceptions, search-types, serialise, servant, servant-server, servant-swagger, servant-swagger-ui, shared-proto, split, stm, stm-containers, swagger2, tagsoup, temporary, text, time, transformers, unliftio, util, uuid, vector, wai-cors, wai-middleware-prometheus, warc, warp, WebArchive
+  build-depends:       aeson, async, base, bytestring, crawler-lib, compactor, containers, directory, environment, file, http-media, lens, metadata, parser, process-extras, query-processor, registry, resourcet, safe, safe-exceptions, search-types, serialise, servant, servant-server, servant-swagger, servant-swagger-ui, shared-proto, split, stm, stm-containers, swagger2, temporary, text, transformers, unliftio, vector, wai-cors, wai-middleware-prometheus, warc, warp, WebArchive
 
 library
   import:              deps
