@@ -3,7 +3,7 @@
              OverloadedStrings,
              TypeOperators #-}
 
-module Controllers.Query (QueryApi, queryServer) where
+module Query (QueryApi, queryServer) where
 
 import Component                 (Component (cmp_filePath))
 import Data.Warc.Body

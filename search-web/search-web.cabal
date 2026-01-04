@@ -1,20 +1,45 @@
 cabal-version:      3.0
 name:               search-web
 version:            0.1.0.0
-license:            BSD-3-Clause
-license-file:       LICENSE
+license:            Apache-2.0
 author:             John Haynes
 maintainer:         john.andrew.haynes@gmail.com
 build-type:         Simple
 
-common warnings
-    ghc-options: -Wall -threaded -O2
-
-executable search-web
-    import:           warnings
-    main-is:          Main.hs
-    -- other-modules:
-    -- other-extensions:
-    build-depends:    base
-    hs-source-dirs:   src
+library
+    ghc-options:      -Wall -O2
+    build-depends:    aeson,
+                      async,
+                      base,
+                      bytestring,
+                      compactor,
+                      containers,
+                      crawler-lib,
+                      directory,
+                      environment,
+                      indexer,
+                      lens,
+                      query-processor,
+                      registry,
+                      safe,
+                      search-types,
+                      servant-server,
+                      servant-swagger,
+                      servant-swagger-ui,
+                      split,
+                      stm,
+                      swagger2,
+                      text,
+                      transformers,
+                      wai-cors,
+                      wai-middleware-prometheus,
+                      warc,
+                      warp,
+                      WebArchive
+    exposed-modules:  Controller
+    other-modules:    Collections
+                      Diagnostic
+                      Indexation
+                      Query
+    hs-source-dirs:   Controller
     default-language: Haskell2010
