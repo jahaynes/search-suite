@@ -1,0 +1,14 @@
+cabal-version:      3.0
+name:               importer
+version:            0.1.0.0
+license:            Apache-2.0
+author:             John Haynes
+maintainer:         john.andrew.haynes@gmail.com
+build-type:         Simple
+
+library
+    ghc-options:      -Wall -O2
+    build-depends:    aeson, base, bytestring, compactor, directory, environment, process-extras, registry, safe-exceptions, search-types, shared-proto, stm
+    exposed-modules:  Importer
+    hs-source-dirs:   Importer
+    default-language: Haskell2010
