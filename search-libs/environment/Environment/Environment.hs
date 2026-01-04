@@ -2,7 +2,11 @@ module Environment where
 
 import Data.ByteString (ByteString)
 
-data Env = Env
+data Env =
+    Env { indexerBinary   :: !FilePath
+        , collectionsPath :: !FilePath
+        , proxySetting    :: !(Maybe (ByteString, Int))
+        }
 
 class NewEnvironment m where    -- TODO un-new
 

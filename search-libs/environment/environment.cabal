@@ -8,7 +8,7 @@ build-type:         Simple
 
 library
     ghc-options:      -Wall -O2
-    build-depends:    base, bytestring, directory, search-types, split
+    build-depends:    base, bytestring, directory, search-types, split, transformers
     exposed-modules:  Environment
                       EnvironmentShim
     hs-source-dirs:   Environment

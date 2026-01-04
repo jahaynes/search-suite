@@ -6,19 +6,21 @@ module EnvironmentShim ( getCollectionPathImpl
                        , getProxySettingImpl
                        ) where
 
-import Types (CollectionName (..))
+import Environment (Env (..))
+import Types       (CollectionName (..))
 
-import Data.ByteString.Char8 (ByteString, pack)
-import Data.List.Split       (splitOn)
-import System.Directory      (makeAbsolute)
-import System.Environment    (lookupEnv)
-import Text.Read             (readMaybe)
+import Control.Monad.Trans.Reader
+import Data.ByteString.Char8  (ByteString)
 
-getCollectionPathImpl :: CollectionName -> IO FilePath
+getCollectionPathImpl :: Monad m => CollectionName -> ReaderT Env m FilePath
 getCollectionPathImpl (CollectionName name) = do
     colns <- getCollectionsPathImpl
     pure $ colns <> "/" <> name
 
+getCollectionsPathImpl :: Monad m => ReaderT Env m FilePath
+getCollectionsPathImpl = collectionsPath <$> ask
+
+{-
 getCollectionsPathImpl :: IO FilePath
 getCollectionsPathImpl =
     lookupEnv "COLLECTIONS_DIR" >>= \case
@@ -26,7 +28,13 @@ getCollectionsPathImpl =
         Nothing -> do
             putStrLn "COLLECTIONS_DIR undefined, defaulting to 'collections'"
             pure "collections"
+-}
 
+-- TODO log on Nothing case
+getIndexerBinaryImpl :: Monad m => ReaderT Env m FilePath
+getIndexerBinaryImpl = indexerBinary <$> ask
+
+{-
 getIndexerBinaryImpl :: IO FilePath
 getIndexerBinaryImpl =
     lookupEnv "INDEXER_BINARY" >>= \case
@@ -34,7 +42,12 @@ getIndexerBinaryImpl =
         Nothing -> do
             putStrLn "INDEXER_BINARY undefined, defaulting to 'bin/indexer-qp2'"
             pure "bin/indexer-qp2"
+-}
 
+getProxySettingImpl :: Monad m => ReaderT Env m (Maybe (ByteString, Int))
+getProxySettingImpl = proxySetting <$> ask
+
+{-
 getProxySettingImpl :: IO (Maybe (ByteString, Int))
 getProxySettingImpl =
     lookupEnv "PROXY" >>= \case
@@ -46,3 +59,4 @@ getProxySettingImpl =
                         Nothing   -> error "Couldnt understand proxy port"
                 _ -> error "Couldn't understand proxy setting"
         Nothing -> pure Nothing
+-}
