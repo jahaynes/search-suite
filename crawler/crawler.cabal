@@ -17,13 +17,7 @@ executable crawler
                     bytestring,
                     directory,
                     extra,
-                    http-client,
-                    http-types,
-                    safe-exceptions,
-                    split,
-                    text,
-                    transformers,
-                    yaml
+                    transformers
   ghc-options:      -Wall -O3 -threaded
   main-is:          Main.hs
   other-modules:    Reporter.Reporter
