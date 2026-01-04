@@ -11,6 +11,8 @@ packages:
 - searchapi3
 - search-libs/compactor
 - search-libs/environment
+- search-libs/importer
+- search-libs/indexer
 - search-libs/metadata
 - search-libs/parser
 - search-libs/query-processor

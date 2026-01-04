@@ -10,8 +10,9 @@ build-type:         Simple
 
 library
     ghc-options:      -Wall -O2
-    build-depends:    aeson, base, deepseq, directory, hashable, text, servant, swagger2
-    exposed-modules:  Component
+    build-depends:    aeson, base, deepseq, directory, hashable, lens, split, text, servant, swagger2
+    exposed-modules:  Api
+                      Component
                       Types
     hs-source-dirs:   SearchTypes
     default-language: Haskell2010
