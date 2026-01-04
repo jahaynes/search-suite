@@ -2,7 +2,7 @@
              OverloadedStrings,
              TypeOperators #-}
 
-module Controllers.Collections where
+module Collections where
 
 import Compactor       (Compactor (mergeInto))
 import EnvironmentShim (getCollectionsPathImpl)

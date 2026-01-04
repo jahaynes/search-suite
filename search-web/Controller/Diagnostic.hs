@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds,
              TypeOperators #-}
 
-module Controllers.Diagnostic where
+module Diagnostic where
 
 import Registry (Registry (totalLocksHeld, totalNumComponents))
 

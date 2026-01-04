@@ -3,7 +3,7 @@
              ScopedTypeVariables,
              TypeOperators #-}
 
-module Controllers.Indexation where
+module Indexation where
 
 import Api                 (Doc (Doc), IndexRequest (IndexRequest))
 import Errors.Errors       (Error)

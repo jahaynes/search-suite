@@ -2,7 +2,7 @@
              OverloadedStrings #-}
 
 -- TODO: not used?
-module Controllers.Mime where
+module Mime where
 
 import Data.ByteString.Lazy              (fromStrict)
 import Data.Text                         (Text)

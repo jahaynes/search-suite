@@ -2,16 +2,16 @@
              OverloadedStrings,
              TypeOperators #-}
 
-module Controllers.Controller ( runController ) where
+module Controller ( runController ) where
 
 import Compactor               (Compactor)
-import Controllers.Collections 
-import Controllers.Diagnostic
-import Controllers.Indexation
-import Controllers.Query
+import Collections 
+import Diagnostic
 import Errors.Errors           (Error)
+import Indexation
 import Indexer                 (Indexer)
 import Network.Fetcher         (Fetcher)
+import Query
 import QueryProcessor          (QueryProcessor)
 import Registry                (Registry)
 import WarcFileReader          (WarcFileReader (..))

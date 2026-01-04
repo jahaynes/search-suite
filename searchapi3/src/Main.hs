@@ -3,7 +3,7 @@
 module Main where
 
 import Compactor              (createCompactor)
-import Controllers.Controller (runController)
+import Controller             (runController)
 import EnvironmentShim        (getCollectionsPathImpl, getProxySettingImpl)
 import Importer               (Importer (importCollection), createImporter)
 import Indexer                (createIndexer)
