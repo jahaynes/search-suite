@@ -24,6 +24,7 @@ import           Network.HostName                   (getHostName)
 import           Network.HTTP.Types.Header          (hContentType)
 import           Network.HTTP.Client
 import           Network.HTTP.Types.Status          (statusCode)
+import           System.Directory                   (makeAbsolute)
 import           System.Environment                 (getArgs)
 import           Text.Printf                        (printf)
 
@@ -36,8 +37,9 @@ main = do
     noIndexDir <- fetchCollectionDir http
 
     [colName, startPath] <- getArgs
+    absoluteStartPath <- makeAbsolute startPath
     let followSymlinks = False
-    runConduitRes $ sourceDirectoryDeep followSymlinks startPath
+    runConduitRes $ sourceDirectoryDeep followSymlinks absoluteStartPath
                 .| CL.filter (\p -> not (noIndexDir `isPrefixOf` p))
                 .| CL.chunksOf 20
                 .| CL.mapM (liftIO . mapConcurrently (processFile http))
@@ -70,10 +72,10 @@ processFile http filePath
     endsWith ext fp = map toLower ext == (reverse . map toLower . take (length ext) . reverse $ fp)
 
     plaintextFileTypes :: [String]
-    plaintextFileTypes = ["hs", "txt", "java"]
+    plaintextFileTypes = [".hs", ".txt", ".java"]
 
     richFiletypes :: [String]
-    richFiletypes = ["pdf", "doc", "docx", "xls", "xlsx", "odt", "rtf", "epub", "mp3"]
+    richFiletypes = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".odt", ".rtf", ".epub", ".mp3"]
 
 processTika :: Manager -> FilePath -> IO (Maybe (FilePath, Text))
 processTika http filePath = do
