@@ -16,7 +16,7 @@ import           Data.Char                          (isAscii, toLower)
 import           Data.Conduit                       ((.|), runConduitRes)
 import qualified Data.Conduit.List            as CL
 import           Data.Conduit.Combinators           (sourceDirectoryDeep)
-import           Data.List                          (isPrefixOf)
+import           Data.List                          (isInfixOf, isPrefixOf)
 import           Data.Maybe                         (catMaybes)
 import           Data.Text as T                     (Text, pack)
 import           Data.Text.Encoding                 (decodeUtf8')
@@ -63,19 +63,23 @@ replaceNonAscii = map go
 
 processFile :: Manager -> FilePath -> IO (Maybe (FilePath, Text))
 processFile http filePath
-    | any (`endsWith` filePath) richFiletypes      = processTika http filePath
-    | any (`endsWith` filePath) plaintextFileTypes = processPlainText filePath
-    | otherwise                                    = pure Nothing
+    | any (`isInfixOf` filePath) ignore             = pure Nothing
+    | any (`endsWith`  filePath) richFiletypes      = processTika http filePath
+    | any (`endsWith`  filePath) plaintextFileTypes = processPlainText filePath
+    | otherwise                                     = pure Nothing
 
     where
     endsWith :: String -> String -> Bool
     endsWith ext fp = map toLower ext == (reverse . map toLower . take (length ext) . reverse $ fp)
 
     plaintextFileTypes :: [String]
-    plaintextFileTypes = [".hs", ".txt", ".java"]
+    plaintextFileTypes = [".hs", ".ts", ".css"]
 
     richFiletypes :: [String]
-    richFiletypes = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".odt", ".rtf", ".epub", ".mp3"]
+    richFiletypes = []
+
+    ignore :: [String]
+    ignore = ["/.stack-work/", "/bin/", "/obj/", "/node_modules/"]
 
 processTika :: Manager -> FilePath -> IO (Maybe (FilePath, Text))
 processTika http filePath = do
