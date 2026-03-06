@@ -1,40 +1,18 @@
 extern crate edit_distance;
 
-mod bk_tree;
-mod bytes;
-mod deletions;
-mod doc;
-mod dump;
-mod index;
-mod index_reader;
-mod index_writer;
-mod input;
-mod merge;
-mod normalise;
-mod query;
-mod ranking;
-mod spelling_correction;
-mod terms;
-mod types;
-mod verify;
-mod write_to_buf;
+use indexer_qp2::deletions::*;
+use indexer_qp2::dump::*;
+use indexer_qp2::index::*;
+use indexer_qp2::index_reader::*;
+use indexer_qp2::merge::*;
+use indexer_qp2::input::*;
+use indexer_qp2::query::*;
+use indexer_qp2::spelling_correction::*;
+use indexer_qp2::types::*;
+use indexer_qp2::verify::*;
 
-#[cfg(test)]
-mod byte_tests;
-#[cfg(test)]
-mod system_tests;
-
-use deletions::*;
-use dump::*;
-use index::*;
-use index_reader::*;
-use input::*;
-use query::*;
-use spelling_correction::*;
 use shared_proto::protocol::encode::Cbor;
 use shared_proto::protocol::types::IndexReply;
-use types::*;
-use verify::*;
 
 use std::collections::HashMap;
 use std::env;
@@ -79,7 +57,7 @@ fn main() {
     "merge"     => { let dest          = &args[2];
                      let src1          = &args[3];
                      let src2          = &args[4];
-                     merge::merge::merge(dest, src1, src2);
+                     merge::merge(dest, src1, src2);
                      // verify(dest);
                    },
 
