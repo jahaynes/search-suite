@@ -1,7 +1,9 @@
-use bytes::*;
+#[cfg(test)]
+use indexer_qp2::bytes::*;
 
+#[cfg(test)]
 #[test]
-pub fn roundtrip_u32() {
+fn roundtrip_u32() {
     let mut buf = Vec::<u8>::new();
     let mut p = 0;
     for x in 0..1024 {
@@ -13,6 +15,7 @@ pub fn roundtrip_u32() {
     }
 }
 
+#[cfg(test)]
 #[test]
 pub fn roundtrip_u64() {
     let mut buf = Vec::<u8>::new();

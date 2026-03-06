@@ -95,7 +95,7 @@ fn unscored_doc_id_intersection<'a>(ir:    &'a IndexRead,
     }
 
     /* Start with rarest term and intersect doc_ids against more common ones */
-    terms.sort_by_key(|te| (te.doc_freq));
+    terms.sort_by_key(|te| te.doc_freq);
     let mut intersection : HashSet<DocId> = HashSet::new();
 
     let first_doc_ids = docids_only_for_term(ir, &terms[0]);

@@ -4,6 +4,20 @@ version = "0.1.0"
 authors = ["John Haynes <john.andrew.haynes@gmail.com>"]
 edition = "2024"
 
+[lib]
+name = "indexer_qp2"
+path = "src/lib.rs"
+test = false
+
+[[test]]
+name = "tests"
+path = "test/mod.rs"
+
+[[bin]]
+name = "indexer-qp2"
+path = "src/main.rs"
+test = false
+
 [dependencies]
 shared-proto = { path = "../shared-proto" }
 

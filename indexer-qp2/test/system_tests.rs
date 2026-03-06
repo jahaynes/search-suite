@@ -1,19 +1,36 @@
+#[cfg(test)]
 use std::collections::HashSet;
+#[cfg(test)]
 use std::collections::HashMap;
+#[cfg(test)]
 use std::env;
+#[cfg(test)]
 use std::path::*;
+#[cfg(test)]
+use std::time::SystemTime;
+#[cfg(test)]
 use uuid::Uuid;
 
-use doc::*;
-use index::*;
-use index_reader::*;
-use input::*;
-use merge::*;
-use query::*;
-use types::*;
-use terms::*;
-use verify::*;
+#[cfg(test)]
+use indexer_qp2::doc::*;
+#[cfg(test)]
+use indexer_qp2::index::*;
+#[cfg(test)]
+use indexer_qp2::index_reader::*;
+#[cfg(test)]
+use indexer_qp2::input::*;
+#[cfg(test)]
+use indexer_qp2::merge::*;
+#[cfg(test)]
+use indexer_qp2::query::*;
+#[cfg(test)]
+use indexer_qp2::types::*;
+#[cfg(test)]
+use indexer_qp2::terms::*;
+#[cfg(test)]
+use indexer_qp2::verify::*;
 
+#[cfg(test)]
 fn fresh_dir() -> String {
     let mut dir = env::temp_dir();
     let uuid = format!("{}", Uuid::new_v4());
@@ -21,6 +38,7 @@ fn fresh_dir() -> String {
     String::from(dir.to_str().unwrap())
 }
 
+#[cfg(test)]
 fn create_index(url_term_doc_ids: &[(&str, &str, u32)]) -> String {
     
     let docs: Vec<Doc> = 
@@ -36,22 +54,26 @@ fn create_index(url_term_doc_ids: &[(&str, &str, u32)]) -> String {
                         .collect();
 
     let idx_dir = fresh_dir();
-    index(&idx_dir, docs);
+    index(&idx_dir, docs, SystemTime::now());
     idx_dir
 }
 
+#[cfg(test)]
 fn create_singleton_index(url:    &str,
                           term:   &str,
                           doc_id: u32) -> String {
     create_index(&[(url, term, doc_id)])
 }
 
+#[cfg(test)]
 fn single_term_query(idx_dir:      &str,
                      term:         &str) -> HashSet<Url> {
 
     let query_params =
         QueryParams { max_results: None
                     , base_path:   idx_dir.to_string()
+                    , scoring:     None
+                    , mode:        None
                     , query_terms: vec![Term(String::from(term))]
                     };
 
@@ -63,6 +85,7 @@ fn single_term_query(idx_dir:      &str,
     })
 }
 
+#[cfg(test)]
 #[test]
 pub fn singleton_test() {
 
@@ -77,6 +100,7 @@ pub fn singleton_test() {
     assert!(urls.contains(&Url("http://one".to_string())));
 }
 
+#[cfg(test)]
 #[test]
 pub fn simple_merge_test() {
 
@@ -109,6 +133,7 @@ pub fn simple_merge_test() {
     assert!(urls.contains(&Url("http://two".to_string())));
 }
 
+#[cfg(test)]
 #[test]
 pub fn self_merge_test() {
 
@@ -129,6 +154,7 @@ pub fn self_merge_test() {
     assert!(urls.contains(&Url("http://one".to_string())));
 }
 
+#[cfg(test)]
 #[test]
 pub fn dualing_docid_merge() {
 
@@ -157,6 +183,7 @@ pub fn dualing_docid_merge() {
     assert!(urls.contains(&Url("http://two".to_string())));
 }
 
+#[cfg(test)]
 #[test]
 pub fn missing_keywords() {
 
@@ -205,6 +232,7 @@ pub fn missing_keywords() {
     }
 }
 
+#[cfg(test)]
 #[test]
 pub fn dualing_docids_correctly_ordered() {
 
