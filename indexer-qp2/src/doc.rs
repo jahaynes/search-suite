@@ -4,7 +4,6 @@ use crate::terms::Term;
 use crate::types::*;
 use crate::write_to_buf::WriteToBuf;
 
-use rand::prelude::*;
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -64,7 +63,8 @@ fn write_to_buf(buf: &mut Vec<u8>,
 }
   
 pub fn mk_doc(url: Url,
-              body: &String) -> Doc {
+              body: &String,
+              doc_id_fn: fn() -> u32) -> Doc {
 
     let mut term_frequencies = HashMap::new();
     let mut doc_len = 0;
@@ -86,7 +86,7 @@ pub fn mk_doc(url: Url,
 
     Doc {
         url              : url,
-        doc_id           : DocId(rand::rng().random()),
+        doc_id           : DocId(doc_id_fn()),
         term_frequencies : term_frequencies,
         doc_len          : doc_len,
     }

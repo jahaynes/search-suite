@@ -6,6 +6,7 @@ use crate::types::*;
 use shared_proto::protocol::encode::UnCbor;
 use shared_proto::protocol::types::InputDoc;
 
+use rand::prelude::*;
 use std::io::{Read, stdin};
 
 #[derive(Debug)]
@@ -24,7 +25,9 @@ pub fn docs_from_stdin_cbor() -> Vec<Doc> {
     let decoded: Vec<InputDoc> = Vec::uncbor(&buf).expect("cborg issue");
     let mut docs = Vec::<Doc>::new();
     for input_doc in decoded {
-        docs.push(mk_doc(Url(input_doc.url), &input_doc.content));
+        docs.push(mk_doc( Url(input_doc.url)
+                        , &input_doc.content
+                        , || rand::rng().random()));
     }
     docs
 }
