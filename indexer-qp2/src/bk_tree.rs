@@ -3,6 +3,7 @@ use crate::index_writer::with_mut_bytes;
 
 use edit_distance::edit_distance;
 use intmap::IntMap;
+use std::collections::HashSet;
 use std::mem::size_of;
 use std::str::from_utf8;
 
@@ -135,6 +136,14 @@ pub fn query_disk_bk(
     })
 }
 
+pub fn query_disk_bk_set(file_name: &str, term: &String, thresh: i64) -> HashSet<(i64, String)> {
+    let mut results = HashSet::new();
+    query_disk_bk(file_name, term, thresh, &mut |dist, term| {
+        let _ = results.insert((dist, term.clone()));
+    });
+    return results;
+}
+
 fn query_bytes_bk(
     pos: usize,
     bytes: &[u8],
@@ -180,9 +189,15 @@ fn query_bytes_bk(
     }
 }
 
-// Query an in-memory bk tree
-// Likely not used since it should be disk-based
-fn _query_bk(tree: &BkTree, term: &String, thresh: i64, action: &mut dyn FnMut(i64, &String)) {
+pub fn query_bk_set(tree: &BkTree, term: &String, thresh: i64) -> HashSet<(i64, String)> {
+    let mut results = HashSet::new();
+    query_bk(tree, term, thresh, &mut |dist, term| {
+        let _ = results.insert((dist, term.clone()));
+    });
+    return results;
+}
+
+pub fn query_bk(tree: &BkTree, term: &String, thresh: i64, action: &mut dyn FnMut(i64, &String)) {
     let dist = edit_distance(&tree.term, &term) as i64;
 
     if dist <= thresh {
@@ -195,7 +210,7 @@ fn _query_bk(tree: &BkTree, term: &String, thresh: i64, action: &mut dyn FnMut(i
     for (child_dist_u64, child_tree) in tree.children.iter() {
         let child_dist = child_dist_u64 as i64;
         if child_dist >= min_thresh && child_dist <= max_thresh {
-            _query_bk(child_tree, term, thresh, action);
+            query_bk(child_tree, term, thresh, action);
         }
     }
 }

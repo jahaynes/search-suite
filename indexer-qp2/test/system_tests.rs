@@ -3,13 +3,7 @@ use std::collections::HashSet;
 #[cfg(test)]
 use std::collections::HashMap;
 #[cfg(test)]
-use std::env;
-#[cfg(test)]
-use std::path::*;
-#[cfg(test)]
 use std::time::SystemTime;
-#[cfg(test)]
-use uuid::Uuid;
 
 #[cfg(test)]
 use indexer_qp2::doc::*;
@@ -31,15 +25,10 @@ use indexer_qp2::terms::*;
 use indexer_qp2::verify::*;
 
 #[cfg(test)]
-fn fresh_dir() -> String {
-    let mut dir = env::temp_dir();
-    let uuid = format!("{}", Uuid::new_v4());
-    dir.push(Path::new(&uuid));
-    String::from(dir.to_str().unwrap())
-}
+use crate::util::{fresh_dir, TempDirGuard};
 
 #[cfg(test)]
-fn create_index(url_term_doc_ids: &[(&str, &str, u32)]) -> String {
+fn create_index(url_term_doc_ids: &[(&str, &str, u32)]) -> TempDirGuard {
     
     let docs: Vec<Doc> = 
         url_term_doc_ids.iter()
@@ -54,14 +43,14 @@ fn create_index(url_term_doc_ids: &[(&str, &str, u32)]) -> String {
                         .collect();
 
     let idx_dir = fresh_dir();
-    index(&idx_dir, docs, SystemTime::now());
+    index(&idx_dir.to_string(), docs, SystemTime::now());
     idx_dir
 }
 
 #[cfg(test)]
 fn create_singleton_index(url:    &str,
                           term:   &str,
-                          doc_id: u32) -> String {
+                          doc_id: u32) -> TempDirGuard {
     create_index(&[(url, term, doc_id)])
 }
 
@@ -93,9 +82,9 @@ pub fn singleton_test() {
                                            "one",
                                            1);
 
-    verify(&idx_dir_1);
+    verify(idx_dir_1.as_ref());
 
-    let urls = single_term_query(&idx_dir_1, "one");
+    let urls = single_term_query(idx_dir_1.as_ref(), "one");
     assert!(urls.len() == 1);
     assert!(urls.contains(&Url("http://one".to_string())));
 }
@@ -108,27 +97,25 @@ pub fn simple_merge_test() {
                                            "one",
                                            1);
 
-    verify(&idx_dir_1);
+    verify(idx_dir_1.as_ref());
 
     let idx_dir_2 = create_singleton_index("http://two",
                                            "two",
                                            2);
 
-    verify(&idx_dir_2);
+    verify(idx_dir_2.as_ref());
 
     let idx_dir_1_2 = fresh_dir();
 
-    merge::merge(&idx_dir_1_2,
-                 &idx_dir_1,
-                 &idx_dir_2);
+    merge::merge(idx_dir_1_2.as_ref(), idx_dir_1.as_ref(), idx_dir_2.as_ref());
 
-    verify(&idx_dir_1_2);
+    verify(idx_dir_1_2.as_ref());
 
-    let urls = single_term_query(&idx_dir_1_2, "one");
+    let urls = single_term_query(idx_dir_1_2.as_ref(), "one");
     assert!(urls.len() == 1);
     assert!(urls.contains(&Url("http://one".to_string())));
 
-    let urls = single_term_query(&idx_dir_1_2, "two");
+    let urls = single_term_query(idx_dir_1_2.as_ref(), "two");
     assert!(urls.len() == 1);
     assert!(urls.contains(&Url("http://two".to_string())));
 }
@@ -141,15 +128,13 @@ pub fn self_merge_test() {
                                            "one",
                                            1);
 
-    verify(&idx_dir_1);
+    verify(idx_dir_1.as_ref());
 
     let idx_dir_1_1 = fresh_dir();
 
-    merge::merge(&idx_dir_1_1,
-                 &idx_dir_1,
-                 &idx_dir_1);
+    merge::merge(idx_dir_1_1.as_ref(), idx_dir_1.as_ref(), idx_dir_1.as_ref());
 
-    let urls = single_term_query(&idx_dir_1_1, "one");
+    let urls = single_term_query(idx_dir_1_1.as_ref(), "one");
     assert!(urls.len() == 1);
     assert!(urls.contains(&Url("http://one".to_string())));
 }
@@ -168,17 +153,15 @@ pub fn dualing_docid_merge() {
 
     let idx_dir_1_2 = fresh_dir();
 
-    merge::merge(&idx_dir_1_2,
-                 &idx_dir_1,
-                 &idx_dir_2);
+    merge::merge(idx_dir_1_2.as_ref(), idx_dir_1.as_ref(), idx_dir_2.as_ref());
 
-    verify(&idx_dir_1_2);
+    verify(idx_dir_1_2.as_ref());
 
-    let urls = single_term_query(&idx_dir_1_2, "one");
+    let urls = single_term_query(idx_dir_1_2.as_ref(), "one");
     assert!(urls.len() == 1);
     assert!(urls.contains(&Url("http://one".to_string())));
 
-    let urls = single_term_query(&idx_dir_1_2, "two");
+    let urls = single_term_query(idx_dir_1_2.as_ref(), "two");
     assert!(urls.len() == 1);
     assert!(urls.contains(&Url("http://two".to_string())));
 }
@@ -199,7 +182,7 @@ pub fn missing_keywords() {
                                    , ("http://apple-b", "apple",  49)
                                    ]);
 
-    verify(&idx_dir_1);
+    verify(idx_dir_1.as_ref());
 
     let idx_dir_2 = create_index( &[ ("http://four-a",   "four",   30)  // Included
                                    , ("http://four-b",   "four",   31)
@@ -213,21 +196,19 @@ pub fn missing_keywords() {
                                    , ("http://banana-b", "banana", 39)
                                    ]);
 
-    verify(&idx_dir_2);
+    verify(idx_dir_2.as_ref());
 
     let idx_dir_1_2 = fresh_dir();
 
-    merge::merge(&idx_dir_1_2,
-                 &idx_dir_1,
-                 &idx_dir_2);
+    merge::merge(idx_dir_1_2.as_ref(), idx_dir_1.as_ref(), idx_dir_2.as_ref());
 
-    verify(&idx_dir_1_2);
+    verify(idx_dir_1_2.as_ref());
 
     for term in &[  "one",   "two", "three"
                  , "four",  "five", "large"
                  ,  "six", "apple", "banana" ] {
 
-    let urls = single_term_query(&idx_dir_1_2, term);
+    let urls = single_term_query(idx_dir_1_2.as_ref(), term);
         println!("{:?}\n{:?}\n", term, urls);
     }
 }
@@ -248,7 +229,7 @@ pub fn dualing_docids_correctly_ordered() {
                                    , ("http://apple-b", "apple", 32)
                                    ]);
 
-    verify(&idx_dir_1);
+    verify(idx_dir_1.as_ref());
 
     let idx_dir_2 = create_index( &[ ("http://four-a",   "four",    1)
                                    , ("http://four-b",   "four",    2)
@@ -262,21 +243,19 @@ pub fn dualing_docids_correctly_ordered() {
                                    , ("http://banana-b", "banana", 34)
                                    ]);
 
-    verify(&idx_dir_2);
+    verify(idx_dir_2.as_ref());
 
     let idx_dir_1_2 = fresh_dir();
 
-    merge::merge(&idx_dir_1_2,
-                 &idx_dir_1,
-                 &idx_dir_2);
+    merge::merge(idx_dir_1_2.as_ref(), idx_dir_1.as_ref(), idx_dir_2.as_ref());
 
-    verify(&idx_dir_1_2);
+    verify(idx_dir_1_2.as_ref());
 
     for term in &[  "one",   "two", "three"
                  , "four",  "five", "large"
                  ,  "six", "apple", "banana" ] {
 
-        let urls = single_term_query(&idx_dir_1_2, term);
+        let urls = single_term_query(idx_dir_1_2.as_ref(), term);
         assert!(urls.len() == 2, "MISSING RESULTS for {}", term);
         assert!(urls.contains(&Url(format!("http://{}-a",term))));
         assert!(urls.contains(&Url(format!("http://{}-b",term))));
