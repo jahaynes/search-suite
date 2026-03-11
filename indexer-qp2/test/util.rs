@@ -2,27 +2,9 @@ use std::env;
 use std::fmt;
 use std::fs;
 use std::ops::Deref;
-use std::panic;
 use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
-
-pub fn with_temp_dir<F, T>(prefix: &str, f: F) -> T
-where
-    F: FnOnce(&Path) -> T,
-    F: panic::UnwindSafe,
-{
-    let random_string = Uuid::new_v4().simple().to_string();
-    let temp_dir = env::temp_dir().join(format!("{}{}", prefix, random_string));
-
-    fs::create_dir_all(&temp_dir).expect("Failed to create temporary directory");
-
-    let _guard = TempDirGuard {
-        path: temp_dir.clone(),
-    };
-
-    f(&temp_dir)
-}
 
 #[cfg(test)]
 pub struct TempDirGuard {
@@ -67,10 +49,9 @@ impl Drop for TempDirGuard {
 }
 
 #[cfg(test)]
-pub fn fresh_dir() -> TempDirGuard {
+pub fn fresh_tmp_dir(prefix: &str) -> TempDirGuard {
     let mut dir = env::temp_dir();
-    let uuid = format!("{}", Uuid::new_v4());
-    dir.push(Path::new(&uuid));
+    dir.push(Path::new(&format!("{}{}", prefix, Uuid::new_v4())));
     let path = dir.clone();
     fs::create_dir_all(&path).expect("Failed to create temporary directory");
     TempDirGuard { path }

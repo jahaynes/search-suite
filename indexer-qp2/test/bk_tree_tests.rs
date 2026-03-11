@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::util::with_temp_dir;
+use crate::util::fresh_tmp_dir;
 #[cfg(test)]
 use indexer_qp2::bk_tree::*;
 #[cfg(test)]
@@ -56,15 +56,15 @@ fn test_ram_partial_match() {
 fn test_disk_no_match() {
     let bk_tree = new_bk_tree("too".to_string());
 
-    with_temp_dir("test1", |fp| {
-        let path = format!("{}/bk_tree", fp.display());
-        write_to_disk(&path, &bk_tree);
+    let fp = fresh_tmp_dir("test_disk_no_match_");
 
-        assert_eq!(
-            query_disk_bk_set(&path, &"different".to_string(), 0),
-            HashSet::new()
-        );
-    });
+    let path = format!("{}/bk_tree", fp.display());
+    write_to_disk(&path, &bk_tree);
+
+    assert_eq!(
+        query_disk_bk_set(&path, &"different".to_string(), 0),
+        HashSet::new()
+    );
 }
 
 #[cfg(test)]
@@ -76,20 +76,20 @@ fn test_disk_exact_match() {
     insert_bk(&mut bk_tree, "four".to_string());
     insert_bk(&mut bk_tree, "five".to_string());
 
-    with_temp_dir("test1", |fp| {
-        let path = format!("{}/bk_tree", fp.display());
-        write_to_disk(&path, &bk_tree);
+    let fp = fresh_tmp_dir("test_disk_exact_match_");
 
-        assert_eq!(
-            query_disk_bk_set(&path, &"one".to_string(), 0),
-            HashSet::from([(0, "one".to_string())])
-        );
+    let path = format!("{}/bk_tree", fp.display());
+    write_to_disk(&path, &bk_tree);
 
-        assert_eq!(
-            query_disk_bk_set(&path, &"four".to_string(), 0),
-            HashSet::from([(0, "four".to_string())])
-        );
-    });
+    assert_eq!(
+        query_disk_bk_set(&path, &"one".to_string(), 0),
+        HashSet::from([(0, "one".to_string())])
+    );
+
+    assert_eq!(
+        query_disk_bk_set(&path, &"four".to_string(), 0),
+        HashSet::from([(0, "four".to_string())])
+    );
 }
 
 #[cfg(test)]
@@ -101,13 +101,13 @@ fn test_disk_partial_match() {
     insert_bk(&mut bk_tree, "four".to_string());
     insert_bk(&mut bk_tree, "five".to_string());
 
-    with_temp_dir("test1", |fp| {
-        let path = format!("{}/bk_tree", fp.display());
-        write_to_disk(&path, &bk_tree);
+    let fp = fresh_tmp_dir("test_disk_partial_match_");
 
-        assert_eq!(
-            query_disk_bk_set(&path, &"thr".to_string(), 2),
-            HashSet::from([(2, "three".to_string()), (2, "two".to_string())])
-        );
-    });
+    let path = format!("{}/bk_tree", fp.display());
+    write_to_disk(&path, &bk_tree);
+
+    assert_eq!(
+        query_disk_bk_set(&path, &"thr".to_string(), 2),
+        HashSet::from([(2, "three".to_string()), (2, "two".to_string())])
+    );
 }

@@ -10,7 +10,7 @@ use std::time::SystemTime;
 
 struct Inverted(Vec<(Term, Vec<(DocId, TermFreq)>)>);
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct IndexResult { pub num_docs:  usize
                        , pub num_terms: u32
                        , pub ms_taken:  u128
