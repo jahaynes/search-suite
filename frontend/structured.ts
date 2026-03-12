@@ -27,6 +27,9 @@ const reqHeaders: RequestInit = {
     headers: { 'Content-Type': 'application/json' }
 }
 
+// Track the current abort controller to cancel stale requests
+let currentAbortController: AbortController | null = null;
+
 function renderResult(collectionName: string, result: UnscoredResult) {
 
     const createTitle = (mode: Mode) => {
@@ -77,15 +80,19 @@ function renderResult(collectionName: string, result: UnscoredResult) {
     }
 }
 
-const fireStructuredSearch = async (state: QueryUIState) => {
+const fireStructuredSearch = async (state: QueryUIState, signal?: AbortSignal) => {
 
     const fireStructuredSearchCollection = async (collectionName: string, query: string): Promise<Either<string, UnscoredResults>> => {
         const url = `/structured-query/${encodeURIComponent(collectionName)}`;
-        return await fetch(url, {
+        const options: RequestInit = {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: query
-        }).then(resp => resp.json());
+        };
+        if (signal !== undefined) {
+            options.signal = signal;
+        }
+        return await fetch(url, options).then(resp => resp.json());
     }
 
     const query: string =
@@ -156,8 +163,14 @@ const runSearch = async () => {
     // Determine the selected collections
     const state = getUIState();
 
+    // Cancel any pending requests before starting a new search
+    if (currentAbortController) {
+        currentAbortController.abort();
+    }
+    currentAbortController = new AbortController();
+
     // Fire search
-    const collectionResponses = await fireStructuredSearch(state);
+    const collectionResponses = await fireStructuredSearch(state, currentAbortController.signal);
 
     // Populate UI
     // TODO ('Left')
