@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings
+{-# LANGUAGE LambdaCase
+           , OverloadedStrings
            , ScopedTypeVariables #-}
 
 module Query.QueryProcessor ( QueryProcessor (..)
@@ -9,7 +10,7 @@ import Component                 ( Component )
 import Environment               ( Environment (..) )
 import Query.QueryParams         ( QueryParams (..) )
 import Query.QueryParser         ( Clause (..), Op (..) )
-import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) )
+import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..), UnscoredResult (..) )
 import Registry                  ( Registry (..) )
 import Metadata                  ( Metadata (..), MetadataApi (..) )
 import Types
@@ -53,7 +54,7 @@ createQueryProcessor :: Environment
 createQueryProcessor env reg metadataApi lg =
     QueryProcessor { runQuery      = runQueryImpl env reg metadataApi lg
                    , runSpelling   = runSpellingImpl env reg lg
-                   , runStructured = runStructuredImpl env reg lg
+                   , runStructured = runStructuredImpl env reg metadataApi lg
                    }
 
 data ComponentResult = 
@@ -70,11 +71,12 @@ data Mode = Normal | Regex deriving Eq
 -- TODO, this can probably pushed into indexer-qp2
 runStructuredImpl :: Environment
                   -> Registry
+                  -> MetadataApi
                   -> (ByteString -> IO ())
                   -> CollectionName
                   -> Clause
                   -> IO (Either Text UnscoredResults)
-runStructuredImpl env reg logger collectionName@(CollectionName cn) clause =
+runStructuredImpl env reg metadataApi logger collectionName@(CollectionName cn) clause =
     withLocks reg collectionName $ \lockedComponents -> do
         rs <- go lockedComponents clause
         pure . Right $ UnscoredResults (S.size rs) rs
@@ -103,15 +105,34 @@ runStructuredImpl env reg logger collectionName@(CollectionName cn) clause =
         pure $ Left errMsg
     
     runUnscored mode lockedComponents q = do
-        (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> queryComponent env logger (execParams lc) (encodeUtf8 q))
+        (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents unscoredQuery)
         let errMsg = C8.unlines (map C8.pack bads)
         unless (null bads)
-                (logger errMsg)
+               (logger errMsg)
         pure $ if null goods
                 then Left $ unlines bads
                 else Right $ mconcat goods
 
         where
+        -- Fetching the metadata probably isn't great down here
+        -- But we have the handle to the component
+        unscoredQuery lc =
+
+            queryComponent env logger (execParams lc) (encodeUtf8 q) >>= \case
+
+                Left e -> error e
+                Right (UnscoredResults n qrs) -> do
+                    -- TODO probably remove the set?
+                    qrs' <- mapM attachMetadata $ S.toList qrs
+                    pure $ Right (UnscoredResults n (S.fromList $ qrs'))
+
+            where
+            attachMetadata :: UnscoredResult -> IO UnscoredResult
+            attachMetadata ur =
+                lookupMetadata metadataApi (path lc) (ur_uri ur) >>= \case
+                    Nothing -> undefined -- TODO
+                    Just m -> pure ur { ur_metadata = Just . M.delete "uri" $ unMetadata m }
+
         execParams :: Component -> [String]
         execParams component =
             concat [ ["unscored"]
@@ -217,10 +238,12 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
                , ["--base_path", path component]
                ]
 
+    -- This is interesting
     attachMetadata :: V.Vector (Component, QueryResult) -> IO QueryResults
     attachMetadata vcqrs = do
         xs <- V.forM vcqrs $ \(cmp, qr) -> do
             mmetadata <- lookupMetadata metadataApi (path cmp) (uri qr)
+            -- This is in two places
             pure $ qr { metadata = M.delete "uri" . unMetadata <$> mmetadata }
         pure $ QueryResults (V.length xs) xs
 

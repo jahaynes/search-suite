@@ -2,7 +2,7 @@
            , DeriveGeneric
            , OverloadedStrings #-}
 
-module Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..) ) where
+module Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..), UnscoredResult (..) ) where
 
 import           Control.DeepSeq            (NFData)
 import           Control.Lens
@@ -30,8 +30,9 @@ instance ToSchema DocId where
         & mapped.schema.example     ?~ toJSON exampleDocId
 
 data UnscoredResult =
-    UnscoredResult { ur_doc_id :: !DocId
-                   , ur_uri    :: !Text
+    UnscoredResult { ur_doc_id   :: !DocId
+                   , ur_uri      :: !Text
+                   , ur_metadata :: !(Maybe (Map Text Text))
                    } deriving (Eq, Ord, Show, Generic, FromJSON, ToJSON)
 
 instance NFData UnscoredResult
@@ -65,8 +66,9 @@ exampleDocId :: DocId
 exampleDocId = DocId 32045
 
 exampleUnscored :: UnscoredResult
-exampleUnscored = UnscoredResult { ur_doc_id = exampleDocId
-                                 , ur_uri    = "https://www.foo.bar"
+exampleUnscored = UnscoredResult { ur_doc_id   = exampleDocId
+                                 , ur_uri      = "https://www.foo.bar"
+                                 , ur_metadata = mempty
                                  }
 
 exampleUnscoredResults :: UnscoredResults

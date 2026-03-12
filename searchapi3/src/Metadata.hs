@@ -24,13 +24,15 @@ import           Data.ByteString              (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char                    (isSpace)
+import           Data.Functor                 ((<&>))
 import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict as M
-import           Data.Maybe                   (mapMaybe, maybeToList)
+import           Data.Maybe                   (catMaybes, mapMaybe, maybeToList)
 import           Data.Text                    (Text)
 import           Data.Text.Encoding
 import           Data.Word                    (Word64)
 import           GHC.Generics                 (Generic)
+import           Safe                         (headMay)
 import           System.IO
 import           Text.HTML.TagSoup
 
@@ -235,25 +237,41 @@ reader hOff hDat = do
 -- TODO - filter some interesting subset of possible html metadata names?
 scrapeMetadata :: WarcEntry -> Metadata
 scrapeMetadata we@(WarcEntry _ (CompressedBody _)) = scrapeMetadata $ decompress we
-scrapeMetadata    (WarcEntry _ (UncompressedBody body)) =
+scrapeMetadata    (WarcEntry wh (UncompressedBody body)) =
 
-    let headTags = getGroup "head"
-                 . parseTags
-                 $ body
+    let headTags :: [Tag ByteString] =
+            getGroup "head" (parseTags body)
 
-        mTitle = do
-            t <- textFrom $ getGroup "title" headTags
-            pure ("title", t)
+        mTitle = getTitle headTags
 
-    in Metadata $  M.fromList
-                (  maybeToList mTitle
-                ++ mapMaybe metaNameContentPair headTags )
+        metadataTags :: [Maybe (Text, Text)] = map metaNameContentPair headTags
+
+    in Metadata . M.fromList
+                . catMaybes
+                $ mTitle : metadataTags
 
     -- TODO title is just a tag, not metadata
     -- TODO failing to get meta description, start reading from first body/div/p?
     -- Also read title from meta?  If not then use first H?, or filename?
 
     where
+    getTitle headTags =
+        headMay $ catMaybes [fromMetadata, fromFilePath]
+        where
+        fromMetadata = textFrom (getGroup "title" headTags) <&> \t -> ("title", t)
+        fromFilePath = do
+
+            uriVal <- getValue (MandatoryKey WarcRecordId) wh
+
+            uri    <- case uriVal of
+                          StringValue uri -> Just uri
+                          _               -> Nothing
+
+            StringValue uri <- getValue (MandatoryKey WarcRecordId) wh
+            if "file://" `C8.isPrefixOf` uri
+                then Just ("title", decodeUtf8 . last . C8.split '/' $ uri) -- TODO decodeUtf8 is partial?
+                else Nothing
+
     getGroup :: Eq a => a -> [Tag a] -> [Tag a]
     getGroup name = takeWhile (not . isTagCloseName name)
                   . tail'
