@@ -5,13 +5,14 @@
 
 module Controllers.Indexation where
 
-import Api                 (Doc (Doc), IndexRequest (IndexRequest))
-import Errors.Errors       (Error)
-import Indexer             (Indexer (..))
-import Network.Fetcher     (Fetcher (fetch))
+import Api                   (Doc (Doc), IndexRequest (IndexRequest))
+import Errors.Errors         (Error)
+import Extensions.GitIndexer (GitIndexer (..))
+import Indexer               (Indexer (..))
+import Network.Fetcher       (Fetcher (fetch))
 import Page.Page
-import Types               (CollectionName)
-import Url                 (mkUrl, valText)
+import Types                 (CollectionName)
+import Url                   (mkUrl, valText)
 
 import           Control.Concurrent.Async.Extra (mapConcurrentlyBounded)
 import           Control.Monad.Trans.Except     (ExceptT, runExceptT)
@@ -42,6 +43,10 @@ type IndexationApi = "indexDocs" :> Capture "col" CollectionName
                                           :> ReqBody '[PlainText] String
                                           :> Post '[JSON] (Either String ())
 
+                :<|> "indexGit" :> Capture "col" CollectionName
+                                :> ReqBody '[PlainText] FilePath
+                                :> Post '[JSON] (Either String ())
+
                 :<|> "deleteDoc" :> Capture "col" CollectionName
                                  :> ReqBody '[PlainText] String
                                  :> Delete '[JSON] (Either String ())
@@ -55,12 +60,14 @@ indexationApi = Proxy
 
 indexationServer :: Fetcher (ExceptT Error IO)
                  -> Indexer
+                 -> GitIndexer
                  -> ServerT IndexationApi IO 
-indexationServer fetcher indexer
+indexationServer fetcher indexer gitIndexer
     = indexDocs indexer
  :<|> indexUrlLines fetcher indexer
  :<|> indexLocalFilesImpl indexer
  :<|> indexLocalWarcFile indexer
+ :<|> indexGitPath gitIndexer
  :<|> deleteDocument indexer
  :<|> isDocDeleted indexer
 

@@ -125,12 +125,19 @@ indexLocalFileImpl :: Environment
                    -> [FilePath]  -- TO Vector? or just json
                    -> IO (Either String ())
 indexLocalFileImpl env writer metadataApi compactor registry collectionName filePaths = do
+
+    print "Called index local files"
+
     -- jsonify?
     -- Unnecessary packing
     -- safe-exceptions
     unsortedDocs <- forM filePaths $ \fp -> do
         t <- T.readFile fp
         pure $ Doc (pack fp) t
+
+    print unsortedDocs
+
+    print "foo!"
 
     ei <- indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest unsortedDocs)
 

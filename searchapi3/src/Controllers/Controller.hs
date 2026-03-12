@@ -11,6 +11,7 @@ import Controllers.Indexation
 import Controllers.Query
 import Environment             (Environment)
 import Errors.Errors           (Error)
+import Extensions.GitIndexer   (GitIndexer)
 import Indexer                 (Indexer)
 import Network.Fetcher         (Fetcher)
 import Query.QueryProcessor    (QueryProcessor)
@@ -50,13 +51,14 @@ searchApiSwagger = toSwagger searchApi
 runController :: Compactor
               -> Environment
               -> Indexer
+              -> GitIndexer
               -> Fetcher (ExceptT Error IO)
               -> QueryProcessor
               -> WarcFileReader
               -> Registry
               -> (ByteString -> IO ())
               -> IO ()
-runController compactor env indexer fetcher qp warcFileReader registry _logger =
+runController compactor env indexer gitIndexer fetcher qp warcFileReader registry _logger =
 
     run 8081 . simpleCors
              . prometheus def 
@@ -65,7 +67,7 @@ runController compactor env indexer fetcher qp warcFileReader registry _logger =
              $ swaggerSchemaUIServerT searchApiSwagger
             :<|> collectionsServer compactor env registry
             :<|> queryServer qp registry warcFileReader
-            :<|> indexationServer fetcher indexer
+            :<|> indexationServer fetcher indexer gitIndexer
             :<|> diagnosticServer registry
             :<|> serveDirectoryFileServer "frontend"
 
