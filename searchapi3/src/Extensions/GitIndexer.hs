@@ -8,7 +8,6 @@ import Indexer (Indexer (indexLocalFiles))
 import Types   (CollectionName)
 
 import           Control.Monad (filterM)
-import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Set as S
 import           System.Directory (canonicalizePath, doesFileExist, doesDirectoryExist)
@@ -34,10 +33,11 @@ indexGitPathImpl indexer collection fp =
             -- TODO check the approach here.  
             -- Maybe first switch on whether the collection exists or not
             -- Maybe create index separately in temp
+            -- Or just do everything in temp, and then merge_into
+
+            -- TODO currently dupes
 
             cfp <- canonicalizePath fp
-
-            putStrLn $ "Want to index path: " <> cfp
 
             (_, Just hout, _, _) <-
                 createProcess (proc "git" [printf "--git-dir=%s/.git" cfp
@@ -46,16 +46,13 @@ indexGitPathImpl indexer collection fp =
                                         , "--name-only"
                                         ]){ std_out = CreatePipe }
 
-            xs <- S.fromList . filter (not . C8.null) . C8.lines <$> C8.hGetContents hout
+            cxs <- map (\s -> concat [cfp, "/", C8.unpack s])
+                 . S.toList
+                 . S.fromList
+                 . filter (not . C8.null)
+                 . C8.lines
+                 <$> C8.hGetContents hout
 
-            let cxs = map (\s -> concat [cfp, "/", C8.unpack s]) $ S.toList xs
+            excs <- filterM doesFileExist cxs -- is this the right way? or make sure git does it the right way?
 
-            excs <- filterM doesFileExist cxs
-
-            print ("Indexing", show (length excs), "files")
-
-            r <- indexLocalFiles indexer collection excs
-
-            print r
-
-            pure $ Right ()
+            indexLocalFiles indexer collection excs
