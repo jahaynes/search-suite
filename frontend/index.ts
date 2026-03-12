@@ -157,7 +157,7 @@ const displayCollections = async (state: QueryUIState, collectionNames: string[]
     }
 }
 
-const onLoad = async (ev: Event) => {
+const init = async () => {
 
     const params = new URLSearchParams(window.location.search);
 
@@ -192,3 +192,5 @@ const onLoad = async (ev: Event) => {
 
     await fireSearch(state);
 }
+
+init();

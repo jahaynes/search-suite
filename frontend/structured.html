@@ -4,24 +4,21 @@
 <head>
     <meta charset="utf-8">
     <title>Search Suite</title>
-    <link rel="stylesheet" href="index.css">
-    <script>var exports = {};</script>
-    <script src="structured.js" content="no-cache"></script>
+    <link rel="stylesheet" href="css/pico.min.css">
+    <script type="module" src="structured.js" content="no-cache"></script>
 </head>
 
-<body onload="onLoad()">
-    <div>
-        <fieldset id="collections"></fieldset>
+<body>
+
+    <div class="grid">
+        <div>
+            <label for="structured_search">Structured query:</label>
+            <textarea id="structured_search" style="font-family: monospace" type="textbox"></textarea>
+        </div>
+        <div id="collections"></div>
     </div>
     <hr />
-    <div>
-        <label for="structured_search">Structured query:</label>
-        <textarea id="structured_search" type="textbox" ></textarea>
-    </div>
-    <hr />
-    <div>
-        <ol id="results"></ol>
-    </div>
+    <div id="result_columns" class="grid"></div>
 </body>
 
 </html>

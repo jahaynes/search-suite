@@ -1,7 +1,9 @@
-type Either<L, R> = { Left: L } | { Right: R };
+
+import type { Either } from './common.js';
+import { gatherMapErrors } from './common.js';
 
 type QueryUIState = {
-    selectedCollection: string | null;
+    selectedCollections: Set<string>;
 };
 
 type UnscoredResults = {
@@ -12,7 +14,13 @@ type UnscoredResults = {
 type UnscoredResult = {
     ur_doc_id: number;
     ur_uri: string;
+    ur_metadata: Record<string, string>;
 };
+
+enum Mode {
+    File,
+    Uri
+}
 
 const reqHeaders: RequestInit = {
     cache: 'no-cache',
@@ -21,115 +29,165 @@ const reqHeaders: RequestInit = {
 
 function renderResult(collectionName: string, result: UnscoredResult) {
 
-    const createUriLink = () => {
-        const uri = document.createElement("div");
+    const createTitle = (mode: Mode) => {
+        const title = document.createElement("div");
         const a = document.createElement('a');
-        a.href = result.ur_uri;
-        a.textContent = result.ur_uri;
-        uri.innerHTML = '';
-        uri.appendChild(a);
-        return uri;
+        switch (mode) {
+            case Mode.File:
+                const safeTarget = encodeURIComponent(result.ur_uri);
+                a.href = `/cached/${encodeURIComponent(collectionName)}?url=${safeTarget}`;
+                break;
+            case Mode.Uri:
+                a.href = result.ur_uri;
+                break;
+        }
+        a.textContent = result.ur_metadata['title'] ?? 'Untitled';  // TODO
+        title.appendChild(a);
+        return title;
     }
 
-    const createCacheLink = () => {
-        const cached = document.createElement("div");
-        const safeTarget = encodeURIComponent(result.ur_uri);
-        const link = `/cached/${encodeURIComponent(collectionName)}?url=${safeTarget}`;
-        const a = document.createElement("a");
-        a.href = link;
-        a.textContent = "cached";
-        cached.appendChild(a);
-        return cached;
+    const renderFileResult = () => {
+
+        const resultItem = document.createElement("li");
+        resultItem.classList.add("result");
+
+        const title = createTitle(Mode.File);
+
+        const filePath = document.createElement("small");
+        // Nasty way to strip off file://hostname
+        filePath.textContent = result.ur_uri.slice(result.ur_uri.lastIndexOf('//') + 1);
+
+        resultItem.appendChild(title);
+        resultItem.appendChild(filePath);
+
+        return resultItem;
     }
 
-    const resultItem = document.createElement("li");
-    resultItem.classList.add("result");
-    resultItem.append(
-        createUriLink(),
-        createCacheLink());
+    const renderUriResult = () => {
+        const resultItem = document.createElement("li");
+        resultItem.classList.add("result");
+        resultItem.appendChild(createTitle(Mode.Uri));
+        return resultItem;
+    }
 
-    return resultItem;
+    if (result.ur_uri.startsWith("file://")) {
+        return renderFileResult();
+    } else {
+        return renderUriResult();
+    }
 }
 
 const fireStructuredSearch = async (state: QueryUIState) => {
 
-    const collectionName: string | null =
-        state.selectedCollection;
+    const fireStructuredSearchCollection = async (collectionName: string, query: string): Promise<Either<string, UnscoredResults>> => {
+        const url = `/structured-query/${encodeURIComponent(collectionName)}`;
+        return await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: query
+        }).then(resp => resp.json());
+    }
 
     const query: string =
         document.querySelector<HTMLInputElement>('#structured_search')?.value ?? "";
 
-    if (!collectionName || query.trim().length == 0) {
-        return;
+    if (state.selectedCollections.size == 0) {
+        return { Left: ["No collections selected"] };
     }
 
-    const url = `/structured-query/${encodeURIComponent(collectionName)}`;
+    // Fetch the search results
+    const collectionsResults = new Map<string, Either<string, UnscoredResults>>(
+        await Promise.all([...state.selectedCollections]
+            .map(async name => [name
+                , await fireStructuredSearchCollection(name, query)
+            ] as const)));
 
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: query
-    })
-    .then(resp => resp.json())
-    .then((data: Either<string, UnscoredResults>) => {
-        const resultList = document.querySelector<HTMLElement>("#results")!;
-        resultList.innerHTML = '';
-
-        if ('Right' in data) {
-            for (let i = 0; i < data.Right.num_unscored; i++) {
-                const resultItem = renderResult(collectionName, data.Right.unscored_results[i]!);
-                resultList.appendChild(resultItem);
-            }
-        }
-    });
+    return gatherMapErrors(collectionsResults);
 }
 
-const displayCollections = async (state: QueryUIState, collectionNames: string[]) => {
+const getUIState = (): QueryUIState => {
+    const selectedCollections =
+        new Set(Array.from(
+            document.querySelectorAll<HTMLInputElement>('.collection-selector'))
+            .filter(cb => cb.checked)
+            .map(cb => cb.value));
+    return { selectedCollections: selectedCollections };
+}
+
+const displayCollections = async (collectionNames: string[]) => {
 
     const collections = document.getElementById("collections")!;
     collections.innerHTML = '';
 
     const legend = document.createElement("legend");
-    legend.innerText = "Search collection:";
+    legend.textContent = "Include collections:";
     collections.append(legend);
 
     for (const collectionName of collectionNames) {
 
-        const radioName = "radio" + collectionName;
+        const collectionDiv = document.createElement("div");
 
-        const radio = document.createElement("input");
-        radio.setAttribute("id", radioName);
-        radio.setAttribute("type", "radio");
-        radio.setAttribute("name", "collectionName");
-        radio.setAttribute("value", collectionName)
+        const checkboxName = "checkbox_" + collectionName;
+
+        const checkbox = document.createElement("input");
+        checkbox.setAttribute("id", checkboxName);
+        checkbox.setAttribute("type", "checkbox");
+        checkbox.setAttribute("name", "collectionName");
+        checkbox.setAttribute("value", collectionName)
+        checkbox.classList.add("collection-selector");
 
         const label = document.createElement("label");
-        label.setAttribute("for", radioName);
-        label.innerText = collectionName;
+        label.setAttribute("for", checkboxName);
+        label.textContent = collectionName;
 
-        radio.addEventListener("change", async (e: Event) => {
-            const target = e.target as HTMLInputElement;
-            state.selectedCollection = target.value;
-            await fireStructuredSearch(state);
-        });
-
-        collections.append(radio);
-        collections.append(label);
+        checkbox.addEventListener("change", async (_: Event) => await runSearch());
+        collectionDiv.append(checkbox);
+        collectionDiv.append(label);
+        collections.append(collectionDiv);
     }
 }
 
-const onLoad = async (ev: Event) => {
+const runSearch = async () => {
 
-    const state =
-        { selectedCollection: null };
+    // Clear UI
+    const resultColumns = document.getElementById('result_columns') as HTMLOListElement;
+    resultColumns.innerHTML = '';
 
+    // Determine the selected collections
+    const state = getUIState();
+
+    // Fire search
+    const collectionResponses = await fireStructuredSearch(state);
+
+    // Populate UI
+    // TODO ('Left')
+    if ('Right' in collectionResponses) {
+        for (const [collectionName, results] of collectionResponses.Right.entries()) {
+            const columnDiv = document.createElement("div");
+            const columnHead = document.createElement("p");
+            columnHead.textContent = collectionName;
+            columnDiv.appendChild(columnHead);
+            const resultColumn = document.createElement("ol");
+            resultColumn.id = 'result_columns_' + collectionName;
+            for (const result of results.unscored_results) {
+                resultColumn.appendChild(renderResult(collectionName, result));
+            }
+            columnDiv.appendChild(resultColumn);
+            resultColumns.appendChild(columnDiv);
+        }
+    }
+}
+
+const init = async () => {
     document
         .getElementById("structured_search")!
-        .addEventListener("input",
-            () => fireStructuredSearch(state));
+        .addEventListener("input", async () => await runSearch());
 
-    const url = "/collection"
-    await fetch(url, reqHeaders)
+    await fetch("/collection", reqHeaders)
         .then(resp => resp.json())
-        .then(cns => displayCollections(state, cns));
+        .then(cns => displayCollections(cns));
+
+    await runSearch();
 }
+
+init();
