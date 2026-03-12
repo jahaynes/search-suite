@@ -135,7 +135,7 @@ indexLocalFileImpl env writer metadataApi compactor registry collectionName file
     unsortedEDocs <- forM filePaths $ \fp ->
         fmap decodeUtf8' (C8.readFile fp) <&> \case
             Left{}    -> Left fp
-            Right utf -> Right $ Doc (T.pack fp) utf
+            Right utf -> Right $ Doc (T.pack ("file://" <> hostname env <> "/" <> fp)) utf
 
     let (failedPaths, unsortedDocs) = partitionEithers unsortedEDocs
 

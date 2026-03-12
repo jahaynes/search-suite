@@ -6,6 +6,7 @@ module Environment ( Environment (..)
 import Control.Monad         (unless)
 import Data.ByteString.Char8 (ByteString, pack)
 import Data.List.Split       (splitOn)
+import Network.HostName      (getHostName)
 import System.Directory      (createDirectoryIfMissing, doesFileExist)
 import System.Environment    (lookupEnv)
 import Text.Printf           (printf)
@@ -14,6 +15,7 @@ import Text.Read             (readMaybe)
 data Environment =
     Environment { collectionsDir :: !FilePath
                 , indexerBinary  :: !FilePath
+                , hostname       :: !String
                 , proxySetting   :: !(Maybe (ByteString, Int))
                 } deriving Show
 
@@ -28,10 +30,13 @@ loadEnvironment = do
     unless exists $
         error $ printf "FATAL: %s does not exist\n" idxbin
 
+    hostname <- getHostName
+
     proxy <- getProxySetting
 
     pure Environment { collectionsDir = colnsDir
                      , indexerBinary  = idxbin
+                     , hostname       = hostname
                      , proxySetting   = proxy
                      }
 

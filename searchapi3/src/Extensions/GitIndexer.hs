@@ -21,6 +21,7 @@ data GitIndexer =
 createGitIndexer :: Monad m => Indexer -> m GitIndexer
 createGitIndexer indexer = pure GitIndexer { indexGitPath = indexGitPathImpl indexer }
 
+-- Todo index 'local!' git repository
 indexGitPathImpl :: Indexer -> CollectionName -> FilePath -> IO (Either String ())
 indexGitPathImpl indexer collection fp =
     
