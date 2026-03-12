@@ -9,7 +9,7 @@ module Indexer ( Indexer (..)
 import Api                 (IndexRequest (..), Doc (..))
 import Compactor           (Compactor (..))
 import Component
-import Data.Warc.Body   -- TOO coupled to Warc
+import Data.Warc.Body   -- TOO coupled to Warc.  Make this an Extensions.WarcIndexer
 import Data.Warc.Key
 import Data.Warc.Header
 import Data.Warc.Value
@@ -24,14 +24,17 @@ import WarcFileReader      (WarcFileReader (..))
 import WarcFileWriter      (WarcFileWriter (..))
 
 import           Control.Concurrent.STM           (atomically)
-import           Control.Monad                    (forM, void)
+import           Control.Monad                    (forM, unless, void)
 import           Data.ByteString                  (ByteString)
+import qualified Data.ByteString.Char8      as C8
 import qualified Data.ByteString.Lazy.Char8 as L8
-import           Data.Either                      (lefts, rights)
-import           Data.Map.Strict
+import           Data.Either                      (lefts, partitionEithers, rights)
+import           Data.Functor                     ((<&>))
+import           Data.Map                         (Map)
 import qualified Data.Map.Strict            as M
 import qualified Data.Set                   as S
-import           Data.Text                        (Text, pack)
+import           Data.Text                        (Text)
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Data.Text.Encoding
 import           Data.Vector                      (Vector)
@@ -126,23 +129,24 @@ indexLocalFileImpl :: Environment
                    -> IO (Either String ())
 indexLocalFileImpl env writer metadataApi compactor registry collectionName filePaths = do
 
-    print "Called index local files"
-
     -- jsonify?
     -- Unnecessary packing
     -- safe-exceptions
-    unsortedDocs <- forM filePaths $ \fp -> do
-        t <- T.readFile fp
-        pure $ Doc (pack fp) t
+    unsortedEDocs <- forM filePaths $ \fp ->
+        fmap decodeUtf8' (C8.readFile fp) <&> \case
+            Left{}    -> Left fp
+            Right utf -> Right $ Doc (T.pack fp) utf
 
-    print unsortedDocs
+    let (failedPaths, unsortedDocs) = partitionEithers unsortedEDocs
 
-    print "foo!"
+    unless (null failedPaths) $ do
+        T.putStrLn "Skipped files with bad utf8:"
+        mapM_ putStrLn failedPaths
 
-    ei <- indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest unsortedDocs)
-
-    case ei of
-        Left e -> pure $ Left e
+    indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest unsortedDocs) >>= \case
+        Left e -> do
+            print e
+            pure $ Left e
         Right i -> do
             putStrLn $ "Indexed: " ++ show i ++ " documents."
             pure $ Right ()
