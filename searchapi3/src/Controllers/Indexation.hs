@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds,
              OverloadedStrings,
-             ScopedTypeVariables,
+             TupleSections,
              TypeOperators #-}
 
 module Controllers.Indexation where
@@ -13,25 +13,26 @@ import Page.Page
 import Types               (CollectionName)
 import Url                 (mkUrl, valText)
 
-import Control.Concurrent.Async          (mapConcurrently)
-import Control.Monad                     (forM_)
-import Control.Monad.Trans.Except        (ExceptT, runExceptT)
-import Data.Aeson                        (encode)
-import Data.ByteString.Lazy.Char8        (unpack)
-import Data.Char                         (isSpace)
-import Data.List.Split                   (chunksOf)
-import Data.Map.Strict                   (Map)
-import Data.Text                         (Text)
-import Data.Text.Encoding                (decodeUtf8')
-import Servant
+import           Control.Concurrent.Async.Extra (mapConcurrentlyBounded)
+import           Control.Monad.Trans.Except     (ExceptT, runExceptT)
+import           Data.Aeson                     (encode)
+import           Data.Bifunctor
+import           Data.ByteString.Lazy.Char8     (unpack)
+import           Data.Char                      (isSpace)
+import           Data.Either                    (partitionEithers)
+import           Data.Map                       (Map)
+import qualified Data.Map.Strict as M
+import           Data.Text                      (Text)
+import           Data.Text.Encoding             (decodeUtf8')
+import           Servant
 
 type IndexationApi = "indexDocs" :> Capture "col" CollectionName
                                  :> ReqBody '[JSON] IndexRequest
                                  :> Post '[JSON] (Either String Int)
 
-                :<|> "indexPage" :> Capture "col" CollectionName
-                                 :> ReqBody '[PlainText] String
-                                 :> Post '[JSON] (Either String ())
+                :<|> "indexUrlLines" :> Capture "col" CollectionName
+                                     :> ReqBody '[PlainText] String
+                                     :> Post '[JSON] (Map String [String])
 
                 :<|> "indexLocalFiles" :> Capture "col" CollectionName
                                        :> ReqBody '[PlainText] String
@@ -57,7 +58,7 @@ indexationServer :: Fetcher (ExceptT Error IO)
                  -> ServerT IndexationApi IO 
 indexationServer fetcher indexer
     = indexDocs indexer
- :<|> fetchUrlLines fetcher indexer
+ :<|> indexUrlLines fetcher indexer
  :<|> indexLocalFilesImpl indexer
  :<|> indexLocalWarcFile indexer
  :<|> deleteDocument indexer
@@ -65,22 +66,26 @@ indexationServer fetcher indexer
 
 -- TODO move out of controller
 -- TODO message
-fetchUrlLines :: Fetcher (ExceptT Error IO)
+indexUrlLines :: Fetcher (ExceptT Error IO)
               -> Indexer
               -> CollectionName
               -> String
-              -> IO (Either String ())
-fetchUrlLines fetcher indexer col strUrlLines = do
+              -> IO (Map String [String])
+indexUrlLines fetcher indexer col strUrlLines = do
 
-    let chunks = chunksOf 4 . filter (not . all isSpace) . map trim . lines $ strUrlLines
+    let maxConcurrency = 10
 
-    forM_ chunks $ \chunk -> do
+    let urls = filter (not . all isSpace)
+             . map trim
+             $ lines strUrlLines
 
-        results <- mapConcurrently fetchUrlLine chunk
-        -- TODO log instead
-        mapM_ print results
+    (fails, successes) <-   partitionEithers
+                        .   zipWith (\u -> bimap (u,) (u,)) urls
+                        <$> mapConcurrentlyBounded maxConcurrency fetchUrlLine urls
 
-    pure $ Right ()
+    pure . M.insert "success" (map fst successes)
+         . M.insert "failure" (map fst fails)
+         $ mempty
 
     where
     trim = reverse . dropWhile isSpace . reverse . dropWhile isSpace
