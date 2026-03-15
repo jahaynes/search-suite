@@ -57,7 +57,7 @@ pub fn rank_result_bm25(
 ) -> Scored {
     let DocOffsetsRead(doc_offsets) = ir.doc_offsets;
     let num_docs = doc_offsets.len() as u64;
-    let avg_doc_len = ir.total_doc_len as u32 / num_docs as u32;
+    let avg_doc_len = (ir.total_doc_len / num_docs) as u32;
 
     match find_doc(ir, DocId(doc_id)) {
         None => panic!("shouldn't happen (missing docid {})", doc_id),
