@@ -67,14 +67,14 @@ fn main() {
                       println!("{}", serialized);
                     },
 
-    "query"      => { let query_params = parse_query_params(&args);
+    "query"      => { let query_params = parse_query_params_stdin(&args);
                       with_index_read(&query_params.base_path, &|ir| {
                           let results    = query(&ir, &query_params);
                           let serialized = serde_json::to_string(&results).unwrap();
                           println!("{}", serialized);
                     })},
 
-    "unscored"   => { let query_params = parse_query_params(&args);
+    "unscored"   => { let query_params = parse_query_params_stdin(&args);
                       with_index_read(&query_params.base_path, &|ir| {
                           let results    = unscored_query(&ir, &query_params);
                           let serialized = serde_json::to_string(&results).unwrap();

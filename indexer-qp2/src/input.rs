@@ -9,19 +9,32 @@ use shared_proto::protocol::types::InputDoc;
 use rand::prelude::*;
 use std::io::{Read, stdin};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Scoring {
     BM25
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Mode {
     Regex
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct QueryParams {
+    pub base_path: String,        //  --base_path=
+    pub max_results: Option<u32>, //  --max_results=
+    pub scoring: Option<Scoring>, //  --scoring=
+    pub mode: Option<Mode>,       //  --mode=regex
+    pub query_terms: Vec<Term>,   //  stdin
 }
 
 pub fn docs_from_stdin_cbor() -> Vec<Doc> {
     let mut buf: Vec<u8> = Vec::new();
     stdin().read_to_end(&mut buf).unwrap();
+    docs_from_cbor(buf)
+}
+
+pub fn docs_from_cbor(buf: Vec<u8>) -> Vec<Doc> {
     let decoded: Vec<InputDoc> = Vec::uncbor(&buf).expect("cborg issue");
     let mut docs = Vec::<Doc>::new();
     for input_doc in decoded {
@@ -32,16 +45,13 @@ pub fn docs_from_stdin_cbor() -> Vec<Doc> {
     docs
 }
 
-#[derive(Debug)]
-pub struct QueryParams { pub base_path:   String            //  --base_path=
-                       , pub max_results: Option<u32>       //  --max_results=
-                       , pub scoring:     Option<Scoring>   //  --scoring=
-                       , pub mode:        Option<Mode>      //  --mode=regex
-                       , pub query_terms: Vec<Term>         //  stdin
-                       }
+pub fn parse_query_params_stdin(args: &Vec<String>) -> QueryParams {
+    let mut buffer = String::new();
+    stdin().read_to_string(&mut buffer).unwrap();
+    parse_query_params(args, buffer)
+}
 
-pub fn parse_query_params(args: &Vec<String>) -> QueryParams {
-
+pub fn parse_query_params(args: &Vec<String>, input: String) -> QueryParams {
     enum ArgMode {
         BasePath,
         MaxResults,
@@ -92,16 +102,11 @@ pub fn parse_query_params(args: &Vec<String>) -> QueryParams {
         }
     }
 
-    // Extract query terms from STDIN
-
-    let mut buffer = String::new();
-    stdin().read_to_string(&mut buffer).unwrap();
-
     let terms =
         match mode {
             // In the case of Regex, let the raw string through
-            Some(Mode::Regex) => vec!(Term(buffer)),
-            None              => normalise(&buffer)
+            Some(Mode::Regex) => vec!(Term(input)),
+            None              => normalise(&input)
         };
 
     return QueryParams { base_path   : base_path.unwrap_or_else(|| panic!("unspecified: --base-path"))
