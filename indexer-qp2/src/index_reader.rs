@@ -278,6 +278,7 @@ pub fn with_vec_align<A,V>(file_name: &str,
         debug_assert!(prefix.is_empty());
         debug_assert!(suffix.is_empty(), "non-empty suffix on: {}", file_name);
         x = f(data);
+        std::mem::drop(mmap);
     };
     x
 }
@@ -292,6 +293,7 @@ pub fn with_vec_align_mut<A,V>(file_name: &str,
         debug_assert!(prefix.is_empty());
         debug_assert!(suffix.is_empty());
         x = f(data);
+        std::mem::drop(mmap);
     };
     x
 }
@@ -303,6 +305,7 @@ pub fn with_vec<A>(file_name: &str,
     unsafe {
         let data = Mmap::map(&file).expect("failed to map u8 file");
         x = f(&data);
+        std::mem::drop(data);
     };
     x
 }
@@ -314,6 +317,7 @@ pub fn with_vec_mut<A>(file_name: &str,
     unsafe {
         let data = Mmap::map(&file).expect("failed to map u8 file");
         x = f(&data);
+        std::mem::drop(data);
     };
     x
 }
@@ -328,6 +332,7 @@ pub fn with_mut_vec<A, V>(file_name: &str,
         debug_assert!(prefix.is_empty());
         debug_assert!(suffix.is_empty());
         x = f(data);
+        std::mem::drop(mmap);
     };
     x
 }
