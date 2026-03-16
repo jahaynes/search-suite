@@ -5,13 +5,13 @@
 
 module Controllers.Indexation where
 
-import Api                 (Doc (Doc), IndexRequest (IndexRequest))
-import Errors.Errors       (Error)
-import Indexer             (Indexer (..))
-import Network.Fetcher     (Fetcher (fetch))
+import Api             (Doc (Doc), IndexRequest (IndexRequest))
+import Errors.Errors   (Error)
+import Indexer         (Indexer (..))
+import Network.Fetcher (Fetcher (fetch))
 import Page.Page
-import Types               (CollectionName)
-import Url                 (mkUrl, valText)
+import Types           (CollectionName)
+import Url             (mkUrl, valText)
 
 import           Control.Concurrent.Async.Extra (mapConcurrentlyBounded)
 import           Control.Monad.Trans.Except     (ExceptT, runExceptT)
@@ -38,10 +38,6 @@ type IndexationApi = "indexDocs" :> Capture "col" CollectionName
                                        :> ReqBody '[PlainText] String
                                        :> Post '[JSON] (Either String ())
 
-                :<|> "indexLocalWarcFile" :> Capture "col" CollectionName
-                                          :> ReqBody '[PlainText] String
-                                          :> Post '[JSON] (Either String ())
-
                 :<|> "deleteDoc" :> Capture "col" CollectionName
                                  :> ReqBody '[PlainText] String
                                  :> Delete '[JSON] (Either String ())
@@ -60,7 +56,6 @@ indexationServer fetcher indexer
     = indexDocs indexer
  :<|> indexUrlLines fetcher indexer
  :<|> indexLocalFilesImpl indexer
- :<|> indexLocalWarcFile indexer
  :<|> deleteDocument indexer
  :<|> isDocDeleted indexer
 

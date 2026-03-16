@@ -4,18 +4,20 @@
 
 module Controllers.Controller ( runController ) where
 
-import Compactor               (Compactor)
-import Controllers.Collections 
-import Controllers.Diagnostic
-import Controllers.Indexation
-import Controllers.Query
-import Environment             (Environment)
-import Errors.Errors           (Error)
-import Indexer                 (Indexer)
-import Network.Fetcher         (Fetcher)
-import Query.QueryProcessor    (QueryProcessor)
-import Registry                (Registry)
-import WarcFileReader          (WarcFileReader (..))
+import Compactor                  (Compactor)
+import Controllers.Collections    (CollectionsApi, collectionsServer)
+import Controllers.Diagnostic     (DiagnosticApi, diagnosticServer)
+import Controllers.Indexation     (IndexationApi, indexationServer)
+import Controllers.Query          (QueryApi, queryServer)
+import Controllers.WarcIndexation (WarcIndexationApi, warcIndexationServer)
+import Environment                (Environment)
+import Extensions.WarcIndexer     (WarcIndexer)
+import Errors.Errors              (Error)
+import Indexer                    (Indexer)
+import Network.Fetcher            (Fetcher)
+import Query.QueryProcessor       (QueryProcessor)
+import Registry                   (Registry)
+import WarcFileReader             (WarcFileReader (..))
 
 import Control.Lens                      ((&), (.~))
 import Control.Monad.IO.Class            (liftIO)
@@ -32,6 +34,7 @@ import Servant.Swagger.UI                (SwaggerSchemaUI, swaggerSchemaUIServer
 type SearchApi = CollectionsApi
             :<|> QueryApi
             :<|> IndexationApi
+            :<|> WarcIndexationApi
             :<|> DiagnosticApi
             :<|> Raw
 
@@ -50,13 +53,14 @@ searchApiSwagger = toSwagger searchApi
 runController :: Compactor
               -> Environment
               -> Indexer
+              -> WarcIndexer
               -> Fetcher (ExceptT Error IO)
               -> QueryProcessor
               -> WarcFileReader
               -> Registry
               -> (ByteString -> IO ())
               -> IO ()
-runController compactor env indexer fetcher qp warcFileReader registry _logger =
+runController compactor env indexer warcIndexer fetcher qp warcFileReader registry _logger =
 
     run 8081 . simpleCors
              . prometheus def 
@@ -66,6 +70,7 @@ runController compactor env indexer fetcher qp warcFileReader registry _logger =
             :<|> collectionsServer compactor env registry
             :<|> queryServer qp registry warcFileReader
             :<|> indexationServer fetcher indexer
+            :<|> warcIndexationServer warcIndexer
             :<|> diagnosticServer registry
             :<|> serveDirectoryFileServer "frontend"
 

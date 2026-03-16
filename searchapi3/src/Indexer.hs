@@ -6,22 +6,16 @@ module Indexer ( Indexer (..)
                , createIndexer
                ) where
 
-import Api                 (IndexRequest (..), Doc (..))
-import Compactor           (Compactor (..))
+import Api             (IndexRequest (..), Doc (..))
+import Compactor       (Compactor (..))
 import Component
-import Data.Warc.Body   -- TOO coupled to Warc
-import Data.Warc.Key
-import Data.Warc.Header
-import Data.Warc.Value
-import Data.Warc.WarcEntry (WarcEntry (..), decompress)
-import Environment         (Environment (..))
-import Metadata            (MetadataApi (generateMetadata))
-import Protocol.Encode     (lcbor, unlcbor)
-import Protocol.Types      (IndexReply (..), Input (..), InputDoc (..))
-import Registry            (Registry (..))
+import Environment     (Environment (..))
+import Metadata        (MetadataApi (generateMetadata))
+import Protocol.Encode (lcbor, unlcbor)
+import Protocol.Types  (IndexReply (..), Input (..), InputDoc (..))
+import Registry        (Registry (..))
 import Types
-import WarcFileReader      (WarcFileReader (..))
-import WarcFileWriter      (WarcFileWriter (..))
+import WarcFileWriter  (WarcFileWriter (..))
 
 import           Control.Concurrent.STM           (atomically)
 import           Control.Monad                    (forM, void)
@@ -34,9 +28,7 @@ import qualified Data.Set                   as S
 import           Data.Text                        (Text, pack)
 import qualified Data.Text.IO as T
 import           Data.Text.Encoding
-import           Data.Vector                      (Vector)
 import qualified Data.Vector                as V
-import           Debug.Trace                      (trace)
 import           System.Exit
 import           System.Process.ByteString        (readProcessWithExitCode)
 import qualified System.Process.ByteString.Lazy as PL
@@ -46,22 +38,19 @@ import           UnliftIO.Exception               (catchIO, finally)
 data Indexer =
     Indexer { indexDocs          :: !(CollectionName -> IndexRequest -> IO (Either String Int))
             , indexLocalFiles    :: !(CollectionName -> [FilePath] -> IO (Either String ()))
-            , indexLocalWarcFile :: !(CollectionName -> FilePath -> IO (Either String ()))
             , deleteDocument     :: !(CollectionName -> String -> IO (Either String ()))
             , isDocDeleted       :: !(CollectionName -> String -> IO (Either String (Map Text Int)))
             }
 
 createIndexer :: Environment
-              -> WarcFileReader
               -> WarcFileWriter
               -> MetadataApi
               -> Compactor
               -> Registry
               -> Indexer
-createIndexer env wfr writer metadataApi cpc reg =
+createIndexer env writer metadataApi cpc reg =
     Indexer { indexDocs          = indexDocsImpl env writer metadataApi cpc reg
             , indexLocalFiles    = indexLocalFileImpl env writer metadataApi cpc reg
-            , indexLocalWarcFile = indexLocalWarcFileImpl env wfr writer metadataApi cpc reg
             , deleteDocument     = deleteDocumentImpl env reg
             , isDocDeleted       = isDocDeletedImpl env reg
             }
@@ -139,50 +128,6 @@ indexLocalFileImpl env writer metadataApi compactor registry collectionName file
         Right i -> do
             putStrLn $ "Indexed: " ++ show i ++ " documents."
             pure $ Right ()
-
--- TODO unnecessary encoding/decoding?
-indexLocalWarcFileImpl :: Environment
-                       -> WarcFileReader
-                       -> WarcFileWriter
-                       -> MetadataApi
-                       -> Compactor
-                       -> Registry
-                       -> CollectionName
-                       -> FilePath
-                       -> IO (Either String ())
-indexLocalWarcFileImpl env warcFileReader writer metadataApi compactor registry collectionName warcFile =
-
-    batchedRead warcFileReader
-                warcFile
-                newIndexify
-
-    where
-    newIndexify :: Vector WarcEntry -> IO ()
-    newIndexify ds = do
-
-        let ds' = V.mapMaybe toDoc ds -- TODO report failures
-
-        V.mapM_ (\d -> indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest [d])) ds'
-
-        where
-        toDoc :: WarcEntry -> Maybe Doc
-        toDoc we = do
-            let (WarcEntry header (UncompressedBody body)) = decompress we
-
-            StringValue uri <- getValue (OptionalKey WarcTargetURI) header
-            
-            case getValue (MandatoryKey WarcType) header of
-                Just (StringValue "response") -> pure ()
-                _                             -> Nothing
-
-            uri'  <- case decodeUtf8' uri of
-                         Left e -> trace (show (e, uri)) Nothing    -- TODO: remove trace
-                         Right x -> Just x
-            body' <- case decodeUtf8' body of
-                         Left e -> trace (show (e, uri)) Nothing    -- TODO: remove trace
-                         Right x -> Just x
-
-            pure $ Doc uri' body'
 
 {- Instead of a complicated locking mechanism,
    this just takes write locks one-by-one and send delete everywhere -}

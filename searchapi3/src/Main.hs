@@ -5,6 +5,7 @@ module Main where
 import Compactor              (createCompactor)
 import Controllers.Controller (runController)
 import Environment            (Environment (..), loadEnvironment)
+import Extensions.WarcIndexer (createWarcIndexer)
 import Importer               (Importer (importCollection), createImporter)
 import Indexer                (createIndexer)
 import Network.Fetcher        (createFetcher)
@@ -53,11 +54,14 @@ main = do
                                   compactor
 
     let indexer = createIndexer env
-                                warcReader
                                 warcWriter
                                 metadataApi
                                 compactor
                                 registry
+
+    let warcIndexer = createWarcIndexer warcReader
+                                        indexer
+                                        (logger WarcIndexerLogger)
 
     fetcher <- createFetcher (proxySetting env)
 
@@ -76,6 +80,7 @@ main = do
     runController compactor
                   env
                   indexer
+                  warcIndexer
                   fetcher
                   queryProcessor
                   warcReader

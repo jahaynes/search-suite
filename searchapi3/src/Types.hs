@@ -72,4 +72,5 @@ data Logger = CompactorLogger
             | QueryProcessorLogger
             | RegistryLogger
             | WarcFileReaderLogger
+            | WarcIndexerLogger
                 deriving Show
