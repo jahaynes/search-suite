@@ -3,17 +3,17 @@ module CompactorStrategy ( fibSet, hybridStrategy, largestFibonacciStrategy, pai
 import           Component     ( Component )
 import           Types         ( numDocs )
 
-import           Data.IntSet                 (IntSet)
-import qualified Data.IntSet           as IS
-import           Data.List                   (maximumBy, sortBy)
-import           Data.Ord                    (comparing)
-import           Data.Set                    (Set)
-import qualified Data.Set              as S
+import           Data.IntSet       (IntSet)
+import qualified Data.IntSet as IS
+import           Data.List         (maximumBy, sortBy)
+import           Data.Ord          (comparing)
+import           Data.Set          (Set)
+import qualified Data.Set as S
 
 fibSet :: IntSet
-fibSet = IS.fromAscList $! take 100 (tail fibs)
+fibSet = IS.fromAscList $! take 100 (drop 1 fibs)
     where
-    fibs = 0 : 1 : zipWith (+) fibs (tail fibs)
+    fibs = 0 : 1 : zipWith (+) fibs (drop 1 fibs)
 
 hybridStrategy :: Set Component
                -> Maybe (String, Component, Component)
@@ -34,7 +34,9 @@ nonFibonacciStrategy :: [Component]
 nonFibonacciStrategy components nonFibComponents =
     -- Find gap
             let maxNonFib    = maximum nonFibComponents
-                Just nextFib = IS.lookupGT (numDocs maxNonFib) fibSet
+                nextFib      = case IS.lookupGT (numDocs maxNonFib) fibSet of
+                                   Nothing -> error "Out of Fibonacci numbers"
+                                   Just nf -> nf
                 gap          = nextFib - numDocs maxNonFib
                 fillers      = filter (\c -> numDocs c == gap)
                              $ filter (\c -> c /= maxNonFib) components
