@@ -1,5 +1,5 @@
-{-# LANGUAGE OverloadedStrings
-           , DeriveGeneric     #-}
+{-# LANGUAGE DeriveGeneric
+           , OverloadedStrings #-}
 
 module Data.Warc.Header where
 
@@ -33,10 +33,11 @@ setValue key    Nothing (WarcHeader ver headers) = WarcHeader ver (filter (\(Hea
 setValue key (Just val) (WarcHeader ver headers) = WarcHeader ver (go headers)
     where
     go [] = [HeaderLine key val]
-    go (h@(HeaderLine k v):hs)
+    go (h@(HeaderLine k _):hs)
         | key == k  = HeaderLine key val : hs
         | otherwise = h : go hs 
 
+buildEq :: ToBuilder a => a -> a -> Bool
 buildEq a b = (toLazyByteString . toBuilder) a == (toLazyByteString . toBuilder) b  --TODO
 
 warcHeader :: Parser WarcHeader
