@@ -22,6 +22,10 @@ enum Mode {
     Uri
 }
 
+type Debounce = {
+    currentSearchId: number
+};
+
 const reqHeaders: RequestInit = {
     cache: 'no-cache',
     headers: { 'Content-Type': 'application/json' }
@@ -114,7 +118,7 @@ const getUIState = (): QueryUIState => {
     return { selectedCollections: selectedCollections };
 }
 
-const displayCollections = async (collectionNames: string[]) => {
+const displayCollections = async (debounce: Debounce, collectionNames: string[]) => {
 
     const collections = document.getElementById("collections")!;
     collections.innerHTML = '';
@@ -140,18 +144,26 @@ const displayCollections = async (collectionNames: string[]) => {
         label.setAttribute("for", checkboxName);
         label.textContent = collectionName;
 
-        checkbox.addEventListener("change", async (_: Event) => await runSearch());
+        checkbox.addEventListener("change", async (_: Event) => await runSearch(debounce));
         collectionDiv.append(checkbox);
         collectionDiv.append(label);
         collections.append(collectionDiv);
     }
 }
 
-const runSearch = async () => {
+const runSearch = async (debounce: Debounce) => {
+
+    // Prepare debouncing
+    const resultDebounce = document.getElementById('result_debounce') as HTMLDivElement;
+    resultDebounce.innerHTML = '';
+
+    const newSearchId = Math.random();
+    debounce.currentSearchId = newSearchId;
 
     // Clear UI
-    const resultColumns = document.getElementById('result_columns') as HTMLOListElement;
-    resultColumns.innerHTML = '';
+    const resultColumns = document.createElement('div');
+    resultColumns.id = 'result-columns';
+    resultColumns.classList.add('grid');
 
     // Determine the selected collections
     const state = getUIState();
@@ -175,19 +187,26 @@ const runSearch = async () => {
             columnDiv.appendChild(resultColumn);
             resultColumns.appendChild(columnDiv);
         }
+
+        if (newSearchId === debounce.currentSearchId) {
+            resultDebounce.appendChild(resultColumns);
+        }
     }
 }
 
 const init = async () => {
+
+    const debounce = { currentSearchId: Math.random() }
+
     document
         .getElementById("structured_search")!
-        .addEventListener("input", async () => await runSearch());
+        .addEventListener("input", async () => await runSearch(debounce));
 
     await fetch("/collection", reqHeaders)
         .then(resp => resp.json())
-        .then(cns => displayCollections(cns));
+        .then(cns => displayCollections(debounce, cns));
 
-    await runSearch();
+    await runSearch(debounce);
 }
 
 init();
