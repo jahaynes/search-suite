@@ -3,14 +3,14 @@
 module Main where
 
 import           Errors.Errors
-import           Job.YamlJobs
+import           Job.YamlJobs                   (Jobs (..), initialise, j_maxPages, readJobs)
 import qualified Network.Fetcher           as F
 
 import           Page.Page
 import           Page.Scrape
 import qualified Pipeline.AllowedUrls      as A
 import qualified Pipeline.Processor        as P
-import qualified Pipeline.TimedFrontier    as TF
+-- import qualified Pipeline.TimedFrontier    as TF
 import qualified Pipeline.SqlTimedFrontier as STF
 import qualified Reporter.Reporter         as R
 import qualified Client.SearchApiClient    as C
@@ -19,7 +19,6 @@ import qualified Storage.WarcFileWriter    as W
 
 import           Control.Concurrent         (threadDelay)
 import           Control.Concurrent.Async
-import           Control.Monad.Extra
 import           Control.Monad.IO.Class     (liftIO)
 import           Control.Monad.Trans.Except (ExceptT, runExceptT)
 import           Data.ByteString.Char8      (ByteString)
@@ -42,9 +41,9 @@ getJobsYaml =
 main :: IO ()
 main = do
 
-    Jobs jobs <- getJobsYaml >>= readJobs
+    Jobs js <- getJobsYaml >>= readJobs
 
-    forConcurrently_ jobs $ \job -> do
+    forConcurrently_ js $ \job -> do
 
         initialise job
 
@@ -61,41 +60,61 @@ main = do
         reporter <- R.create
         md5Store <- S.create
 
-        -- TODO investigate this
-        replicateConcurrently_ 8 (run reporter md5Store processor)
 
-        -- run reporter md5Store processor
+        run reporter md5Store processor (j_maxPages job)
 
 run :: R.Reporter IO
     -> S.Store ByteString (ExceptT Error IO)
     -> P.Processor (ExceptT Error IO)
+    -> Maybe Int
     -> IO ()
-run reporter md5store processor = do
+run reporter md5store processor maxPages = do
 
-    (runExceptT $ P.p_step processor) >>= \case
+    loop 0
 
-        Left e -> do R.report reporter e
-                     run reporter md5store processor
+    where
+    loop :: Int -> IO ()
+    loop n =
 
-        Right Nothing -> do putStrLn "Thread sleeping"
-                            threadDelay 1000000
-                            run reporter md5store processor
+        case maxPages of
 
-        Right (Just page) -> do
+            Just mp | n >= mp ->
 
-            eSeen <- runExceptT $ S.s_member md5store (p_md5 page)
+                putStrLn "Hit page limit"
 
-            case eSeen of
-                Left e -> do R.report reporter e
-                             run reporter md5store processor
-                Right seen -> do
-                    unless seen $ do
-                        sr <- runExceptT $ do
-                            S.s_put md5store (p_md5 page)
-                            let urls = scrape page
-                            P.p_submit processor (Just $ p_url page) urls
-                        case sr of
-                            Left e -> do R.report reporter e
-                                         run reporter md5store processor
-                            Right () -> pure ()
-                    run reporter md5store processor
+            _ ->
+
+                runExceptT (P.p_step processor) >>= \case
+
+                    Left e -> do
+                        R.report reporter e
+                        loop n
+
+                    Right Nothing -> do
+                        putStrLn "Thread sleeping"
+                        threadDelay 1000000
+                        loop n
+
+                    Right (Just page) ->
+
+                        runExceptT (S.s_member md5store (p_md5 page)) >>= \case
+
+                            Left e -> do
+                                R.report reporter e
+                                loop n
+
+                            Right True ->
+                                loop n
+
+                            Right False -> do
+                                sr <- runExceptT $ do
+                                    S.s_put md5store (p_md5 page)
+                                    let urls = scrape page
+                                    P.p_submit processor (Just $ p_url page) urls
+
+                                case sr of
+                                        Left e -> do
+                                            R.report reporter e
+                                            loop n
+                                        Right () ->
+                                            loop (n+1)

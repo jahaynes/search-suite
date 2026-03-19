@@ -7,6 +7,7 @@ jobs:
         param: "/home/john/nytimes.warc"
     seedUrls:
       - "https://www.nytimes.com/"
+    maxPages: 30
   -
     actions:
       -
@@ -14,6 +15,7 @@ jobs:
         param: "/home/john/msnbc.warc"
     seedUrls:
       - "https://www.msnbc.com/"
+    maxPages: 30
   -
     actions:
       -
@@ -21,5 +23,4 @@ jobs:
         param: "/home/john/guardian.warc"
     seedUrls:
       - "https://www.theguardian.com"
-
-
+    maxPages: 30

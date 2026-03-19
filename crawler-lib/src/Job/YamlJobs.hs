@@ -2,7 +2,12 @@
              DeriveGeneric,
              LambdaCase #-}
 
-module Job.YamlJobs where
+module Job.YamlJobs ( Action (..)
+                    , Job (..)
+                    , Jobs (..)
+                    , initialise
+                    , readJobs
+                    ) where
 
 import           Control.Exception.Safe
 import           Data.Aeson
@@ -25,6 +30,7 @@ newtype Jobs =
 data Job =
     Job { j_actions  :: ![Action]
         , j_seedUrls :: ![String]
+        , j_maxPages :: !(Maybe Int)
         } deriving Generic
 
 instance FromJSON Job where
@@ -46,7 +52,7 @@ chop :: String -> String
 chop = concat . drop 1 . splitOn "_"
 
 initialise :: Job -> IO ()
-initialise (Job actions _) = mapM_ initialiseAction actions
+initialise (Job actions _ _) = mapM_ initialiseAction actions
     where
     initialiseAction (Action "writeWarc" warcFile) =
         catchIO (removeFile warcFile)
