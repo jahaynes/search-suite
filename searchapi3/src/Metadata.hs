@@ -27,7 +27,7 @@ import           Data.Char                    (isSpace)
 import           Data.Functor                 ((<&>))
 import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict as M
-import           Data.Maybe                   (catMaybes, mapMaybe, maybeToList)
+import           Data.Maybe                   (catMaybes)
 import           Data.Text                    (Text)
 import           Data.Text.Encoding
 import           Data.Word                    (Word64)
@@ -267,7 +267,6 @@ scrapeMetadata    (WarcEntry wh (UncompressedBody body)) =
                           StringValue uri -> Just uri
                           _               -> Nothing
 
-            StringValue uri <- getValue (MandatoryKey WarcRecordId) wh
             if "file://" `C8.isPrefixOf` uri
                 then Just ("title", decodeUtf8 . last . C8.split '/' $ uri) -- TODO decodeUtf8 is partial?
                 else Nothing

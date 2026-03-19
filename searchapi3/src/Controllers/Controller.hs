@@ -11,9 +11,10 @@ import Controllers.Indexation     (IndexationApi, indexationServer)
 import Controllers.Query          (QueryApi, queryServer)
 import Controllers.WarcIndexation (WarcIndexationApi, warcIndexationServer)
 import Environment                (Environment)
+import Errors.Errors              (Error) -- TODO - used?
 import Extensions.WarcIndexer     (WarcIndexer)
-import Errors.Errors              (Error)
 import Indexer                    (Indexer)
+import Logger                     (Logger)
 import Network.Fetcher            (Fetcher)
 import Query.QueryProcessor       (QueryProcessor)
 import Registry                   (Registry)
@@ -22,7 +23,6 @@ import WarcFileReader             (WarcFileReader (..))
 import Control.Lens                      ((&), (.~))
 import Control.Monad.IO.Class            (liftIO)
 import Control.Monad.Trans.Except        (ExceptT)
-import Data.ByteString.Char8             (ByteString)
 import Data.Swagger                      (Swagger, info, title, version)
 import Network.Wai.Handler.Warp          (run)
 import Network.Wai.Middleware.Cors       (simpleCors)
@@ -58,9 +58,9 @@ runController :: Compactor
               -> QueryProcessor
               -> WarcFileReader
               -> Registry
-              -> (ByteString -> IO ())
+              -> Logger
               -> IO ()
-runController compactor env indexer warcIndexer fetcher qp warcFileReader registry _logger =
+runController compactor env indexer warcIndexer fetcher qp warcFileReader registry logger =
 
     run 8081 . simpleCors
              . prometheus def 
@@ -68,7 +68,7 @@ runController compactor env indexer warcIndexer fetcher qp warcFileReader regist
              . hoistServer searchApiWithDoc liftIO 
              $ swaggerSchemaUIServerT searchApiSwagger
             :<|> collectionsServer compactor env registry
-            :<|> queryServer qp registry warcFileReader
+            :<|> queryServer qp registry warcFileReader logger
             :<|> indexationServer fetcher indexer
             :<|> warcIndexationServer warcIndexer
             :<|> diagnosticServer registry

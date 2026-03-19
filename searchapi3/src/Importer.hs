@@ -5,17 +5,17 @@ module Importer ( Importer (..)
 
 import Compactor 
 import Component
-import Environment ( Environment (..) )
-import Registry    ( Registry, registerInPlace )
-
+import Environment   ( Environment (..) )
 import ImporterTypes
+import Logger        ( Logger (..) )
+import Registry      ( Registry, registerInPlace )
 import Types
 
 import Control.Concurrent.STM    (atomically)
 import Control.Exception.Safe    (catchIO)
 import Control.Monad             (unless, when)
 import Data.Aeson                (eitherDecodeStrict')
-import Data.ByteString.Char8     (ByteString, unpack)
+import Data.ByteString.Char8     (ByteString, pack)
 import Data.Either               (partitionEithers)
 import GHC.IO.Exception          (ExitCode (..))
 import System.Directory          (canonicalizePath, getDirectoryContents)
@@ -25,16 +25,17 @@ newtype Importer =
     Importer { importCollection :: CollectionName -> IO (Either ByteString ())
              }
 
-createImporter :: Environment -> Registry -> Compactor -> Importer
-createImporter env reg cpc = 
-    Importer { importCollection = importCollectionImpl env reg cpc}
+createImporter :: Environment -> Registry -> Compactor -> Logger -> Importer
+createImporter env reg cpc logger = 
+    Importer { importCollection = importCollectionImpl env reg cpc logger }
 
 importCollectionImpl :: Environment
                      -> Registry
                      -> Compactor
+                     -> Logger
                      -> CollectionName
                      -> IO (Either ByteString ())
-importCollectionImpl env registry compactor collectionName = do
+importCollectionImpl env registry compactor logger collectionName = do
 
     let name = getCollectionPath env collectionName
 
@@ -48,7 +49,7 @@ importCollectionImpl env registry compactor collectionName = do
 
     unless (null failures)
            $ do putStrLn "WARNING, FAILED IMPORTS"
-                mapM_ print failures
+                mapM_ (infoBs logger . (\x -> [x])) failures
 
     mapM_ (atomically . registerInPlace registry collectionName) components
 
@@ -63,7 +64,7 @@ importCollectionImpl env registry compactor collectionName = do
       print progress
       when progress loadingCompaction
 
-    loadComponent :: FilePath -> IO (Either String Component)
+    loadComponent :: FilePath -> IO (Either ByteString Component)
     loadComponent componentPath =
         let job = do let execparams = [ "num_docs"
                                       , componentPath
@@ -74,8 +75,8 @@ importCollectionImpl env registry compactor collectionName = do
                      case exitcode of
                        ExitSuccess ->
                          case eitherDecodeStrict' stdout of
-                           Left e -> pure $ Left e
+                           Left e  -> pure . Left $ pack e
                            Right r -> Right <$> createComponent (num_docs r) componentPath
-                       _ -> pure $ Left (unpack stderr)
-            handle ioe = pure $ Left (show ioe)
+                       _ -> pure $ Left stderr
+            handle ioe = pure . Left . pack $ show ioe
         in catchIO job handle

@@ -7,10 +7,11 @@ module Extensions.WarcIndexer ( WarcIndexer (..)
 
 import Api                 (Doc (..), IndexRequest (..))
 import Data.Warc.Body
-import Data.Warc.Key
 import Data.Warc.Header
+import Data.Warc.Key
 import Data.Warc.Value
 import Data.Warc.WarcEntry (WarcEntry (..), decompress)
+import Logger              (Logger (..))
 import Indexer             (Indexer (..))
 import Types
 import WarcFileReader      (WarcFileReader (..))
@@ -21,7 +22,6 @@ import qualified Data.ByteString.Char8 as C8
 import           Data.Text.Encoding          (decodeUtf8')
 import           Data.Vector                 (Vector)
 import qualified Data.Vector as V
-import           Debug.Trace                 (trace)
 
 newtype WarcIndexer =
     WarcIndexer { indexLocalWarcFile :: CollectionName
@@ -30,7 +30,7 @@ newtype WarcIndexer =
 
 createWarcIndexer :: WarcFileReader
                   -> Indexer
-                  -> (ByteString -> IO ())
+                  -> Logger
                   -> WarcIndexer
 createWarcIndexer warcFileReader indexer logger =
     WarcIndexer { indexLocalWarcFile = indexLocalWarcFileImpl warcFileReader indexer logger }
@@ -38,7 +38,7 @@ createWarcIndexer warcFileReader indexer logger =
 -- TODO unnecessary encoding/decoding?
 indexLocalWarcFileImpl :: WarcFileReader
                        -> Indexer
-                       -> (ByteString -> IO ())
+                       -> Logger
                        -> CollectionName
                        -> FilePath
                        -> IO (Either String ())

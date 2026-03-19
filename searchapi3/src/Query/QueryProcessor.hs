@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase
            , OverloadedStrings
+           , QuasiQuotes
            , ScopedTypeVariables #-}
 
 module Query.QueryProcessor ( QueryProcessor (..)
@@ -8,11 +9,12 @@ module Query.QueryProcessor ( QueryProcessor (..)
 
 import Component                 ( Component )
 import Environment               ( Environment (..) )
+import Logger                    ( Logger (..) )
+import Metadata                  ( Metadata (..), MetadataApi (..) )
 import Query.QueryParams         ( QueryParams (..) )
 import Query.QueryParser         ( Clause (..), Op (..) )
 import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..), UnscoredResult (..) )
 import Registry                  ( Registry (..) )
-import Metadata                  ( Metadata (..), MetadataApi (..) )
 import Types
 
 import           Control.Concurrent.Async       (forConcurrently)
@@ -24,6 +26,7 @@ import           Data.Aeson                     (FromJSON, eitherDecodeStrict')
 import           Data.ByteString                (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import           Data.Either                    (partitionEithers)
+import           Data.Functor                   ((<&>))
 import           Data.Heap                      (Heap)
 import qualified Data.Heap as H
 import           Data.List                      (sortOn)
@@ -31,6 +34,7 @@ import           Data.List.NonEmpty             (NonEmpty (..))
 import qualified Data.Map.Strict as M
 import           Data.Maybe                     (fromMaybe)
 import qualified Data.Set as S
+import           Data.String.Interpolate        (i)
 import           Data.Text                      (Text)
 import qualified Data.Text as T
 import           Data.Text.Encoding             (decodeUtf8, encodeUtf8)
@@ -38,18 +42,18 @@ import qualified Data.Vector as V
 import           GHC.IO.Exception               (ExitCode (..))
 import           System.Process.ByteString      (readProcessWithExitCode)
 import           Text.Printf                    (printf)
-import           UnliftIO.Exception             (bracket)
+import           UnliftIO.Exception             (SomeException, bracket)
 
 data QueryProcessor =
     QueryProcessor { runQuery      :: !(CollectionName -> QueryParams -> IO (Either String QueryResults))
-                   , runSpelling   :: !(CollectionName -> Text -> Maybe Int -> IO (Either String SpellingSuggestions))
+                   , runSpelling   :: !(CollectionName -> Text -> Maybe Int -> IO (Either Text SpellingSuggestions))
                    , runStructured :: !(CollectionName -> Clause -> IO (Either Text UnscoredResults))
                    }
 
 createQueryProcessor :: Environment
                      -> Registry
                      -> MetadataApi
-                     -> (ByteString -> IO ())
+                     -> Logger
                      -> QueryProcessor
 createQueryProcessor env reg metadataApi lg =
     QueryProcessor { runQuery      = runQueryImpl env reg metadataApi lg
@@ -72,7 +76,7 @@ data Mode = Normal | Regex deriving Eq
 runStructuredImpl :: Environment
                   -> Registry
                   -> MetadataApi
-                  -> (ByteString -> IO ())
+                  -> Logger
                   -> CollectionName
                   -> Clause
                   -> IO (Either Text UnscoredResults)
@@ -98,19 +102,19 @@ runStructuredImpl env reg metadataApi logger collectionName@(CollectionName cn) 
         r :| rs <- mapM (go lockedComponents) cs
         pure (foldl' f r rs)
 
-    runUnscored :: Mode -> [Component] -> Text -> IO (Either String UnscoredResults)
+    runUnscored :: Mode -> [Component] -> Text -> IO (Either ByteString UnscoredResults)
     runUnscored _ [] _ = do
-        let errMsg = printf "No such collection: %s" cn
-        logger $ C8.pack errMsg
+        let errMsg = [i|No such collection: #{cn}|]
+        infoBs logger [errMsg]
         pure $ Left errMsg
     
     runUnscored mode lockedComponents q = do
         (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents unscoredQuery)
         let errMsg = C8.unlines (map C8.pack bads)
         unless (null bads)
-               (logger errMsg)
+               (infoBs logger [errMsg])
         pure $ if null goods
-                then Left $ unlines bads
+                then Left errMsg
                 else Right $ mconcat goods
 
         where
@@ -154,54 +158,61 @@ withLocks reg collectionName f =
 
 runSpellingImpl :: Environment
                 -> Registry
-                -> (ByteString -> IO ())
+                -> Logger
                 -> CollectionName
                 -> Text
                 -> Maybe Int
-                -> IO (Either String SpellingSuggestions)
+                -> IO (Either Text SpellingSuggestions)
 runSpellingImpl env registry logger collectionName@(CollectionName cn) s mMaxDist =
 
     withLocks registry collectionName $ \lockedComponents -> do
 
         if null lockedComponents
 
-            then do
-                let errMsg = printf "No such collection: %s" cn
-                logger $ C8.pack errMsg
-                pure $ Left errMsg
+            then pure $ Left [i|No such collection: #{cn}|]
 
             else do
 
                 (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> spellingComponent lc)
 
-                let errMsg = C8.unlines (map C8.pack bads)
+                let errMsg = T.unlines bads
                 unless (null bads)
-                       (logger errMsg)
+                       (infoBs logger . (\l -> [l]) . C8.pack . T.unpack $ errMsg) -- TODO: #logging
 
                 pure $ if null goods
-                           then Left $ unlines bads
+                           then Left errMsg
                            else Right . mconcat . map snd $ goods
 
     where
-    spellingComponent :: Component -> IO (Either String SpellingSuggestions)
+    spellingComponent :: Component -> IO (Either Text SpellingSuggestions)
     spellingComponent cmp =
 
         let maxDist = fromMaybe 1 mMaxDist
 
-            args = ["spelling", path cmp, show maxDist] ++ (map T.unpack $ T.words s) -- TODO better normalisation
+            -- TODO better normalisation
+            args = ["spelling", path cmp, show maxDist] ++ (map T.unpack $ T.words s)
 
-            job = do (exitcode, stdout, stderr) <- readProcessWithExitCode (indexerBinary env) args ""
-                     case exitcode of
-                         ExitSuccess -> pure (SpellingSuggestions <$> eitherDecodeStrict' stdout)
-                         _  -> do print $ "stdout was: " <> stdout
-                                  pure . Left $ C8.unpack stderr
-            handle = pure . Left . show
-        in catchAnyDeep job handle
+            job = readProcessWithExitCode (indexerBinary env) args "" <&> \(exitcode, stdout, stderr) ->
+                      case exitcode of
+                          ExitSuccess ->
+                              case eitherDecodeStrict' stdout of
+                                  Left e ->
+                                      Left [i|Could not parse result of spelling: #{e}|]
+                                  Right ss ->
+                                      Right $ SpellingSuggestions ss
+                          _ -> Left [i|Spelling did not execute successfully: #{exitcode}\n#{stderr}|]
+
+        in catchAnyDeep job (pure . handle)
+
+        where
+        handle :: SomeException -> Either Text a
+        handle e = Left [i|Exception when executing spelling: #{e}|]
+
 
 runQueryImpl :: Environment
              -> Registry
              -> MetadataApi
-             -> (ByteString -> IO ())
+             -> Logger
              -> CollectionName
              -> QueryParams
              -> IO (Either String QueryResults)
@@ -212,9 +223,7 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
         if null lockedComponents
 
             then do
-
                 let errMsg = printf "No such collection: %s" cn
-                logger $ C8.pack errMsg
                 pure $ Left errMsg
 
             else do
@@ -223,7 +232,7 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
 
                 let errMsg = C8.unlines (map C8.pack bads)
                 unless (null bads)
-                       (logger errMsg)
+                       (infoBs logger [errMsg])
 
                 if null goods
                     then pure . Left $ unlines bads
@@ -300,7 +309,11 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
                                 -- Lesser (no change)
                                 else h'
 
-queryComponent :: (FromJSON a, NFData a) => Environment -> (ByteString -> IO ()) -> [String] -> ByteString -> IO (Either String a)
+queryComponent :: (FromJSON a, NFData a) => Environment
+                                         -> Logger
+                                         -> [String]
+                                         -> ByteString
+                                         -> IO (Either String a)
 queryComponent env logger execParams queryStr =
 
     let job = do logExecution
@@ -310,11 +323,11 @@ queryComponent env logger execParams queryStr =
                  case exitcode of
 
                      ExitSuccess -> do
-                         C8.putStr stderr
+                         C8.putStr stderr -- TODO don't
                          Right <$> decodeOutput stdout
 
                      _  -> do
-                        print $ "stdout was: " <> stdout
+                        infoBs logger ["stdout was: " <> stdout]
                         pure . Left $ C8.unpack stderr
 
         handle = pure . Left . show
@@ -329,7 +342,10 @@ queryComponent env logger execParams queryStr =
             Left _  -> error $ "Could not decode output: " <> take 100 (C8.unpack stdout) <> "..."
 
     logExecution :: IO ()
-    logExecution = logger . C8.pack $ unwords [ "Running binary: "
-                                              , show (indexerBinary env)
-                                              , show execParams
-                                              ]
+    logExecution = infoBs logger
+                 . (\l -> [l])
+                 . C8.pack
+                 $ unwords [ "Running binary: "
+                           , show (indexerBinary env)
+                           , show execParams
+                           ]

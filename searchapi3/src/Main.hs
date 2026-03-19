@@ -8,16 +8,16 @@ import Environment            (Environment (..), loadEnvironment)
 import Extensions.WarcIndexer (createWarcIndexer)
 import Importer               (Importer (importCollection), createImporter)
 import Indexer                (createIndexer)
+import Logger                 (LoggerType (..), createLogger)
 import Network.Fetcher        (createFetcher)
 import Query.QueryProcessor   (createQueryProcessor)
 import Registry               (createRegistry)
 import Metadata               (createMetadataApi)
-import Types                  (CollectionName, Logger (..), parseCollectionName)
+import Types                  (CollectionName, parseCollectionName)
 import WarcFileReader         (createWarcFileReader)
 import WarcFileWriter         (createWarcFileWriter)
 
 import Control.Monad         (filterM)
-import Data.ByteString.Char8 (ByteString, unpack)
 import System.Directory      (createDirectoryIfMissing, doesDirectoryExist, listDirectory)
 import Text.Printf           (printf)
 
@@ -26,13 +26,11 @@ main = do
 
     env <- loadEnvironment
 
-    let logger = stdoutLogger
-
     registry <- createRegistry env
-                               (logger RegistryLogger)
+                               (createLogger RegistryLogger)
 
     let warcReader = createWarcFileReader 128
-                                          (logger WarcFileReaderLogger)
+                                          (createLogger WarcFileReaderLogger)
 
     let warcWriter = createWarcFileWriter
 
@@ -41,17 +39,18 @@ main = do
     let queryProcessor = createQueryProcessor env
                                               registry
                                               metadataApi
-                                              (logger QueryProcessorLogger)
+                                              (createLogger QueryProcessorLogger)
 
     let compactor = createCompactor env
                                     registry
                                     warcWriter
                                     metadataApi
-                                    (logger CompactorLogger)
+                                    (createLogger CompactorLogger)
 
     let importer = createImporter env
                                   registry
                                   compactor
+                                  (createLogger ImporterLogger)
 
     let indexer = createIndexer env
                                 warcWriter
@@ -61,7 +60,7 @@ main = do
 
     let warcIndexer = createWarcIndexer warcReader
                                         indexer
-                                        (logger WarcIndexerLogger)
+                                        (createLogger WarcIndexerLogger)
 
     fetcher <- createFetcher (proxySetting env)
 
@@ -85,7 +84,7 @@ main = do
                   queryProcessor
                   warcReader
                   registry
-                  (stdoutLogger ControllerLogger)
+                  (createLogger ControllerLogger)
 
 findRegistrableCollections :: Environment -> IO [CollectionName]
 findRegistrableCollections env = do
@@ -94,6 +93,3 @@ findRegistrableCollections env = do
     collectionFiles <- listDirectory collectionsPath
     collections     <- filterM (\c -> doesDirectoryExist (collectionsPath <> "/" <> c)) collectionFiles
     mapM parseCollectionName collections
-
-stdoutLogger :: Logger -> ByteString -> IO ()
-stdoutLogger logger msg = putStrLn $ printf "%s: %s" (show logger) (unpack msg)

@@ -1,13 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module WarcFileReader  where
+module WarcFileReader ( WarcFileReader (..), createWarcFileReader) where
 
-import           Data.Warc.Parse                   (fromByteStringRemainder {- :: L.ByteString -> Either ByteString (Int, WarcEntry, L.ByteString) -} )
-import           Data.Warc.WarcEntry               (WarcEntry (..))
-import           Data.Warc.Value
-import           Data.Warc.Header
-import           Data.Warc.Key
-
+import Data.Warc.Header
+import Data.Warc.Key
+import Data.Warc.Parse     (fromByteStringRemainder)
+import Data.Warc.Value
+import Data.Warc.WarcEntry (WarcEntry (..))
+import Logger              (Logger (..))
 
 import           Control.Exception.Safe            (catchIO)
 import           Data.ByteString                   (ByteString)
@@ -32,11 +32,10 @@ data WarcFileReader =
                                  ->  IO (Either String ()))
 
                    , findWarcEntry :: !(FilePath -> FilePath -> ByteString -> IO (Maybe WarcEntry))
-
                    }
 
 createWarcFileReader :: Int
-                     -> (ByteString -> IO ())
+                     -> Logger
                      -> WarcFileReader
 createWarcFileReader batchSize logger =
     WarcFileReader { batchedRead   = batchedReadImpl batchSize logger
@@ -76,7 +75,7 @@ findWarcEntryImpl warcFile warcOffs url = do
     pure (snd <$> x)
 
 batchedReadImpl :: Int
-                -> (ByteString -> IO ())
+                -> Logger
                 -> FilePath
                 -> (Vector WarcEntry -> IO ())
                 -> IO (Either String ())
@@ -91,7 +90,7 @@ batchedReadImpl batchSize logger warcFile action = do
                  pure $ Right ()
 
         handler ioe = do let errMsg = show ioe
-                         logger $ C8.pack errMsg
+                         infoBs logger [C8.pack errMsg]
                          hClose h
                          pure $ Left errMsg
 
@@ -112,7 +111,7 @@ batchedReadImpl batchSize logger warcFile action = do
             case fromByteStringRemainder contents of
 
                 Left err ->
-                    logger $ C8.pack err
+                    infoBs logger [C8.pack err]
 
                 Right (szRead', we, remainder) ->
                     go fileSz (szRead + fromIntegral szRead') (n + 1) (we:acc) remainder
@@ -125,7 +124,7 @@ batchedReadImpl batchSize logger warcFile action = do
                 docsRead = V.length vWes
                 complete = 100.0 * fromIntegral (fileSz - remainingBytes) / fromIntegral fileSz :: Float
 
-            logger . C8.pack $
-                printf "Read %d warc entries.  MB left %d.  Complete %.2f%%" docsRead (remainingBytes `div` (1024 * 1024)) complete
+            infoBs logger [C8.pack $
+                printf "Read %d warc entries.  MB left %d.  Complete %.2f%%" docsRead (remainingBytes `div` (1024 * 1024)) complete]
 
             action vWes

@@ -8,6 +8,7 @@ module Controllers.Query (QueryApi, queryServer) where
 import Component                 (Component (cmp_filePath))
 import Data.Warc.Body
 import Data.Warc.WarcEntry
+import Logger                    (Logger (..))
 import Query.QueryParams         (QueryParams (QueryParams))
 import Query.QueryParser
 import Query.QueryProcessor      (QueryProcessor (..))
@@ -16,15 +17,15 @@ import Registry                  (Registry (..))
 import Types                     (CollectionName)
 import WarcFileReader            (WarcFileReader (..))
 
-import Control.Concurrent.STM    (atomically)
-import Control.Monad             (forM)
-import Control.Monad.IO.Class    (liftIO)
-import Data.Maybe                (catMaybes, fromMaybe)
-import Data.Set                  (toList)
-import Data.Text                 (Text)
-import Data.Text.Encoding        (decodeUtf8, encodeUtf8)
-import Safe                      (headMay)
-import Servant
+import           Control.Concurrent.STM      (atomically)
+import           Control.Monad               (forM)
+import qualified Data.ByteString.Char8 as C8
+import           Data.Maybe                  (catMaybes, fromMaybe)
+import           Data.Set                    (toList)
+import           Data.Text                   (Text)
+import           Data.Text.Encoding          (decodeUtf8, encodeUtf8)
+import           Safe                        (headMay)
+import           Servant
 
 type QueryApi = "query" :> Capture "col" CollectionName
                         :> QueryParam' '[Required] "q" Text
@@ -38,7 +39,7 @@ type QueryApi = "query" :> Capture "col" CollectionName
            :<|> "spelling" :> Capture "col" CollectionName
                            :> QueryParam' '[Required] "s" Text
                            :> QueryParam "n" Int
-                           :> Get '[JSON] (Either String SpellingSuggestions)
+                           :> Get '[JSON] (Either Text SpellingSuggestions)
 
            :<|> "cached" :> Capture "col" CollectionName
                          :> QueryParam' '[Required] "url" Text
@@ -47,12 +48,13 @@ type QueryApi = "query" :> Capture "col" CollectionName
 queryServer :: QueryProcessor
             -> Registry
             -> WarcFileReader
+            -> Logger
             -> ServerT QueryApi IO
-
-queryServer qp reg wfr = serveQuery
-                    :<|> structuredQuery
-                    :<|> serveSpelling
-                    :<|> getCached
+queryServer qp reg wfr logger
+    =    serveQuery
+    :<|> structuredQuery
+    :<|> serveSpelling
+    :<|> getCached
 
     where
     serveQuery cn q mn =
@@ -64,7 +66,7 @@ queryServer qp reg wfr = serveQuery
         case parseQuery (encodeUtf8 txt) of
             Left e   -> pure $ Left e
             Right sq -> do
-                liftIO $ print ("Parsed: ", sq)
+                infoBs logger ["Parsed: " <> (C8.pack . show $ sq)]
                 runStructured qp cn sq
 
     serveSpelling cn s mn =

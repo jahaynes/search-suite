@@ -7,6 +7,7 @@ module Registry ( Registry (..)
 
 import Component
 import Environment (Environment (..))
+import Logger      (Logger (..))
 import Types
 
 import           Control.Concurrent.STM   (STM, TVar, atomically, modifyTVar', newTVarIO, readTVar, retry)
@@ -49,7 +50,7 @@ newtype Locks =
     Locks (STM.Set Component)
 
 createRegistry :: Environment
-               -> (ByteString -> IO ())
+               -> Logger
                -> IO Registry
 createRegistry env logger = do
     collections <- Collections <$> newTVarIO M.empty
@@ -98,13 +99,13 @@ registerInPlaceImpl (Collections cs) collectionName component =
         f Nothing           = S.singleton c
 
 releaseLockIOImpl :: Locks
-                  -> (ByteString -> IO ())
+                  -> Logger
                   -> Component
                   -> IO ()
 releaseLockIOImpl locks logger component = do
     x <- atomically $ releaseLock locks component
     case x of
-        Left err -> logger err
+        Left err -> infoBs logger [err]
         Right _  -> pure ()
 
 -- generify?

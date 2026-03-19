@@ -6,7 +6,6 @@ module Types ( CollectionName (..)
              , getCollectionPath
              , parseCollectionName
              , HasPath (..)
-             , Logger (..)
              , NumDocs (..)
              ) where
 
@@ -65,12 +64,3 @@ parseCollectionName str
 newtype Collection =
     Collection { col_filePath :: FilePath
                } deriving Show
-
-data Logger = CompactorLogger
-            | ControllerLogger
-            | IndexerLogger
-            | QueryProcessorLogger
-            | RegistryLogger
-            | WarcFileReaderLogger
-            | WarcIndexerLogger
-                deriving Show
