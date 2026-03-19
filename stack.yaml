@@ -9,6 +9,7 @@ packages:
 - searchapi3
 - shared-proto
 - util/filecrawler
+- util/filewatcher
 - util/warccrawler
 
 ghc-options:
