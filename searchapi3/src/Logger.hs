@@ -14,6 +14,7 @@ data LoggerType = CompactorLogger
                 | IndexerLogger
                 | QueryProcessorLogger
                 | RegistryLogger
+                | SpellingProcessorLogger
                 | WarcFileReaderLogger
                 | WarcIndexerLogger
                     deriving Show

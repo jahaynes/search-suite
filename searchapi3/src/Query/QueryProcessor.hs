@@ -11,22 +11,21 @@ import Component                 ( Component )
 import Environment               ( Environment (..) )
 import Logger                    ( Logger (..) )
 import Metadata                  ( Metadata (..), MetadataApi (..) )
+import Query.QueryCommon         ( withLocks )
 import Query.QueryParams         ( QueryParams (..) )
 import Query.QueryParser         ( Clause (..), Op (..) )
-import Query.QueryProcessorTypes ( SpellingSuggestions (..), QueryResults (..), QueryResult (..), UnscoredResults (..), UnscoredResult (..) )
+import Query.QueryProcessorTypes ( QueryResults (..), QueryResult (..), UnscoredResults (..), UnscoredResult (..) )
 import Registry                  ( Registry (..) )
 import Types
 
 import           Control.Concurrent.Async       (forConcurrently)
-import           Control.Concurrent.STM         (atomically)
-import           Control.DeepSeq                (NFData, deepseq)
+import           Control.DeepSeq                (NFData)
 import           Control.Exception.Safe         (catchAnyDeep)
 import           Control.Monad                  (unless)
 import           Data.Aeson                     (FromJSON, eitherDecodeStrict')
 import           Data.ByteString                (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import           Data.Either                    (partitionEithers)
-import           Data.Functor                   ((<&>))
 import           Data.Heap                      (Heap)
 import qualified Data.Heap as H
 import           Data.List                      (sortOn)
@@ -36,17 +35,14 @@ import           Data.Maybe                     (fromMaybe)
 import qualified Data.Set as S
 import           Data.String.Interpolate        (i)
 import           Data.Text                      (Text)
-import qualified Data.Text as T
 import           Data.Text.Encoding             (decodeUtf8, encodeUtf8)
 import qualified Data.Vector as V
 import           GHC.IO.Exception               (ExitCode (..))
 import           System.Process.ByteString      (readProcessWithExitCode)
 import           Text.Printf                    (printf)
-import           UnliftIO.Exception             (SomeException, bracket)
 
 data QueryProcessor =
     QueryProcessor { runQuery      :: !(CollectionName -> QueryParams -> IO (Either String QueryResults))
-                   , runSpelling   :: !(CollectionName -> Text -> Maybe Int -> IO (Either Text SpellingSuggestions))
                    , runStructured :: !(CollectionName -> Clause -> IO (Either Text UnscoredResults))
                    }
 
@@ -57,7 +53,6 @@ createQueryProcessor :: Environment
                      -> QueryProcessor
 createQueryProcessor env reg metadataApi lg =
     QueryProcessor { runQuery      = runQueryImpl env reg metadataApi lg
-                   , runSpelling   = runSpellingImpl env reg lg
                    , runStructured = runStructuredImpl env reg metadataApi lg
                    }
 
@@ -143,71 +138,6 @@ runStructuredImpl env reg metadataApi logger collectionName@(CollectionName cn) 
                    , if mode == Regex then ["--mode", "regex"] else []
                    , ["--base_path", path component]
                    ]
-
-withLocks :: NFData a => Registry -> CollectionName -> ([Component] -> IO a) -> IO a
-withLocks reg collectionName f =
-    bracket acquire release $ \cmps -> do
-        y <- f cmps
-        y `deepseq` pure y
-    where
-    acquire = atomically $ do
-        components <- S.toList <$> viewCollectionComponents reg collectionName
-        mapM_ (takeLock reg) components
-        pure components
-    release = mapM_ (releaseLockIO reg)
-
-runSpellingImpl :: Environment
-                -> Registry
-                -> Logger
-                -> CollectionName
-                -> Text
-                -> Maybe Int
-                -> IO (Either Text SpellingSuggestions)
-runSpellingImpl env registry logger collectionName@(CollectionName cn) s mMaxDist =
-
-    withLocks registry collectionName $ \lockedComponents -> do
-
-        if null lockedComponents
-
-            then pure $ Left [i|No such collection: #{cn}|]
-
-            else do
-
-                (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> spellingComponent lc)
-
-                let errMsg = T.unlines bads
-                unless (null bads)
-                       (infoBs logger . (\l -> [l]) . C8.pack . T.unpack $ errMsg) -- TODO: #logging
-
-                pure $ if null goods
-                           then Left errMsg
-                           else Right . mconcat . map snd $ goods
-
-    where
-    spellingComponent :: Component -> IO (Either Text SpellingSuggestions)
-    spellingComponent cmp =
-
-        let maxDist = fromMaybe 1 mMaxDist
-
-            -- TODO better normalisation
-            args = ["spelling", path cmp, show maxDist] ++ (map T.unpack $ T.words s)
-
-            job = readProcessWithExitCode (indexerBinary env) args "" <&> \(exitcode, stdout, stderr) ->
-                      case exitcode of
-                          ExitSuccess ->
-                              case eitherDecodeStrict' stdout of
-                                  Left e ->
-                                      Left [i|Could not parse result of spelling: #{e}|]
-                                  Right ss ->
-                                      Right $ SpellingSuggestions ss
-                          _ -> Left [i|Spelling did not execute successfully: #{exitcode}\n#{stderr}|]
-
-        in catchAnyDeep job (pure . handle)
-
-        where
-        handle :: SomeException -> Either Text a
-        handle e = Left [i|Exception when executing spelling: #{e}|]
-
 
 runQueryImpl :: Environment
              -> Registry

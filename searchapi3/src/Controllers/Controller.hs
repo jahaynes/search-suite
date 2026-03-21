@@ -17,6 +17,7 @@ import Indexer                    (Indexer)
 import Logger                     (Logger)
 import Network.Fetcher            (Fetcher)
 import Query.QueryProcessor       (QueryProcessor)
+import Query.SpellingProcessor    (SpellingProcessor)
 import Registry                   (Registry)
 import WarcFileReader             (WarcFileReader (..))
 
@@ -56,11 +57,12 @@ runController :: Compactor
               -> WarcIndexer
               -> Fetcher (ExceptT Error IO)
               -> QueryProcessor
+              -> SpellingProcessor
               -> WarcFileReader
               -> Registry
               -> Logger
               -> IO ()
-runController compactor env indexer warcIndexer fetcher qp warcFileReader registry logger =
+runController compactor env indexer warcIndexer fetcher qp sp warcFileReader registry logger =
 
     run 8081 . simpleCors
              . prometheus def 
@@ -68,7 +70,7 @@ runController compactor env indexer warcIndexer fetcher qp warcFileReader regist
              . hoistServer searchApiWithDoc liftIO 
              $ swaggerSchemaUIServerT searchApiSwagger
             :<|> collectionsServer compactor env registry
-            :<|> queryServer qp registry warcFileReader logger
+            :<|> queryServer qp sp registry warcFileReader logger
             :<|> indexationServer fetcher indexer
             :<|> warcIndexationServer warcIndexer
             :<|> diagnosticServer registry

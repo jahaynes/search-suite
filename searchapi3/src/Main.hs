@@ -2,24 +2,25 @@
 
 module Main where
 
-import Compactor              (createCompactor)
-import Controllers.Controller (runController)
-import Environment            (Environment (..), loadEnvironment)
-import Extensions.WarcIndexer (createWarcIndexer)
-import Importer               (Importer (importCollection), createImporter)
-import Indexer                (createIndexer)
-import Logger                 (LoggerType (..), createLogger)
-import Network.Fetcher        (createFetcher)
-import Query.QueryProcessor   (createQueryProcessor)
-import Registry               (createRegistry)
-import Metadata               (createMetadataApi)
-import Types                  (CollectionName, parseCollectionName)
-import WarcFileReader         (createWarcFileReader)
-import WarcFileWriter         (createWarcFileWriter)
+import Compactor               (createCompactor)
+import Controllers.Controller  (runController)
+import Environment             (Environment (..), loadEnvironment)
+import Extensions.WarcIndexer  (createWarcIndexer)
+import Importer                (Importer (importCollection), createImporter)
+import Indexer                 (createIndexer)
+import Logger                  (LoggerType (..), createLogger)
+import Network.Fetcher         (createFetcher)
+import Query.QueryProcessor    (createQueryProcessor)
+import Query.SpellingProcessor (createSpellingProcessor)
+import Registry                (createRegistry)
+import Metadata                (createMetadataApi)
+import Types                   (CollectionName, parseCollectionName)
+import WarcFileReader          (createWarcFileReader)
+import WarcFileWriter          (createWarcFileWriter)
 
-import Control.Monad         (filterM)
-import System.Directory      (createDirectoryIfMissing, doesDirectoryExist, listDirectory)
-import Text.Printf           (printf)
+import Control.Monad    (filterM)
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist, listDirectory)
+import Text.Printf      (printf)
 
 main :: IO ()
 main = do
@@ -40,6 +41,10 @@ main = do
                                               registry
                                               metadataApi
                                               (createLogger QueryProcessorLogger)
+
+    let spellingProcessor = createSpellingProcessor env
+                                                    registry
+                                                    (createLogger SpellingProcessorLogger)
 
     let compactor = createCompactor env
                                     registry
@@ -82,6 +87,7 @@ main = do
                   warcIndexer
                   fetcher
                   queryProcessor
+                  spellingProcessor
                   warcReader
                   registry
                   (createLogger ControllerLogger)

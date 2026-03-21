@@ -13,6 +13,7 @@ import Query.QueryParams         (QueryParams (QueryParams))
 import Query.QueryParser
 import Query.QueryProcessor      (QueryProcessor (..))
 import Query.QueryProcessorTypes (QueryResults, SpellingSuggestions, UnscoredResults)
+import Query.SpellingProcessor   (SpellingProcessor (..))
 import Registry                  (Registry (..))
 import Types                     (CollectionName)
 import WarcFileReader            (WarcFileReader (..))
@@ -46,11 +47,12 @@ type QueryApi = "query" :> Capture "col" CollectionName
                          :> Get '[PlainText] (Headers '[Header "Content-Disposition" Text] Text)
 
 queryServer :: QueryProcessor
+            -> SpellingProcessor
             -> Registry
             -> WarcFileReader
             -> Logger
             -> ServerT QueryApi IO
-queryServer qp reg wfr logger
+queryServer qp sp reg wfr logger
     =    serveQuery
     :<|> structuredQuery
     :<|> serveSpelling
@@ -70,7 +72,7 @@ queryServer qp reg wfr logger
                 runStructured qp cn sq
 
     serveSpelling cn s mn =
-        runSpelling qp cn s mn
+        runSpelling sp cn s mn
 
     -- TODO take a read lock on each component
     getCached cn url = do
