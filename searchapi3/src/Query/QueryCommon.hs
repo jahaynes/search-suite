@@ -12,14 +12,13 @@ import Types       ( CollectionName )
 
 import           Control.Concurrent.STM      (atomically)
 import           Control.DeepSeq             (NFData, deepseq)
-import           Control.Exception.Safe      (catchAnyDeep)
 import           Data.Aeson                  (FromJSON, eitherDecodeStrict')
 import           Data.ByteString             (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Set as S
 import           GHC.IO.Exception            (ExitCode (..))
 import           System.Process.ByteString   (readProcessWithExitCode)
-import           UnliftIO.Exception          (bracket)
+import           UnliftIO.Exception          (bracket, catchAnyDeep)
 
 withLocks :: NFData a => Registry -> CollectionName -> ([Component] -> IO a) -> IO a
 withLocks reg collectionName f =

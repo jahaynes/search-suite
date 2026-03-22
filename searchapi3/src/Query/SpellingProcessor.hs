@@ -14,7 +14,6 @@ import Registry                  ( Registry (..) )
 import Types
 
 import           Control.Concurrent.Async       (forConcurrently)
-import           Control.Exception.Safe         (catchAnyDeep)
 import           Control.Monad                  (unless)
 import           Data.Aeson                     (eitherDecodeStrict')
 import qualified Data.ByteString.Char8 as C8
@@ -26,7 +25,7 @@ import           Data.Text                      (Text)
 import qualified Data.Text as T
 import           GHC.IO.Exception               (ExitCode (..))
 import           System.Process.ByteString      (readProcessWithExitCode)
-import           UnliftIO.Exception             (SomeException)
+import           UnliftIO.Exception             (SomeException, catchAnyDeep)
 
 newtype SpellingProcessor =
     SpellingProcessor { runSpelling :: CollectionName -> Text -> Maybe Int -> IO (Either Text SpellingSuggestions) }

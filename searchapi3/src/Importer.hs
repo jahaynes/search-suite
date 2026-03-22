@@ -12,7 +12,6 @@ import Registry      ( Registry, registerInPlace )
 import Types
 
 import Control.Concurrent.STM    (atomically)
-import Control.Exception.Safe    (catchIO)
 import Control.Monad             (unless, when)
 import Data.Aeson                (eitherDecodeStrict')
 import Data.ByteString.Char8     (ByteString, pack)
@@ -20,6 +19,7 @@ import Data.Either               (partitionEithers)
 import GHC.IO.Exception          (ExitCode (..))
 import System.Directory          (canonicalizePath, getDirectoryContents)
 import System.Process.ByteString (readProcessWithExitCode)
+import UnliftIO.Exception        (catchIO)
 
 newtype Importer =
     Importer { importCollection :: CollectionName -> IO (Either ByteString ())

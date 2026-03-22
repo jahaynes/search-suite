@@ -9,7 +9,6 @@ import Data.Warc.Value
 import Data.Warc.WarcEntry (WarcEntry (..))
 import Logger              (Logger (..))
 
-import           Control.Exception.Safe            (catchIO)
 import           Data.ByteString                   (ByteString)
 import qualified Data.ByteString            as BS
 import qualified Data.ByteString.Char8      as C8
@@ -24,6 +23,7 @@ import           System.Directory                  (getFileSize)
 import           System.IO
 import           Text.Printf                       (printf)
 import           Util.BinarySearch
+import           UnliftIO.Exception                (catchIO)
 
 data WarcFileReader =
 

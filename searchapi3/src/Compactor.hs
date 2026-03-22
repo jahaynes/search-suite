@@ -15,7 +15,6 @@ import Types             ( CollectionName (..), getCollectionPath, numDocs, path
 import WarcFileWriter    ( WarcFileWriter (..) )
 
 import           Control.Concurrent.STM      (STM, atomically)
-import           Control.Exception.Safe      (catchIO)  -- todo remove
 import           Control.Monad               (unless)
 import           Data.ByteString.Char8       (ByteString)
 import qualified Data.Set              as S
@@ -24,7 +23,7 @@ import qualified Data.UUID             as U
 import qualified Data.UUID.V4          as U
 import           System.Directory            (canonicalizePath, createDirectoryIfMissing, removeDirectoryRecursive)
 import           System.Process              (callProcess)
-import           UnliftIO.Exception          (bracket)
+import           UnliftIO.Exception          (bracket, catchIO)
 
 data Compactor =
     Compactor { compact   :: CollectionName -> IO Bool
