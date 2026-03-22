@@ -14,6 +14,7 @@ import Query.QueryParser
 import Query.QueryProcessor      (QueryProcessor (..))
 import Query.QueryProcessorTypes (QueryResults, SpellingSuggestions, UnscoredResults)
 import Query.SpellingProcessor   (SpellingProcessor (..))
+import Query.StructuredProcessor (StructuredProcessor (..))
 import Registry                  (Registry (..))
 import Types                     (CollectionName)
 import WarcFileReader            (WarcFileReader (..))
@@ -48,11 +49,12 @@ type QueryApi = "query" :> Capture "col" CollectionName
 
 queryServer :: QueryProcessor
             -> SpellingProcessor
+            -> StructuredProcessor
             -> Registry
             -> WarcFileReader
             -> Logger
             -> ServerT QueryApi IO
-queryServer qp sp reg wfr logger
+queryServer qp sp struc reg wfr logger
     =    serveQuery
     :<|> structuredQuery
     :<|> serveSpelling
@@ -69,7 +71,7 @@ queryServer qp sp reg wfr logger
             Left e   -> pure $ Left e
             Right sq -> do
                 infoBs logger ["Parsed: " <> (C8.pack . show $ sq)]
-                runStructured qp cn sq
+                runStructured struc cn sq
 
     serveSpelling cn s mn =
         runSpelling sp cn s mn

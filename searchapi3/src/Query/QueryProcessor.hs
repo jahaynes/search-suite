@@ -1,6 +1,5 @@
 {-# LANGUAGE LambdaCase
            , OverloadedStrings
-           , QuasiQuotes
            , ScopedTypeVariables #-}
 
 module Query.QueryProcessor ( QueryProcessor (..)
@@ -11,39 +10,27 @@ import Component                 ( Component )
 import Environment               ( Environment (..) )
 import Logger                    ( Logger (..) )
 import Metadata                  ( Metadata (..), MetadataApi (..) )
-import Query.QueryCommon         ( withLocks )
+import Query.QueryCommon         ( queryComponent, withLocks )
 import Query.QueryParams         ( QueryParams (..) )
-import Query.QueryParser         ( Clause (..), Op (..) )
-import Query.QueryProcessorTypes ( QueryResults (..), QueryResult (..), UnscoredResults (..), UnscoredResult (..) )
+import Query.QueryProcessorTypes ( QueryResults (..), QueryResult (..) )
 import Registry                  ( Registry (..) )
 import Types
 
 import           Control.Concurrent.Async       (forConcurrently)
-import           Control.DeepSeq                (NFData)
-import           Control.Exception.Safe         (catchAnyDeep)
 import           Control.Monad                  (unless)
-import           Data.Aeson                     (FromJSON, eitherDecodeStrict')
-import           Data.ByteString                (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import           Data.Either                    (partitionEithers)
 import           Data.Heap                      (Heap)
 import qualified Data.Heap as H
 import           Data.List                      (sortOn)
-import           Data.List.NonEmpty             (NonEmpty (..))
 import qualified Data.Map.Strict as M
 import           Data.Maybe                     (fromMaybe)
-import qualified Data.Set as S
-import           Data.String.Interpolate        (i)
 import           Data.Text                      (Text)
-import           Data.Text.Encoding             (decodeUtf8, encodeUtf8)
 import qualified Data.Vector as V
-import           GHC.IO.Exception               (ExitCode (..))
-import           System.Process.ByteString      (readProcessWithExitCode)
 import           Text.Printf                    (printf)
 
-data QueryProcessor =
-    QueryProcessor { runQuery      :: !(CollectionName -> QueryParams -> IO (Either String QueryResults))
-                   , runStructured :: !(CollectionName -> Clause -> IO (Either Text UnscoredResults))
+newtype QueryProcessor =
+    QueryProcessor { runQuery :: CollectionName -> QueryParams -> IO (Either String QueryResults)
                    }
 
 createQueryProcessor :: Environment
@@ -52,8 +39,7 @@ createQueryProcessor :: Environment
                      -> Logger
                      -> QueryProcessor
 createQueryProcessor env reg metadataApi lg =
-    QueryProcessor { runQuery      = runQueryImpl env reg metadataApi lg
-                   , runStructured = runStructuredImpl env reg metadataApi lg
+    QueryProcessor { runQuery = runQueryImpl env reg metadataApi lg
                    }
 
 data ComponentResult = 
@@ -64,80 +50,6 @@ instance Eq ComponentResult where
 
 instance Ord ComponentResult where
     compare (ComponentResult r1 c1) (ComponentResult r2 c2) = compare (score r1, c1) (score r2, c2)
-
-data Mode = Normal | Regex deriving Eq
-
--- TODO, this can probably pushed into indexer-qp2
-runStructuredImpl :: Environment
-                  -> Registry
-                  -> MetadataApi
-                  -> Logger
-                  -> CollectionName
-                  -> Clause
-                  -> IO (Either Text UnscoredResults)
-runStructuredImpl env reg metadataApi logger collectionName@(CollectionName cn) clause =
-    withLocks reg collectionName $ \lockedComponents -> do
-        rs <- go lockedComponents clause
-        pure . Right $ UnscoredResults (S.size rs) rs
-
-    where
-    go lockedComponents (ClauseText q) = do
-        Right r <- runUnscored Normal lockedComponents (decodeUtf8 q) -- TODO can this decode be skipped
-        pure $ unscored_results r
-
-    go lockedComponents (ClauseRegex q) = do
-        Right r <- runUnscored Regex lockedComponents (decodeUtf8 q) -- TODO can this decode be skipped
-        pure $ unscored_results r
-
-    go lockedComponents (Conjunction op cs) = do
-        let f = case op of
-                    Or  -> S.union
-                    And -> S.intersection
-                    Sub -> S.difference
-        r :| rs <- mapM (go lockedComponents) cs
-        pure (foldl' f r rs)
-
-    runUnscored :: Mode -> [Component] -> Text -> IO (Either ByteString UnscoredResults)
-    runUnscored _ [] _ = do
-        let errMsg = [i|No such collection: #{cn}|]
-        infoBs logger [errMsg]
-        pure $ Left errMsg
-    
-    runUnscored mode lockedComponents q = do
-        (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents unscoredQuery)
-        let errMsg = C8.unlines (map C8.pack bads)
-        unless (null bads)
-               (infoBs logger [errMsg])
-        pure $ if null goods
-                then Left errMsg
-                else Right $ mconcat goods
-
-        where
-        -- Fetching the metadata probably isn't great down here
-        -- But we have the handle to the component
-        unscoredQuery lc =
-
-            queryComponent env logger (execParams lc) (encodeUtf8 q) >>= \case
-
-                Left e -> error e
-                Right (UnscoredResults n qrs) -> do
-                    -- TODO probably remove the set?
-                    qrs' <- mapM attachMetadata $ S.toList qrs
-                    pure $ Right (UnscoredResults n (S.fromList $ qrs'))
-
-            where
-            attachMetadata :: UnscoredResult -> IO UnscoredResult
-            attachMetadata ur =
-                lookupMetadata metadataApi (path lc) (ur_uri ur) >>= \case
-                    Nothing -> undefined -- TODO
-                    Just m -> pure ur { ur_metadata = Just . M.delete "uri" $ unMetadata m }
-
-        execParams :: Component -> [String]
-        execParams component =
-            concat [ ["unscored"]
-                   , if mode == Regex then ["--mode", "regex"] else []
-                   , ["--base_path", path component]
-                   ]
 
 runQueryImpl :: Environment
              -> Registry
@@ -238,44 +150,3 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
                                 then H.insert (ComponentResult qr cmp) h''
                                 -- Lesser (no change)
                                 else h'
-
-queryComponent :: (FromJSON a, NFData a) => Environment
-                                         -> Logger
-                                         -> [String]
-                                         -> ByteString
-                                         -> IO (Either String a)
-queryComponent env logger execParams queryStr =
-
-    let job = do logExecution
-
-                 (exitcode, stdout, stderr) <- readProcessWithExitCode (indexerBinary env) execParams queryStr
-
-                 case exitcode of
-
-                     ExitSuccess -> do
-                         C8.putStr stderr -- TODO don't
-                         Right <$> decodeOutput stdout
-
-                     _  -> do
-                        infoBs logger ["stdout was: " <> stdout]
-                        pure . Left $ C8.unpack stderr
-
-        handle = pure . Left . show
-
-    in catchAnyDeep job handle
-
-    where
-    decodeOutput :: FromJSON a => ByteString -> IO a
-    decodeOutput stdout =
-        case eitherDecodeStrict' stdout of
-            Right r -> pure r
-            Left _  -> error $ "Could not decode output: " <> take 100 (C8.unpack stdout) <> "..."
-
-    logExecution :: IO ()
-    logExecution = infoBs logger
-                 . (\l -> [l])
-                 . C8.pack
-                 $ unwords [ "Running binary: "
-                           , show (indexerBinary env)
-                           , show execParams
-                           ]
