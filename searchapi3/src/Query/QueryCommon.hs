@@ -1,9 +1,11 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase
+           , OverloadedStrings #-}
 
 module Query.QueryCommon ( queryComponent
                          , withLocks
                          ) where
 
+import Bin         ( Bin (..), runJson )
 import Component   ( Component )
 import Environment ( Environment (..) )
 import Logger      ( Logger (..) )
@@ -12,13 +14,12 @@ import Types       ( CollectionName )
 
 import           Control.Concurrent.STM      (atomically)
 import           Control.DeepSeq             (NFData, deepseq)
-import           Data.Aeson                  (FromJSON, eitherDecodeStrict')
+import           Data.Aeson                  (FromJSON)
 import           Data.ByteString             (ByteString)
-import qualified Data.ByteString.Char8 as C8
+import qualified Data.ByteString.Lazy as LBS
+import           Data.Functor                ((<&>))
 import qualified Data.Set as S
-import           GHC.IO.Exception            (ExitCode (..))
-import           System.Process.ByteString   (readProcessWithExitCode)
-import           UnliftIO.Exception          (bracket, catchAnyDeep)
+import           UnliftIO.Exception          (bracket)
 
 withLocks :: NFData a => Registry -> CollectionName -> ([Component] -> IO a) -> IO a
 withLocks reg collectionName f =
@@ -36,39 +37,13 @@ queryComponent :: (FromJSON a, NFData a) => Environment
                                          -> Logger
                                          -> [String]
                                          -> ByteString
-                                         -> IO (Either String a)
+                                         -> IO (Either [ByteString] a) -- Does it need to be so abstract?
 queryComponent env logger execParams queryStr =
 
-    let job = do logExecution
+    let bin = Bin { getCmd   = indexerBinary env
+                  , getArgs  = execParams
+                  , getInput = Just $ LBS.fromStrict queryStr } -- conversion needed?
 
-                 (exitcode, stdout, stderr) <- readProcessWithExitCode (indexerBinary env) execParams queryStr
-
-                 case exitcode of
-
-                     ExitSuccess -> do
-                         C8.putStr stderr -- TODO don't
-                         Right <$> decodeOutput stdout
-
-                     _  -> do
-                        infoBs logger ["stdout was: " <> stdout]
-                        pure . Left $ C8.unpack stderr
-
-        handle = pure . Left . show
-
-    in catchAnyDeep job handle
-
-    where
-    decodeOutput :: FromJSON a => ByteString -> IO a
-    decodeOutput stdout =
-        case eitherDecodeStrict' stdout of
-            Right r -> pure r
-            Left _  -> error $ "Could not decode output: " <> take 100 (C8.unpack stdout) <> "..."
-
-    logExecution :: IO ()
-    logExecution = infoBs logger
-                 . (\l -> [l])
-                 . C8.pack
-                 $ unwords [ "Running binary: "
-                           , show (indexerBinary env)
-                           , show execParams
-                           ]
+    in runJson bin <&> \case
+        Left l           -> Left l
+        Right (err, out) -> Right out

@@ -1,25 +1,22 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Importer ( Importer (..) 
                 , createImporter ) where
 
-import Compactor 
+import Bin           ( Bin (..), runJson )
+import Compactor
 import Component
 import Environment   ( Environment (..) )
-import ImporterTypes
+import ImporterTypes ( NumDocsReply (num_docs) )
 import Logger        ( Logger (..) )
 import Registry      ( Registry, registerInPlace )
 import Types
 
-import Control.Concurrent.STM    (atomically)
-import Control.Monad             (unless, when)
-import Data.Aeson                (eitherDecodeStrict')
-import Data.ByteString.Char8     (ByteString, pack)
-import Data.Either               (partitionEithers)
-import GHC.IO.Exception          (ExitCode (..))
-import System.Directory          (canonicalizePath, getDirectoryContents)
-import System.Process.ByteString (readProcessWithExitCode)
-import UnliftIO.Exception        (catchIO)
+import Control.Concurrent.STM (atomically)
+import Control.Monad          (unless, when)
+import Data.ByteString.Char8  (ByteString)
+import Data.Either            (partitionEithers)
+import System.Directory       (canonicalizePath, getDirectoryContents)
 
 newtype Importer =
     Importer { importCollection :: CollectionName -> IO (Either ByteString ())
@@ -45,7 +42,9 @@ importCollectionImpl env registry compactor logger collectionName = do
            <$> getDirectoryContents name
            >>= mapM canonicalizePath
 
-    (failures, components) <- partitionEithers <$> mapM loadComponent subdirs
+    (failuress, components) <- partitionEithers <$> mapM loadComponent subdirs
+
+    let failures = concat failuress
 
     unless (null failures)
            $ do putStrLn "WARNING, FAILED IMPORTS"
@@ -59,24 +58,22 @@ importCollectionImpl env registry compactor logger collectionName = do
 
     where
     loadingCompaction = do
-      putStr "Loading compaction: "
-      progress <- compact compactor collectionName
-      print progress
-      when progress loadingCompaction
+        putStr "Loading compaction: "
+        progress <- compact compactor collectionName
+        print progress
+        when progress loadingCompaction
 
-    loadComponent :: FilePath -> IO (Either ByteString Component)
+    loadComponent :: FilePath -> IO (Either [ByteString] Component)
     loadComponent componentPath =
-        let job = do let execparams = [ "num_docs"
-                                      , componentPath
-                                      ]
 
-                     (exitcode, stdout, stderr) <- readProcessWithExitCode (indexerBinary env) execparams ""
+        let bin = Bin { getCmd   = indexerBinary env
+                      , getArgs  = [ "num_docs" , componentPath ]
+                      , getInput = Nothing }
 
-                     case exitcode of
-                       ExitSuccess ->
-                         case eitherDecodeStrict' stdout of
-                           Left e  -> pure . Left $ pack e
-                           Right r -> Right <$> createComponent (num_docs r) componentPath
-                       _ -> pure $ Left stderr
-            handle ioe = pure . Left . pack $ show ioe
-        in catchIO job handle
+        in runJson bin >>= \case
+
+               Left l ->
+                   pure $ Left l
+
+               Right (stderr, numDocsReply) ->
+                   Right <$> createComponent (num_docs numDocsReply) componentPath

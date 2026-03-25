@@ -1,6 +1,6 @@
-{-# LANGUAGE LambdaCase
-           , OverloadedStrings
-           , ScopedTypeVariables #-}
+ {-# LANGUAGE OverloadedStrings
+            , QuasiQuotes
+            , ScopedTypeVariables #-}
 
 module Query.QueryProcessor ( QueryProcessor (..)
                             , createQueryProcessor
@@ -16,21 +16,22 @@ import Query.QueryProcessorTypes ( QueryResults (..), QueryResult (..) )
 import Registry                  ( Registry (..) )
 import Types
 
-import           Control.Concurrent.Async       (forConcurrently)
-import           Control.Monad                  (unless)
-import qualified Data.ByteString.Char8 as C8
-import           Data.Either                    (partitionEithers)
-import           Data.Heap                      (Heap)
+import           Control.Concurrent.Async (forConcurrently)
+import           Control.Monad            (unless)
+import           Data.ByteString          (ByteString)
+import           Data.Either              (partitionEithers)
+import           Data.Heap                (Heap)
 import qualified Data.Heap as H
-import           Data.List                      (sortOn)
+import           Data.List                (sortOn)
 import qualified Data.Map.Strict as M
-import           Data.Maybe                     (fromMaybe)
-import           Data.Text                      (Text)
+import           Data.Maybe               (fromMaybe)
+import           Data.String.Interpolate  (i)
+import           Data.Text                (Text)
 import qualified Data.Vector as V
-import           Text.Printf                    (printf)
+import           Text.Printf              (printf)
 
 newtype QueryProcessor =
-    QueryProcessor { runQuery :: CollectionName -> QueryParams -> IO (Either String QueryResults)
+    QueryProcessor { runQuery :: CollectionName -> QueryParams -> IO (Either [ByteString] QueryResults)
                    }
 
 createQueryProcessor :: Environment
@@ -57,27 +58,27 @@ runQueryImpl :: Environment
              -> Logger
              -> CollectionName
              -> QueryParams
-             -> IO (Either String QueryResults)
+             -> IO (Either [ByteString] QueryResults)
 runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) params =
 
-    withLocks registry collectionName $ \lockedComponents -> do
+    withLocks registry collectionName $ \lockedComponents ->
 
         if null lockedComponents
 
-            then do
-                let errMsg = printf "No such collection: %s" cn
-                pure $ Left errMsg
+            then
+                pure $ Left [[i|No such collection: #{cn}|]]
 
             else do
 
-                (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> queryComponent env logger (execParams lc) (query params))
+                (badss, goods) <- partitionEithers <$> (forConcurrently lockedComponents $ \lc -> fmap (\qr -> (lc, qr)) <$> queryComponent env logger (execParams lc) (query params))
 
-                let errMsg = C8.unlines (map C8.pack bads)
+                let bads = concat badss
+
                 unless (null bads)
-                       (infoBs logger [errMsg])
+                       (infoBs logger bads)
 
                 if null goods
-                    then pure . Left $ unlines bads
+                    then pure $ Left bads
                     else let merged = mergeQueryResults (maxResults params) goods
                          in Right <$> attachMetadata merged
 

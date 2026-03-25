@@ -1,10 +1,12 @@
-{-# LANGUAGE OverloadedStrings,
-             QuasiQuotes #-}
+{-# LANGUAGE LambdaCase
+           , OverloadedStrings
+           , QuasiQuotes #-}
 
 module Compactor ( Compactor (..)
                  , createCompactor
                  ) where
 
+import Bin               ( Bin (..), runBs )
 import CompactorStrategy ( hybridStrategy )
 import Component         ( Component (..), createComponent )
 import Environment       ( Environment (indexerBinary) )
@@ -14,20 +16,19 @@ import Registry          ( Registry (..) )
 import Types             ( CollectionName (..), getCollectionPath, numDocs, path )
 import WarcFileWriter    ( WarcFileWriter (..) )
 
-import           Control.Concurrent.STM      (STM, atomically)
-import           Control.Monad               (unless)
-import           Data.ByteString.Char8       (ByteString)
+import           Control.Concurrent.STM     (STM, atomically)
+import           Control.Monad              (unless)
+import           Data.ByteString.Char8      (ByteString)
 import qualified Data.Set              as S
-import           Data.String.Interpolate     (i)
+import           Data.String.Interpolate    (i)
 import qualified Data.UUID             as U
 import qualified Data.UUID.V4          as U
-import           System.Directory            (canonicalizePath, createDirectoryIfMissing, removeDirectoryRecursive)
-import           System.Process              (callProcess)
-import           UnliftIO.Exception          (bracket, catchIO)
+import           System.Directory           (canonicalizePath, createDirectoryIfMissing, removeDirectoryRecursive)
+import           UnliftIO.Exception         (bracket)
 
 data Compactor =
-    Compactor { compact   :: CollectionName -> IO Bool
-              , mergeInto :: CollectionName -> CollectionName -> IO ()
+    Compactor { compact   :: !(CollectionName -> IO Bool)
+              , mergeInto :: !(CollectionName -> CollectionName -> IO ())
               }
 
 createCompactor :: Environment
@@ -76,12 +77,12 @@ compactImpl env registry wfw metadataApi logger collectionName@(CollectionName c
 
                                  infoBs logger [[i|Took locks: #{cmp_filePath x} #{cmp_filePath y}|]]
 
-                                 mergeResult <- mergeComponentFiles env wfw metadataApi (indexerBinary env) collectionName x y logger
+                                 mergeResult <- mergeComponentFiles env wfw metadataApi collectionName x y logger
 
                                  case mergeResult of
 
                                      Left errMsg -> do
-                                         infoBs logger [errMsg]
+                                         infoBs logger errMsg
                                          pure False
 
                                      Right z -> do
@@ -143,37 +144,36 @@ mergeIntoImpl env reg wfw metadataApi logger dest src = do
 mergeComponentFiles :: Environment
                     -> WarcFileWriter
                     -> MetadataApi
-                    -> FilePath
                     -> CollectionName
                     -> Component
                     -> Component
                     -> Logger
-                    -> IO (Either ByteString Component)
-
-mergeComponentFiles env wfw metadataApi indexerPath collectionName x y logger = do
+                    -> IO (Either [ByteString] Component)
+mergeComponentFiles env wfw metadataApi collectionName x y logger = do
 
     let cn = getCollectionPath env collectionName
     createDirectoryIfMissing True cn
     cmpName <- U.toString <$> U.nextRandom
     dest <- canonicalizePath $ concat [cn, "/", cmpName]
 
-    let mergeArgs = [ "merge"
-                    , dest
-                    , path x
-                    , path y ]
+    let params = [ "merge"
+                 , dest
+                 , path x
+                 , path y ]
 
-                 -- Metrics needed
-        job = do callProcess indexerPath mergeArgs
+    let bin = Bin { getCmd   = indexerBinary env
+                  , getArgs  = params
+                  , getInput = Nothing }
 
-                 interleaveWarcFiles wfw x y dest
+    runBs bin >>= \case
 
-                 mergeMetadata metadataApi (path x) (path y) dest
+        Left l ->
+            pure $ Left l
 
-                 Right <$> createComponent (numDocs x + numDocs y) dest
+        Right (stderr, "") -> do
 
-        handle ioe = do
-            let errMsg = [i|Merge failed. Params were #{mergeArgs}|]
-            infoBs logger [errMsg]
-            pure $ Left errMsg
+            interleaveWarcFiles wfw x y dest -- TODO catch
 
-    catchIO job handle
+            mergeMetadata metadataApi (path x) (path y) dest -- TODO catch
+
+            Right <$> createComponent (numDocs x + numDocs y) dest

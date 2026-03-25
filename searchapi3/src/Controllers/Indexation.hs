@@ -28,7 +28,7 @@ import           Servant
 
 type IndexationApi = "indexDocs" :> Capture "col" CollectionName
                                  :> ReqBody '[JSON] IndexRequest
-                                 :> Post '[JSON] (Either String Int)
+                                 :> Post '[JSON] (Either [Text] Int)
 
                 :<|> "indexUrlLines" :> Capture "col" CollectionName
                                      :> ReqBody '[PlainText] String
@@ -36,15 +36,15 @@ type IndexationApi = "indexDocs" :> Capture "col" CollectionName
 
                 :<|> "indexLocalFiles" :> Capture "col" CollectionName
                                        :> ReqBody '[PlainText] String
-                                       :> Post '[JSON] (Either String ())
+                                       :> Post '[JSON] (Either [Text] ())
 
                 :<|> "deleteDoc" :> Capture "col" CollectionName
                                  :> ReqBody '[PlainText] String
-                                 :> Delete '[JSON] (Either String ())
+                                 :> Delete '[JSON] (Either [Text] ())
 
                 :<|> "isDocDeleted" :> Capture "col" CollectionName
                                     :> ReqBody '[PlainText] String
-                                    :> Post '[JSON] (Either String (Map Text Int))
+                                    :> Post '[JSON] (Either [Text] (Map Text Int))
 
 indexationApi :: Proxy IndexationApi
 indexationApi = Proxy
@@ -101,6 +101,6 @@ indexUrlLines fetcher indexer col strUrlLines = do
 
 -- TODO use more efficient filepath - or json?
 -- or dirs, or regexes
-indexLocalFilesImpl :: Indexer -> CollectionName -> FilePath -> IO (Either String ())
+indexLocalFilesImpl :: Indexer -> CollectionName -> FilePath -> IO (Either [Text] ())
 indexLocalFilesImpl indexer cn filePaths =
     indexLocalFiles indexer cn (lines filePaths)

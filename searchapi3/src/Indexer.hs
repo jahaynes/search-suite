@@ -7,39 +7,39 @@ module Indexer ( Indexer (..)
                ) where
 
 import Api             (IndexRequest (..), Doc (..))
+import Bin             (Bin (..), runBs, runCbor)
 import Compactor       (Compactor (..))
 import Component
 import Environment     (Environment (..))
 import Metadata        (MetadataApi (generateMetadata))
-import Protocol.Encode (lcbor, unlcbor)
+import Protocol.Encode (lcbor)
 import Protocol.Types  (IndexReply (..), Input (..), InputDoc (..))
 import Registry        (Registry (..))
 import Types
 import WarcFileWriter  (WarcFileWriter (..))
 
-import           Control.Concurrent.STM           (atomically)
+import           Control.Concurrent.STM           (STM, atomically)
 import           Control.Monad                    (forM, void)
 import           Data.ByteString                  (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as L8
-import           Data.Either                      (lefts, rights)
-import           Data.Map.Strict
+import           Data.Either                      (partitionEithers)
+import           Data.Functor                     ((<&>))
+import           Data.Map.Strict                  (Map)
 import qualified Data.Map.Strict            as M
 import qualified Data.Set                   as S
-import           Data.Text                        (Text, pack)
-import qualified Data.Text.IO as T
-import           Data.Text.Encoding
+import           Data.Text                        (Text)
+import qualified Data.Text                  as T
+import qualified Data.Text.IO               as T
+import qualified Data.Text.Encoding         as TE
 import qualified Data.Vector                as V
-import           System.Exit
-import           System.Process.ByteString        (readProcessWithExitCode)
-import qualified System.Process.ByteString.Lazy as PL
 import           System.IO.Temp                   (getCanonicalTemporaryDirectory, createTempDirectory)
-import           UnliftIO.Exception               (catchIO, finally)
+import           UnliftIO.Exception               (bracket)
 
 data Indexer =
-    Indexer { indexDocs          :: !(CollectionName -> IndexRequest -> IO (Either String Int))
-            , indexLocalFiles    :: !(CollectionName -> [FilePath] -> IO (Either String ()))
-            , deleteDocument     :: !(CollectionName -> String -> IO (Either String ()))
-            , isDocDeleted       :: !(CollectionName -> String -> IO (Either String (Map Text Int)))
+    Indexer { indexDocs       :: !(CollectionName -> IndexRequest -> IO (Either [Text] Int))
+            , indexLocalFiles :: !(CollectionName -> [FilePath] -> IO (Either [Text] ()))
+            , deleteDocument  :: !(CollectionName -> String -> IO (Either [Text] ()))
+            , isDocDeleted    :: !(CollectionName -> String -> IO (Either [Text] (Map Text Int)))
             }
 
 createIndexer :: Environment
@@ -49,27 +49,40 @@ createIndexer :: Environment
               -> Registry
               -> Indexer
 createIndexer env writer metadataApi cpc reg =
-    Indexer { indexDocs          = indexDocsImpl env writer metadataApi cpc reg
-            , indexLocalFiles    = indexLocalFileImpl env writer metadataApi cpc reg
-            , deleteDocument     = deleteDocumentImpl env reg
-            , isDocDeleted       = isDocDeletedImpl env reg
+    Indexer { indexDocs       = indexDocsImpl env writer metadataApi cpc reg
+            , indexLocalFiles = indexLocalFileImpl env writer metadataApi cpc reg
+            , deleteDocument  = deleteDocumentImpl env reg
+            , isDocDeleted    = isDocDeletedImpl env reg
             }
 
-indexDocsImpl :: Environment -> WarcFileWriter -> MetadataApi -> Compactor -> Registry -> CollectionName -> IndexRequest -> IO (Either String Int)
-indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest docs) = do
+indexDocsImpl :: Environment
+              -> WarcFileWriter
+              -> MetadataApi
+              -> Compactor
+              -> Registry
+              -> CollectionName
+              -> IndexRequest
+              -> IO (Either [Text] Int)
+indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest ds) = do
 
     idxCmpDir <- getCanonicalTemporaryDirectory >>= (`createTempDirectory` "idx-cmp")
 
-    let bin   = indexerBinary env
-        args  = ["index_docs", idxCmpDir]
-        stdin = lcbor asInput
+    let input = Input
+              . V.map (\(Doc u c) -> InputDoc u c "none") --TODO ugly
+              $ V.fromList ds
 
-    PL.readProcessWithExitCode bin args stdin >>= \case
+    let bin' = Bin { getCmd   = indexerBinary env
+                   , getArgs  = ["index_docs", idxCmpDir]
+                   , getInput = Just (lcbor input) }
 
-        -- TODO log
-        (ExitSuccess, stdout, stderr) ->
+    runCbor bin' >>= \case
 
-            let IndexReply nd _ _ = unlcbor stdout in
+        Left l -> pure
+                . Left
+                . map TE.decodeUtf8
+                $ l
+
+        Right (stderr, IndexReply nd _ _) ->
 
             case fromIntegral nd of
 
@@ -80,7 +93,7 @@ indexDocsImpl env writer metadataApi compactor registry collectionName (IndexReq
                     -- Write out the warc file and offsets
                     let destWarcFile = idxCmpDir <> "/" <> "file.warc"
                         destOffsets  = idxCmpDir <> "/" <> "file.offs"
-                    writeWarcFile writer destWarcFile destOffsets docs
+                    writeWarcFile writer destWarcFile destOffsets ds
 
                     -- Extract / write out metadata
                     generateMetadata metadataApi idxCmpDir
@@ -94,17 +107,6 @@ indexDocsImpl env writer metadataApi compactor registry collectionName (IndexReq
 
                     pure $ Right nDocs
 
-        -- TODO log
-        (ec, stdout, stderr) -> do
-            print ec
-            L8.putStrLn stdout
-            L8.putStrLn stderr
-            pure $ Left "Failed to index"
-    where
-    asInput :: Input
-    asInput  = Input . V.map (\(Doc u c) -> InputDoc u c "none") --TODO ugly
-                     $ V.fromList docs
-
 indexLocalFileImpl :: Environment
                    -> WarcFileWriter
                    -> MetadataApi
@@ -112,76 +114,101 @@ indexLocalFileImpl :: Environment
                    -> Registry
                    -> CollectionName
                    -> [FilePath]  -- TO Vector? or just json
-                   -> IO (Either String ())
+                   -> IO (Either [Text] ())
 indexLocalFileImpl env writer metadataApi compactor registry collectionName filePaths = do
     -- jsonify?
     -- Unnecessary packing
     -- safe-exceptions
-    unsortedDocs <- forM filePaths $ \fp -> do
-        t <- T.readFile fp
-        pure $ Doc (pack fp) t
+    unsortedDocs <- forM filePaths $ \fp ->
+        Doc (T.pack fp) <$> T.readFile fp
 
-    ei <- indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest unsortedDocs)
+    indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest unsortedDocs) >>= \case
 
-    case ei of
-        Left e -> pure $ Left e
+        Left e ->
+            pure $ Left e
+
         Right i -> do
             putStrLn $ "Indexed: " ++ show i ++ " documents."
             pure $ Right ()
 
-{- Instead of a complicated locking mechanism,
-   this just takes write locks one-by-one and send delete everywhere -}
 deleteDocumentImpl :: Environment
                    -> Registry
                    -> CollectionName
                    -> String
-                   -> IO (Either String ())
-deleteDocumentImpl env reg collectionName docUrl = do
-    let bin = indexerBinary env
-    components <- S.toList <$> (atomically $ viewCollectionComponents reg collectionName)
-    putStrLn $ "Deleting doc: " <> docUrl
-    results <- forM components $ \cmp ->
-        finally (isDeletedJob bin cmp)
-                (releaseLockIO reg cmp)
+                   -> IO (Either [Text] ())
+deleteDocumentImpl env reg collectionName docUrl =
 
-    mapM_ print results
+    let acquire = atomically $ acquireComponents reg collectionName
 
-    pure $ case lefts results of
-               [] -> Right ()
-               ls -> Left $ unlines ls
+        release = releaseComponents reg
+
+    in bracket acquire release $ \cmps ->
+
+        mapM deleteJob cmps <&> \rs ->
+
+            let (lefts, rights) = partitionEithers rs
+
+            in if null lefts
+
+                then Right ()
+
+                else Left
+                   . map TE.decodeUtf8
+                   $ concat lefts
 
         where
-        isDeletedJob :: FilePath -> Component -> IO (Either String (ExitCode, ByteString, ByteString))
-        isDeletedJob bin cmp = do
-            atomically $ takeLock reg cmp
-            let args = ["delete_doc", cmp_filePath cmp, docUrl]
-            catchIO (Right <$> readProcessWithExitCode bin args "")
-                    (\ex -> pure . Left . show $ ex)
+        deleteJob :: Component -> IO (Either [ByteString] ())
+        deleteJob cmp =
+            let bin = Bin { getCmd   = indexerBinary env
+                          , getArgs  = ["delete_doc", cmp_filePath cmp, docUrl]
+                          , getInput = Nothing }
+            in runBs bin <&> \case
+                Left l -> Left l
+                Right (stderr, "") -> Right ()
 
 isDocDeletedImpl :: Environment
                  -> Registry
                  -> CollectionName
                  -> String
-                 -> IO (Either String (Map Text Int))
-isDocDeletedImpl env reg collectionName docUrl = do
-    let bin = indexerBinary env
-    components <- S.toList <$> (atomically $ viewCollectionComponents reg collectionName)
-    results <- forM components $ \cmp ->
-        finally (deleteJob bin cmp)
-                (releaseLockIO reg cmp)
+                 -> IO (Either [Text] (Map Text Int))
+isDocDeletedImpl env reg collectionName docUrl =
 
-    pure $
-        case lefts results of
-            [] -> Right . M.fromListWith (+) . zip (rights results) $ repeat 1
-            ls -> Left $ unlines ls
+    let acquire = atomically $ acquireComponents reg collectionName
 
-        where
-        deleteJob :: FilePath -> Component -> IO (Either String Text)
-        deleteJob bin cmp = do
-            atomically $ takeLock reg cmp
-            let args = ["is_deleted", cmp_filePath cmp, docUrl]
-            r <- catchIO (Right <$> readProcessWithExitCode bin args "")
-                         (\ex -> pure . Left . show $ ex)
-            pure $ case r of
-                       Left l -> Left l
-                       Right (ExitSuccess, str, "") -> Right $ decodeUtf8 str
+        release = releaseComponents reg
+
+    in bracket acquire release $ \cmps ->
+
+        mapM isDeleted cmps <&> \rs ->
+
+            let (lefts, rights) = partitionEithers rs
+
+            in if null lefts
+
+                then Right
+                   . M.fromListWith (+)
+                   . zip rights
+                   $ repeat 1
+
+                else Left
+                   . map TE.decodeUtf8
+                   $ concat lefts
+
+    where
+    isDeleted :: Component -> IO (Either [ByteString] Text)
+    isDeleted cmp =
+        let bin = Bin { getCmd   = indexerBinary env
+                      , getArgs  = ["is_deleted", cmp_filePath cmp, docUrl]
+                      , getInput = Nothing }
+        in runBs bin <&> \case
+            Left l -> Left l
+            Right (stderr, stdout) -> Right . TE.decodeUtf8 . L8.toStrict $ stdout
+
+releaseComponents :: Registry -> [Component] -> IO ()
+releaseComponents reg = mapM_ (releaseLockIO reg)
+
+acquireComponents :: Registry -> CollectionName -> STM [Component]
+acquireComponents reg collectionName = do
+    cmps <- S.toList <$> viewCollectionComponents reg collectionName
+    mapM_ (takeLock reg) cmps
+    pure cmps

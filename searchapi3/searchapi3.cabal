@@ -8,12 +8,13 @@ author:              John Haynes
 extra-source-files:  CHANGELOG.md
 
 common deps
-  build-depends:       aeson, async, async-extra, base, binary, bytestring, crawler-lib, WebArchive, cereal, containers, deepseq, directory, hashable, heaps, http-media, lens, process, process-extras, resourcet, safe, serialise, servant, servant-server, servant-swagger, servant-swagger-ui, shared-proto, split, stm, stm-containers, string-interpolate, swagger2, tagsoup, temporary, text, time, transformers, unliftio, uuid, vector, wai-cors, wai-middleware-prometheus, warp
+  build-depends:       aeson, async, async-extra, base, binary, bytestring, crawler-lib, WebArchive, cereal, containers, deepseq, directory, hashable, heaps, http-media, lens, process-extras, resourcet, safe, serialise, servant, servant-server, servant-swagger, servant-swagger-ui, shared-proto, split, stm, stm-containers, string-interpolate, swagger2, tagsoup, temporary, text, time, transformers, typed-process, unliftio, uuid, vector, wai-cors, wai-middleware-prometheus, warp
 
 library
   import:              deps
   ghc-options:         -Wall -O2
   exposed-modules:     Api,
+                       Bin,
                        Compactor,
                        CompactorStrategy,
                        Component,
@@ -67,6 +68,7 @@ executable searchapi3
     ghc-options:      -Wall -threaded -O2
     build-depends:    searchapi3
     other-modules:    Api,
+                      Bin,
                       Compactor,
                       CompactorStrategy,
                       Component,

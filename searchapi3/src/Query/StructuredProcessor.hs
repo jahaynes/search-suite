@@ -16,17 +16,16 @@ import Query.QueryProcessorTypes ( UnscoredResults (..), UnscoredResult (..) )
 import Registry                  ( Registry (..) )
 import Types
 
-import           Control.Concurrent.Async       (forConcurrently)
-import           Control.Monad                  (unless)
-import           Data.ByteString                (ByteString)
-import qualified Data.ByteString.Char8 as C8
-import           Data.Either                    (partitionEithers)
-import           Data.List.NonEmpty             (NonEmpty (..))
+import           Control.Concurrent.Async (forConcurrently)
+import           Control.Monad            (unless)
+import           Data.ByteString          (ByteString)
+import           Data.Either              (partitionEithers)
+import           Data.List.NonEmpty       (NonEmpty (..))
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
-import           Data.String.Interpolate        (i)
-import           Data.Text                      (Text)
-import           Data.Text.Encoding             (decodeUtf8, encodeUtf8)
+import           Data.String.Interpolate  (i)
+import           Data.Text                (Text)
+import           Data.Text.Encoding       (decodeUtf8, encodeUtf8)
 
 newtype StructuredProcessor =
     StructuredProcessor { runStructured :: CollectionName -> Clause -> IO (Either Text UnscoredResults)
@@ -72,29 +71,34 @@ runStructuredImpl env reg metadataApi logger collectionName@(CollectionName cn) 
         r :| rs <- mapM (go lockedComponents) cs
         pure (foldl' f r rs)
 
-    runUnscored :: Mode -> [Component] -> Text -> IO (Either ByteString UnscoredResults)
+    runUnscored :: Mode -> [Component] -> Text -> IO (Either [ByteString] UnscoredResults)
     runUnscored _ [] _ = do
         let errMsg = [i|No such collection: #{cn}|]
         infoBs logger [errMsg]
-        pure $ Left errMsg
+        pure $ Left [errMsg]
 
     runUnscored mode lockedComponents q = do
-        (bads, goods) <- partitionEithers <$> (forConcurrently lockedComponents unscoredQuery)
-        let errMsg = C8.unlines (map C8.pack bads)
+
+        (badss, goods) <- partitionEithers <$> (forConcurrently lockedComponents unscoredQuery)
+
+        let bads = concat badss
+
         unless (null bads)
-               (infoBs logger [errMsg])
+               (infoBs logger bads)
+
         pure $ if null goods
-                then Left errMsg
+                then Left bads
                 else Right $ mconcat goods
 
         where
         -- Fetching the metadata probably isn't great down here
         -- But we have the handle to the component
+        unscoredQuery :: Component -> IO (Either [ByteString] UnscoredResults)
         unscoredQuery lc =
 
             queryComponent env logger (execParams lc) (encodeUtf8 q) >>= \case
 
-                Left e -> error e
+                Left e -> pure . Left $ e
                 Right (UnscoredResults n qrs) -> do
                     -- TODO probably remove the set?
                     qrs' <- mapM attachMetadata $ S.toList qrs

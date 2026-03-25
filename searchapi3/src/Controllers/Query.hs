@@ -22,6 +22,7 @@ import WarcFileReader            (WarcFileReader (..))
 import           Control.Concurrent.STM      (atomically)
 import           Control.Monad               (forM)
 import qualified Data.ByteString.Char8 as C8
+import           Data.Functor                ((<&>))
 import           Data.Maybe                  (catMaybes, fromMaybe)
 import           Data.Set                    (toList)
 import           Data.Text                   (Text)
@@ -74,7 +75,9 @@ queryServer qp sp struc reg wfr logger
                 runStructured struc cn sq
 
     serveSpelling cn s mn =
-        runSpelling sp cn s mn
+        runSpelling sp cn s mn <&> \case
+            Left l  -> Left . decodeUtf8 $ C8.unlines l
+            Right r -> Right r
 
     -- TODO take a read lock on each component
     getCached cn url = do
