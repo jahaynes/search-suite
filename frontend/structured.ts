@@ -3,6 +3,7 @@ import { gatherMapErrors } from './common.js';
 
 type QueryUIState = {
     selectedCollections: Set<string>;
+    query: string;
 };
 
 type UnscoredResults = {
@@ -30,6 +31,7 @@ const reqHeaders: RequestInit = {
     headers: { 'Content-Type': 'application/json' }
 }
 
+const SESSION_KEY_QUERY = 'structured_query';
 const SESSION_KEY_SELECTED_COLLECTIONS = 'structured_selected_collections';
 
 function renderResult(collectionName: string, result: UnscoredResult) {
@@ -93,9 +95,6 @@ const fireStructuredSearch = async (state: QueryUIState) => {
         }).then(resp => resp.json());
     }
 
-    const query: string =
-        document.querySelector<HTMLInputElement>('#structured_search')?.value ?? "";
-
     if (state.selectedCollections.size == 0) {
         return { Left: ["No collections selected"] };
     }
@@ -104,39 +103,55 @@ const fireStructuredSearch = async (state: QueryUIState) => {
     const collectionsResults = new Map<string, Either<string, UnscoredResults>>(
         await Promise.all([...state.selectedCollections]
             .map(async name => [name
-                , await fireStructuredSearchCollection(name, query)
+                , await fireStructuredSearchCollection(name, state.query)
             ] as const)));
 
     return gatherMapErrors(collectionsResults);
 }
 
 const getUIState = (): QueryUIState => {
+    const queryInput = document.querySelector<HTMLInputElement>('#structured_search');
     const selectedCollections =
         new Set(Array.from(
             document.querySelectorAll<HTMLInputElement>('.collection-selector'))
             .filter(cb => cb.checked)
             .map(cb => cb.value));
-    return { selectedCollections: selectedCollections };
+    return { 
+        selectedCollections: selectedCollections,
+        query: queryInput?.value ?? ""
+    };
 }
 
 const saveUIState = () => {
     const state = getUIState();
+    sessionStorage.setItem(SESSION_KEY_QUERY, state.query);
     sessionStorage.setItem(SESSION_KEY_SELECTED_COLLECTIONS, JSON.stringify([...state.selectedCollections]));
 }
 
-const restoreUIState = (): string[] | null => {
-    const saved = sessionStorage.getItem(SESSION_KEY_SELECTED_COLLECTIONS);
-    if (saved) {
-        try {
-            return JSON.parse(saved);
-        } catch {
+const restoreUIState = (): { query: string | null; selectedCollections: string[] | null } => {
+    return {
+        query: sessionStorage.getItem(SESSION_KEY_QUERY),
+        selectedCollections: (() => {
+            const saved = sessionStorage.getItem(SESSION_KEY_SELECTED_COLLECTIONS);
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch {
+                    return null;
+                }
+            }
             return null;
-        }
-    }
-    return null;
+        })()
+    };
 }
 
-const displayCollections = async (debounce: Debounce, collectionNames: string[], restoredSelections: string[] | null) => {
+let debounce: Debounce | null = null;
+let collectionsInitialized = false;
+
+const displayCollections = async (collectionNames: string[], restoredSelections: string[] | null) => {
+
+    if (collectionsInitialized) return;
+    collectionsInitialized = true;
 
     const collections = document.getElementById("collections")!;
     collections.innerHTML = '';
@@ -169,7 +184,7 @@ const displayCollections = async (debounce: Debounce, collectionNames: string[],
 
         checkbox.addEventListener("change", async (_: Event) => {
             saveUIState();
-            await runSearch(debounce);
+            await runSearch();
         });
         collectionDiv.append(checkbox);
         collectionDiv.append(label);
@@ -177,7 +192,8 @@ const displayCollections = async (debounce: Debounce, collectionNames: string[],
     }
 }
 
-const runSearch = async (debounce: Debounce) => {
+const runSearch = async () => {
+    if (!debounce) return;
 
     // Prepare debouncing
     const resultDebounce = document.getElementById('result_debounce') as HTMLDivElement;
@@ -220,42 +236,41 @@ const runSearch = async (debounce: Debounce) => {
     }
 }
 
-const init = async (restoredSelections: string[] | null = null) => {
+const init = (restoredState: { query: string | null; selectedCollections: string[] | null }) => {
+    debounce = { currentSearchId: Math.random() };
 
-    const debounce = { currentSearchId: Math.random() }
+    const searchInput = document.getElementById("structured_search")!;
 
-    document
-        .getElementById("structured_search")!
-        .addEventListener("input", async () => {
-            saveUIState();
-            await runSearch(debounce);
-        });
+    // Restore query if available
+    if (restoredState.query) {
+        (searchInput as HTMLInputElement).value = restoredState.query;
+    }
 
-    await fetch("/collection", reqHeaders)
+    searchInput.addEventListener("input", async () => {
+        saveUIState();
+        await runSearch();
+    });
+
+    // Fetch collections and initialize UI
+    fetch("/collection", reqHeaders)
         .then(resp => resp.json())
-        .then(cns => displayCollections(debounce, cns, restoredSelections));
-
-    await runSearch(debounce);
+        .then(cns => displayCollections(cns, restoredState.selectedCollections))
+        .then(() => runSearch());
 }
 
-// Handle bfcache restoration - fires when page is restored from bfcache or regular navigation
+// Restore state from sessionStorage
+const savedState = restoreUIState();
+
+// Always initialize on page load
+// This handles both fresh page loads and cases where bfcache wasn't used
+init(savedState);
+
+// Handle bfcache restoration - fires when page is restored from bfcache
 window.addEventListener('pageshow', (event) => {
     if (event.persisted) {
-        // Page was restored from bfcache - restore state without full reinit
-        const restoredSelections = restoreUIState();
-        if (restoredSelections) {
-            init(restoredSelections);
-        } else {
-            init();
-        }
+        // Page was restored from bfcache - reset state tracking and reinitialize
+        collectionsInitialized = false;
+        debounce = null;
+        init(restoreUIState());
     }
 });
-
-// Only run init on initial page load (not on bfcache restore)
-// Check if this is a back/forward navigation by examining the navigation type
-const navigationEntries = performance.getEntriesByType('navigation');
-const isRestoredFromBfcache = navigationEntries.length > 0 && 
-    (navigationEntries[0] as PerformanceNavigationTiming).type === 'back_forward';
-if (!isRestoredFromBfcache) {
-    init();
-}
