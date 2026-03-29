@@ -8,10 +8,12 @@ import Compactor                  (Compactor)
 import Controllers.Collections    (CollectionsApi, collectionsServer)
 import Controllers.Diagnostic     (DiagnosticApi, diagnosticServer)
 import Controllers.Indexation     (IndexationApi, indexationServer)
+import Controllers.GitIndexation  (GitIndexationApi, gitIndexationServer)
 import Controllers.Query          (QueryApi, queryServer)
 import Controllers.WarcIndexation (WarcIndexationApi, warcIndexationServer)
 import Environment                (Environment)
 import Errors.Errors              (Error) -- TODO - used?
+import Extensions.GitIndexer      (GitIndexer)
 import Extensions.WarcIndexer     (WarcIndexer)
 import Indexer                    (Indexer)
 import Logger                     (Logger)
@@ -36,6 +38,7 @@ import Servant.Swagger.UI                (SwaggerSchemaUI, swaggerSchemaUIServer
 type SearchApi = CollectionsApi
             :<|> QueryApi
             :<|> IndexationApi
+            :<|> GitIndexationApi
             :<|> WarcIndexationApi
             :<|> DiagnosticApi
             :<|> Raw
@@ -55,6 +58,7 @@ searchApiSwagger = toSwagger searchApi
 runController :: Compactor
               -> Environment
               -> Indexer
+              -> GitIndexer
               -> WarcIndexer
               -> Fetcher (ExceptT Error IO)
               -> QueryProcessor
@@ -64,7 +68,7 @@ runController :: Compactor
               -> Registry
               -> Logger
               -> IO ()
-runController compactor env indexer warcIndexer fetcher qp sp struc warcFileReader registry logger =
+runController compactor env indexer gitIndexer warcIndexer fetcher qp sp struc warcFileReader registry logger =
 
     run 8081 . simpleCors
              . prometheus def 
@@ -74,6 +78,7 @@ runController compactor env indexer warcIndexer fetcher qp sp struc warcFileRead
             :<|> collectionsServer compactor env registry
             :<|> queryServer qp sp struc registry warcFileReader logger
             :<|> indexationServer fetcher indexer
+            :<|> gitIndexationServer gitIndexer
             :<|> warcIndexationServer warcIndexer
             :<|> diagnosticServer registry
             :<|> serveDirectoryFileServer "frontend"

@@ -5,6 +5,7 @@ module Main where
 import Compactor                 (createCompactor)
 import Controllers.Controller    (runController)
 import Environment               (Environment (..), loadEnvironment)
+import Extensions.GitIndexer     (createGitIndexer)
 import Extensions.WarcIndexer    (createWarcIndexer)
 import Importer                  (Importer (importCollection), createImporter)
 import Indexer                   (createIndexer)
@@ -73,6 +74,8 @@ main = do
                                         indexer
                                         (createLogger WarcIndexerLogger)
 
+    gitIndexer <- createGitIndexer indexer
+
     fetcher <- createFetcher (proxySetting env)
 
     collections <- findRegistrableCollections env
@@ -90,6 +93,7 @@ main = do
     runController compactor
                   env
                   indexer
+                  gitIndexer
                   warcIndexer
                   fetcher
                   queryProcessor

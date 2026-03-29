@@ -21,23 +21,23 @@ import WarcFileWriter  (WarcFileWriter (..))
 import           Control.Concurrent.STM           (STM, atomically)
 import           Control.Monad                    (forM, void)
 import           Data.ByteString                  (ByteString)
+import qualified Data.ByteString.Char8      as C8
 import qualified Data.ByteString.Lazy.Char8 as L8
 import           Data.Either                      (partitionEithers)
 import           Data.Functor                     ((<&>))
-import           Data.Map.Strict                  (Map)
+import           Data.Map                         (Map)
 import qualified Data.Map.Strict            as M
 import qualified Data.Set                   as S
 import           Data.Text                        (Text)
-import qualified Data.Text                  as T
-import qualified Data.Text.IO               as T
-import qualified Data.Text.Encoding         as TE
+import qualified Data.Text as T
+import           Data.Text.Encoding
 import qualified Data.Vector                as V
 import           System.IO.Temp                   (getCanonicalTemporaryDirectory, createTempDirectory)
 import           UnliftIO.Exception               (bracket)
 
 data Indexer =
     Indexer { indexDocs       :: !(CollectionName -> IndexRequest -> IO (Either [Text] Int))
-            , indexLocalFiles :: !(CollectionName -> [FilePath] -> IO (Either [Text] ()))
+            , indexLocalFiles :: !(CollectionName -> [FilePath] -> IO (Either [Text] Int))
             , deleteDocument  :: !(CollectionName -> String -> IO (Either [Text] ()))
             , isDocDeleted    :: !(CollectionName -> String -> IO (Either [Text] (Map Text Int)))
             }
@@ -71,15 +71,15 @@ indexDocsImpl env writer metadataApi compactor registry collectionName (IndexReq
               . V.map (\(Doc u c) -> InputDoc u c "none") --TODO ugly
               $ V.fromList ds
 
-    let bin' = Bin { getCmd   = indexerBinary env
-                   , getArgs  = ["index_docs", idxCmpDir]
-                   , getInput = Just (lcbor input) }
+    let bin = Bin { getCmd   = indexerBinary env
+                  , getArgs  = ["index_docs", idxCmpDir]
+                  , getInput = Just (lcbor input) }
 
-    runCbor bin' >>= \case
+    runCbor bin >>= \case
 
         Left l -> pure
                 . Left
-                . map TE.decodeUtf8
+                . map decodeUtf8
                 $ l
 
         Right (stderr, IndexReply nd _ _) ->
@@ -114,22 +114,17 @@ indexLocalFileImpl :: Environment
                    -> Registry
                    -> CollectionName
                    -> [FilePath]  -- TO Vector? or just json
-                   -> IO (Either [Text] ())
+                   -> IO (Either [Text] Int)
 indexLocalFileImpl env writer metadataApi compactor registry collectionName filePaths = do
     -- jsonify?
     -- Unnecessary packing
     -- safe-exceptions
-    unsortedDocs <- forM filePaths $ \fp ->
-        Doc (T.pack fp) <$> T.readFile fp
 
-    indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest unsortedDocs) >>= \case
+    unsortedDocs <- forM filePaths $ \fp -> do
+        c <- C8.readFile fp
+        pure $ Doc (T.pack fp) (decodeUtf8Lenient c)
 
-        Left e ->
-            pure $ Left e
-
-        Right i -> do
-            putStrLn $ "Indexed: " ++ show i ++ " documents."
-            pure $ Right ()
+    indexDocsImpl env writer metadataApi compactor registry collectionName (IndexRequest unsortedDocs)
 
 deleteDocumentImpl :: Environment
                    -> Registry
@@ -153,7 +148,7 @@ deleteDocumentImpl env reg collectionName docUrl =
                 then Right ()
 
                 else Left
-                   . map TE.decodeUtf8
+                   . map decodeUtf8
                    $ concat lefts
 
         where
@@ -191,7 +186,7 @@ isDocDeletedImpl env reg collectionName docUrl =
                    $ repeat 1
 
                 else Left
-                   . map TE.decodeUtf8
+                   . map decodeUtf8
                    $ concat lefts
 
     where
@@ -202,7 +197,7 @@ isDocDeletedImpl env reg collectionName docUrl =
                       , getInput = Nothing }
         in runBs bin <&> \case
             Left l -> Left l
-            Right (stderr, stdout) -> Right . TE.decodeUtf8 . L8.toStrict $ stdout
+            Right (stderr, stdout) -> Right . decodeUtf8 . L8.toStrict $ stdout
 
 releaseComponents :: Registry -> [Component] -> IO ()
 releaseComponents reg = mapM_ (releaseLockIO reg)

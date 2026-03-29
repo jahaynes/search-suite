@@ -8,7 +8,7 @@ author:              John Haynes
 extra-source-files:  CHANGELOG.md
 
 common deps
-  build-depends:       aeson, async, async-extra, base, binary, bytestring, crawler-lib, WebArchive, cereal, containers, deepseq, directory, hashable, heaps, http-media, lens, process-extras, resourcet, safe, serialise, servant, servant-server, servant-swagger, servant-swagger-ui, shared-proto, split, stm, stm-containers, string-interpolate, swagger2, tagsoup, temporary, text, time, transformers, typed-process, unliftio, uuid, vector, wai-cors, wai-middleware-prometheus, warp
+  build-depends:       aeson, async, async-extra, base, binary, bytestring, crawler-lib, WebArchive, cereal, containers, deepseq, directory, hashable, heaps, hostname, http-media, lens, process-extras, resourcet, safe, serialise, servant, servant-server, servant-swagger, servant-swagger-ui, shared-proto, split, stm, stm-containers, string-interpolate, swagger2, tagsoup, temporary, text, time, transformers, typed-process, unliftio, uuid, vector, wai-cors, wai-middleware-prometheus, warp
 
 library
   import:              deps
@@ -21,11 +21,13 @@ library
                        Controllers.Collections
                        Controllers.Controller,
                        Controllers.Diagnostic,
+                       Controllers.GitIndexation,
                        Controllers.Indexation,
                        Controllers.Mime,
                        Controllers.Query,
                        Controllers.WarcIndexation,
                        Environment,
+                       Extensions.GitIndexer,
                        Extensions.WarcIndexer,
                        Importer,
                        ImporterTypes,
@@ -75,11 +77,13 @@ executable searchapi3
                       Controllers.Collections
                       Controllers.Controller,
                       Controllers.Diagnostic,
+                      Controllers.GitIndexation,
                       Controllers.Indexation,
                       Controllers.Mime,
                       Controllers.Query,
                       Controllers.WarcIndexation,
                       Environment,
+                      Extensions.GitIndexer,
                       Extensions.WarcIndexer,
                       Importer,
                       ImporterTypes,

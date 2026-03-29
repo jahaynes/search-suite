@@ -1,22 +1,24 @@
 {-# LANGUAGE DataKinds,
              TypeOperators #-}
 
-module Controllers.WarcIndexation where
+module Controllers.WarcIndexation ( WarcIndexationApi
+                                  , warcIndexationServer
+                                  ) where
 
 import Extensions.WarcIndexer (WarcIndexer (..))
 import Types                  (CollectionName)
 
 import Servant
 
-type WarcIndexationApi = "indexLocalWarcFile" :> Capture "col" CollectionName
-                                              :> ReqBody '[PlainText] String
-                                              :> Post '[JSON] (Either String ())
+type WarcIndexationApi =
+    "indexLocalWarcFile" :> Capture "col" CollectionName
+                         :> ReqBody '[PlainText] String
+                         :> Post '[JSON] (Either String ())
 
 warcIndexationApi :: Proxy WarcIndexationApi
 warcIndexationApi = Proxy
 
 warcIndexationServer :: WarcIndexer
                      -> ServerT WarcIndexationApi IO 
-warcIndexationServer warcIndexer
-    = indexLocalWarcFile warcIndexer
-
+warcIndexationServer warcIndexer =
+    indexLocalWarcFile warcIndexer
