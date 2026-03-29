@@ -8,11 +8,53 @@ author:              John Haynes
 extra-source-files:  CHANGELOG.md
 
 common deps
-  build-depends:       aeson, async, async-extra, base, binary, bytestring, crawler-lib, WebArchive, cereal, containers, deepseq, directory, hashable, heaps, hostname, http-media, lens, process-extras, resourcet, safe, serialise, servant, servant-server, servant-swagger, servant-swagger-ui, shared-proto, split, stm, stm-containers, string-interpolate, swagger2, tagsoup, temporary, text, time, transformers, typed-process, unliftio, uuid, vector, wai-cors, wai-middleware-prometheus, warp
+  build-depends: WebArchive,
+                 aeson,
+                 async,
+                 async-extra,
+                 base,
+                 binary,
+                 bytestring,
+                 cereal,
+                 containers,
+                 crawler-lib,
+                 deepseq,
+                 directory,
+                 hashable,
+                 heaps,
+                 hostname,
+                 http-media,
+                 lens,
+                 process-extras,
+                 resourcet,
+                 safe,
+                 serialise,
+                 servant,
+                 servant-server,
+                 servant-swagger,
+                 servant-swagger-ui,
+                 shared-proto,
+                 split,
+                 stm,
+                 stm-containers,
+                 string-interpolate,
+                 swagger2,
+                 tagsoup,
+                 temporary,
+                 text,
+                 time,
+                 transformers,
+                 typed-process,
+                 unliftio,
+                 uuid,
+                 vector,
+                 wai-cors,
+                 wai-middleware-prometheus,
+                 warp
 
 library
   import:              deps
-  ghc-options:         -Wall -O2
+  ghc-options:         -Wall -Wunused-packages -O2
   exposed-modules:     Api,
                        Bin,
                        Compactor,
@@ -55,7 +97,7 @@ library
 
 executable benchmarks
     import:           deps
-    ghc-options:      -Wall -threaded -O2
+    ghc-options:      -Wall -Wunused-packages -threaded -O2
     build-depends:    searchapi3, criterion
     main-is:          Bench.hs
     other-modules:    CompactorStrategy
@@ -67,7 +109,7 @@ executable benchmarks
 
 executable searchapi3
     import:           deps
-    ghc-options:      -Wall -threaded -O2
+    ghc-options:      -Wall -Wunused-packages -threaded -O2
     build-depends:    searchapi3
     other-modules:    Api,
                       Bin,
