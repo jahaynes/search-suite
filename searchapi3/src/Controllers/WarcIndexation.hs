@@ -15,9 +15,6 @@ type WarcIndexationApi =
                          :> ReqBody '[PlainText] String
                          :> Post '[JSON] (Either String ())
 
-warcIndexationApi :: Proxy WarcIndexationApi
-warcIndexationApi = Proxy
-
 warcIndexationServer :: WarcIndexer
                      -> ServerT WarcIndexationApi IO 
 warcIndexationServer warcIndexer =

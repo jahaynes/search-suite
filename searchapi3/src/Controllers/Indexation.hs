@@ -7,7 +7,6 @@ module Controllers.Indexation where
 
 import Api                   (Doc (Doc), IndexRequest (IndexRequest))
 import Errors.Errors         (Error)
-import Extensions.GitIndexer (GitIndexer (..))
 import Indexer               (Indexer (..))
 import Network.Fetcher       (Fetcher (fetch))
 import Page.Page
