@@ -311,3 +311,19 @@ init({
     selectedCollections: savedState.selectedCollections,
     results: savedResults
 });
+
+// Handle bfcache restoration - pageshow fires even when restored from bfcache
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        console.log('[StructuredSearch] Restored from bfcache, re-initializing');
+        collectionsInitialized = false;
+        debounce = null;
+        const state = restoreUIState();
+        const results = restoreResults();
+        init({
+            query: state.query,
+            selectedCollections: state.selectedCollections,
+            results: results
+        });
+    }
+});
