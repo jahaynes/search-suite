@@ -33,6 +33,7 @@ const reqHeaders: RequestInit = {
 
 const SESSION_KEY_QUERY = 'structured_query';
 const SESSION_KEY_SELECTED_COLLECTIONS = 'structured_selected_collections';
+const SESSION_KEY_RESULTS = 'structured_results';
 
 function renderResult(collectionName: string, result: UnscoredResult) {
 
@@ -128,14 +129,36 @@ const saveUIState = () => {
     sessionStorage.setItem(SESSION_KEY_SELECTED_COLLECTIONS, JSON.stringify([...state.selectedCollections]));
 }
 
-const restoreUIState = (): { query: string | null; selectedCollections: string[] | null } => {
+const saveResults = (results: Map<string, UnscoredResults>) => {
+    // Convert Map to array of entries for JSON serialization
+    const serializable: [string, UnscoredResults][] = [];
+    results.forEach((value, key) => {
+        serializable.push([key, value]);
+    });
+    sessionStorage.setItem(SESSION_KEY_RESULTS, JSON.stringify(serializable));
+}
+
+const restoreResults = (): Map<string, UnscoredResults> | null => {
+    const saved = sessionStorage.getItem(SESSION_KEY_RESULTS);
+    if (saved) {
+        try {
+            const parsed: [string, UnscoredResults][] = JSON.parse(saved);
+            return new Map(parsed);
+        } catch {
+            return null;
+        }
+    }
+    return null;
+}
+
+const restoreUIState = () => {
     return {
         query: sessionStorage.getItem(SESSION_KEY_QUERY),
         selectedCollections: (() => {
             const saved = sessionStorage.getItem(SESSION_KEY_SELECTED_COLLECTIONS);
             if (saved) {
                 try {
-                    return JSON.parse(saved);
+                    return JSON.parse(saved) as string[];
                 } catch {
                     return null;
                 }
@@ -148,7 +171,7 @@ const restoreUIState = (): { query: string | null; selectedCollections: string[]
 let debounce: Debounce | null = null;
 let collectionsInitialized = false;
 
-const displayCollections = async (collectionNames: string[], restoredSelections: string[] | null) => {
+const displayCollections = (collectionNames: string[], restoredSelections: string[] | null) => {
 
     if (collectionsInitialized) return;
     collectionsInitialized = true;
@@ -158,7 +181,7 @@ const displayCollections = async (collectionNames: string[], restoredSelections:
 
     const legend = document.createElement("legend");
     legend.textContent = "Include collections:";
-    collections.append(legend);
+    collections.appendChild(legend);
 
     for (const collectionName of collectionNames) {
 
@@ -182,95 +205,103 @@ const displayCollections = async (collectionNames: string[], restoredSelections:
         label.setAttribute("for", checkboxName);
         label.textContent = collectionName;
 
-        checkbox.addEventListener("change", async (_: Event) => {
+        checkbox.addEventListener("change", () => {
             saveUIState();
-            await runSearch();
+            runSearch();
         });
-        collectionDiv.append(checkbox);
-        collectionDiv.append(label);
-        collections.append(collectionDiv);
+        collectionDiv.appendChild(checkbox);
+        collectionDiv.appendChild(label);
+        collections.appendChild(collectionDiv);
     }
+}
+
+const displayResults = (collectionResponses: Map<string, UnscoredResults>) => {
+    const resultDebounce = document.getElementById('result_debounce') as HTMLDivElement;
+    resultDebounce.innerHTML = '';
+
+    const resultColumns = document.createElement('div');
+    resultColumns.id = 'result-columns';
+    resultColumns.classList.add('grid');
+
+    for (const [collectionName, results] of collectionResponses.entries()) {
+        const columnDiv = document.createElement("div");
+        const columnHead = document.createElement("p");
+        columnHead.textContent = collectionName;
+        columnDiv.appendChild(columnHead);
+        const resultColumn = document.createElement("ol");
+        resultColumn.id = 'result_columns_' + collectionName;
+        for (const result of results.unscored_results) {
+            resultColumn.appendChild(renderResult(collectionName, result));
+        }
+        columnDiv.appendChild(resultColumn);
+        resultColumns.appendChild(columnDiv);
+    }
+
+    resultDebounce.appendChild(resultColumns);
 }
 
 const runSearch = async () => {
     if (!debounce) return;
 
-    // Prepare debouncing
-    const resultDebounce = document.getElementById('result_debounce') as HTMLDivElement;
-    resultDebounce.innerHTML = '';
-
     const newSearchId = Math.random();
     debounce.currentSearchId = newSearchId;
 
-    // Clear UI
-    const resultColumns = document.createElement('div');
-    resultColumns.id = 'result-columns';
-    resultColumns.classList.add('grid');
-
-    // Determine the selected collections
     const state = getUIState();
-
-    // Fire search
     const collectionResponses = await fireStructuredSearch(state);
+
+    // Check if this search is still valid (not superseded by another)
+    if (newSearchId !== debounce.currentSearchId) return;
 
     // Populate UI
     // TODO ('Left')
     if ('Right' in collectionResponses) {
-        for (const [collectionName, results] of collectionResponses.Right.entries()) {
-            const columnDiv = document.createElement("div");
-            const columnHead = document.createElement("p");
-            columnHead.textContent = collectionName;
-            columnDiv.appendChild(columnHead);
-            const resultColumn = document.createElement("ol");
-            resultColumn.id = 'result_columns_' + collectionName;
-            for (const result of results.unscored_results) {
-                resultColumn.appendChild(renderResult(collectionName, result));
-            }
-            columnDiv.appendChild(resultColumn);
-            resultColumns.appendChild(columnDiv);
-        }
+        const resultsMap = collectionResponses.Right;
+        
+        // Save results to sessionStorage
+        saveResults(resultsMap);
 
-        if (newSearchId === debounce.currentSearchId) {
-            resultDebounce.appendChild(resultColumns);
-        }
+        // Display results
+        displayResults(resultsMap);
     }
 }
 
-const init = (restoredState: { query: string | null; selectedCollections: string[] | null }) => {
+const init = (restoredState: { query: string | null; selectedCollections: string[] | null; results: Map<string, UnscoredResults> | null }) => {
     debounce = { currentSearchId: Math.random() };
 
-    const searchInput = document.getElementById("structured_search")!;
+    const searchInput = document.getElementById("structured_search") as HTMLInputElement;
 
     // Restore query if available
     if (restoredState.query) {
-        (searchInput as HTMLInputElement).value = restoredState.query;
+        searchInput.value = restoredState.query;
     }
 
-    searchInput.addEventListener("input", async () => {
+    searchInput.addEventListener("input", () => {
         saveUIState();
-        await runSearch();
+        runSearch();
     });
 
     // Fetch collections and initialize UI
     fetch("/collection", reqHeaders)
         .then(resp => resp.json())
-        .then(cns => displayCollections(cns, restoredState.selectedCollections))
-        .then(() => runSearch());
+        .then((cns: string[]) => displayCollections(cns, restoredState.selectedCollections))
+        .then(() => {
+            // If we have cached results, display them immediately
+            if (restoredState.results) {
+                displayResults(restoredState.results);
+            } else {
+                // Otherwise run a new search
+                runSearch();
+            }
+        });
 }
 
 // Restore state from sessionStorage
 const savedState = restoreUIState();
+const savedResults = restoreResults();
 
-// Always initialize on page load
-// This handles both fresh page loads and cases where bfcache wasn't used
-init(savedState);
-
-// Handle bfcache restoration - fires when page is restored from bfcache
-window.addEventListener('pageshow', (event) => {
-    if (event.persisted) {
-        // Page was restored from bfcache - reset state tracking and reinitialize
-        collectionsInitialized = false;
-        debounce = null;
-        init(restoreUIState());
-    }
+// Initialize with restored state and results
+init({
+    query: savedState.query,
+    selectedCollections: savedState.selectedCollections,
+    results: savedResults
 });
