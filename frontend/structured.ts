@@ -1,4 +1,3 @@
-
 import type { Either } from './common.js';
 import { gatherMapErrors } from './common.js';
 
@@ -30,6 +29,8 @@ const reqHeaders: RequestInit = {
     cache: 'no-cache',
     headers: { 'Content-Type': 'application/json' }
 }
+
+const SESSION_KEY_SELECTED_COLLECTIONS = 'structured_selected_collections';
 
 function renderResult(collectionName: string, result: UnscoredResult) {
 
@@ -118,7 +119,24 @@ const getUIState = (): QueryUIState => {
     return { selectedCollections: selectedCollections };
 }
 
-const displayCollections = async (debounce: Debounce, collectionNames: string[]) => {
+const saveUIState = () => {
+    const state = getUIState();
+    sessionStorage.setItem(SESSION_KEY_SELECTED_COLLECTIONS, JSON.stringify([...state.selectedCollections]));
+}
+
+const restoreUIState = (): string[] | null => {
+    const saved = sessionStorage.getItem(SESSION_KEY_SELECTED_COLLECTIONS);
+    if (saved) {
+        try {
+            return JSON.parse(saved);
+        } catch {
+            return null;
+        }
+    }
+    return null;
+}
+
+const displayCollections = async (debounce: Debounce, collectionNames: string[], restoredSelections: string[] | null) => {
 
     const collections = document.getElementById("collections")!;
     collections.innerHTML = '';
@@ -140,11 +158,19 @@ const displayCollections = async (debounce: Debounce, collectionNames: string[])
         checkbox.setAttribute("value", collectionName)
         checkbox.classList.add("collection-selector");
 
+        // Restore selection state if available
+        if (restoredSelections && restoredSelections.includes(collectionName)) {
+            checkbox.checked = true;
+        }
+
         const label = document.createElement("label");
         label.setAttribute("for", checkboxName);
         label.textContent = collectionName;
 
-        checkbox.addEventListener("change", async (_: Event) => await runSearch(debounce));
+        checkbox.addEventListener("change", async (_: Event) => {
+            saveUIState();
+            await runSearch(debounce);
+        });
         collectionDiv.append(checkbox);
         collectionDiv.append(label);
         collections.append(collectionDiv);
@@ -194,19 +220,42 @@ const runSearch = async (debounce: Debounce) => {
     }
 }
 
-const init = async () => {
+const init = async (restoredSelections: string[] | null = null) => {
 
     const debounce = { currentSearchId: Math.random() }
 
     document
         .getElementById("structured_search")!
-        .addEventListener("input", async () => await runSearch(debounce));
+        .addEventListener("input", async () => {
+            saveUIState();
+            await runSearch(debounce);
+        });
 
     await fetch("/collection", reqHeaders)
         .then(resp => resp.json())
-        .then(cns => displayCollections(debounce, cns));
+        .then(cns => displayCollections(debounce, cns, restoredSelections));
 
     await runSearch(debounce);
 }
 
-init();
+// Handle bfcache restoration - fires when page is restored from bfcache or regular navigation
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        // Page was restored from bfcache - restore state without full reinit
+        const restoredSelections = restoreUIState();
+        if (restoredSelections) {
+            init(restoredSelections);
+        } else {
+            init();
+        }
+    }
+});
+
+// Only run init on initial page load (not on bfcache restore)
+// Check if this is a back/forward navigation by examining the navigation type
+const navigationEntries = performance.getEntriesByType('navigation');
+const isRestoredFromBfcache = navigationEntries.length > 0 && 
+    (navigationEntries[0] as PerformanceNavigationTiming).type === 'back_forward';
+if (!isRestoredFromBfcache) {
+    init();
+}
