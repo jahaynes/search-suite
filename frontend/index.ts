@@ -88,7 +88,42 @@ function renderResult(collectionName: string, result: QueryResult) {
     return resultItem;
 }
 
+const restoreOrFireSearch = async (state: QueryUIState) => {
+
+    const collectionName = sessionStorage['COLLECTION_NAME_1'];
+    const strResults = sessionStorage['SEARCH_RESULTS_1'];
+
+    if (collectionName && strResults) {
+        const results = JSON.parse(strResults);
+        displaySearchResult(collectionName, results);
+    } else {
+        await fireSearch(state);
+    }
+}
+
+const clearSearchState = async () => {
+    sessionStorage['COLLECTION_NAME_1'] = null;
+    sessionStorage['SEARCH_RESULTS_1'] = null;
+}
+
+const storeSearchState = async (collectionName: string, results: QueryResults) => {
+    sessionStorage['COLLECTION_NAME_1'] = collectionName;
+    sessionStorage['SEARCH_RESULTS_1'] = JSON.stringify(results);
+    return results;
+}
+
+const displaySearchResult = async (collectionName: string, data: QueryResults) => {
+    const resultList = document.querySelector<HTMLElement>("#results")!;
+    resultList.innerHTML = '';
+    for (let i = 0; i < data.results.length; i++) {
+        const resultItem = renderResult(collectionName, data.results[i]!);
+        resultList.appendChild(resultItem);
+    }
+}
+
 const fireSearch = async (state: QueryUIState) => {
+
+    clearSearchState();
 
     const collectionName: string | null = state.selectedCollection;
     const query: string | null = state.query;
@@ -105,14 +140,8 @@ const fireSearch = async (state: QueryUIState) => {
 
     await fetch(url, reqHeaders)
         .then(resp => resp.json())
-        .then((data: QueryResults) => {
-            const resultList = document.querySelector<HTMLElement>("#results")!;
-            resultList.innerHTML = '';
-            for (let i = 0; i < data.results.length; i++) {
-                const resultItem = renderResult(collectionName, data.results[i]!);
-                resultList.appendChild(resultItem);
-            }
-        });
+        .then((data: QueryResults) => storeSearchState(collectionName, data))
+        .then((data: QueryResults) => displaySearchResult(collectionName, data));
 }
 
 const displayCollections = async (state: QueryUIState, collectionNames: string[]) => {
@@ -190,7 +219,7 @@ const init = async () => {
         .then(resp => resp.json())
         .then(cns => displayCollections(state, cns));
 
-    await fireSearch(state);
+    await restoreOrFireSearch(state);
 }
 
 init();
