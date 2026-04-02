@@ -2,12 +2,13 @@
 
 module WarcFileReader ( WarcFileReader (..), createWarcFileReader) where
 
+import Codec.Compression.GZip (decompress)
 import Data.Warc.Header
 import Data.Warc.Key
-import Data.Warc.Parse     (fromByteStringRemainder)
+import Data.Warc.Parse        (fromByteStringRemainder)
 import Data.Warc.Value
-import Data.Warc.WarcEntry (WarcEntry (..))
-import Logger              (Logger (..))
+import Data.Warc.WarcEntry    (WarcEntry (..))
+import Logger                 (Logger (..))
 
 import           Data.ByteString                   (ByteString)
 import qualified Data.ByteString            as BS
@@ -84,7 +85,10 @@ batchedReadImpl batchSize logger warcFile action = do
     sz <- fromIntegral <$> getFileSize warcFile
     h <- openFile warcFile ReadMode
 
-    let job = do contents <- L8.hGetContents h
+    let job = do rawContents <- L8.hGetContents h
+                 let contents = if ".gz" `L8.isSuffixOf` L8.pack warcFile
+                                    then decompress rawContents
+                                    else rawContents
                  go sz 0 0 [] contents
                  hClose h
                  pure $ Right ()

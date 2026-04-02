@@ -48,7 +48,8 @@ common deps
                  vector,
                  wai-cors,
                  wai-middleware-prometheus,
-                 warp
+                 warp,
+                 zlib
 
 library
   import:              deps
