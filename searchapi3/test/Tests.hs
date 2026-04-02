@@ -196,6 +196,8 @@ buildAndRunTests = do
     testDeletionAndMerge env registry indexer
     testDeleteAndReAdd indexer queryProcessor
 
+indexDocuments = indexDocs
+
 testAddTwoDocs :: MonadIO m => Environment -> Registry -> Indexer -> m ()
 testAddTwoDocs env registry indexer = do
     let colName = "index-2-docs"
