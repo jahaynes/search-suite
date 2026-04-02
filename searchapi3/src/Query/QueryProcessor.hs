@@ -121,8 +121,7 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
         -- then resort by score
         let qrs = V.fromList
                 . sortOn (negate . score . snd)
-                . map snd
-                $ M.toList resultMap
+                $ M.elems resultMap
 
         qrs
 
