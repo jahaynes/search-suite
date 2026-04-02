@@ -8,8 +8,8 @@ author:              John Haynes
 extra-source-files:  CHANGELOG.md
 
 common build-opts
-    ghc-options: -Wall -Wunused-packages -O0 
---  -threaded -O2
+    ghc-options: -Wall -Wunused-packages -threaded -O2
+
 common deps
   build-depends: WebArchive,
                  aeson,
