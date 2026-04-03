@@ -59,7 +59,7 @@ library
                        Compactor,
                        CompactorStrategy,
                        Component,
-                       Controllers.Collections
+                       Controllers.Collections,
                        Controllers.Controller,
                        Controllers.Diagnostic,
                        Controllers.GitIndexation,
@@ -114,7 +114,7 @@ executable searchapi3
                       Compactor,
                       CompactorStrategy,
                       Component,
-                      Controllers.Collections
+                      Controllers.Collections,
                       Controllers.Controller,
                       Controllers.Diagnostic,
                       Controllers.GitIndexation,
