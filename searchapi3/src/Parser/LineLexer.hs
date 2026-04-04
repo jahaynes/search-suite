@@ -8,6 +8,7 @@ import           Control.Monad.Trans.Class (lift)
 import           Control.Monad.Trans.Writer (WriterT, tell, runWriterT, censor)
 import           Data.ByteString             (ByteString)
 import qualified Data.ByteString.Char8 as C8
+import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Text.Encoding (decodeUtf8)
 
@@ -21,15 +22,16 @@ fromInput :: ByteString -> LexState
 fromInput = LexState 0 0
 
 type LineLexer a =
-    WriterT [T.Text] (Parser LexState) a
+    WriterT [Text] (Parser LexState) a
 
 getCol :: LineLexer Int
-getCol = do
-    r <- lift $ Parser (\ls@(LexState _ c _ ) -> Right (ls, c))
-    pure r
+getCol = lift $ Parser (\ls@(LexState _ c _ ) -> Right (ls, c))
 
 lexChar :: (Char -> Bool) -> LineLexer Char
-lexChar f = lift $ Parser go
+lexChar = lift . lexChar'
+
+lexChar' :: (Char -> Bool) -> Parser LexState Char
+lexChar' f = Parser go
     where
     go (LexState r c i)
 
@@ -47,7 +49,10 @@ lexChar f = lift $ Parser go
         (start, rest) = C8.splitAt 1 i
 
 lexString :: ByteString -> LineLexer ByteString
-lexString bs = lift $ Parser go
+lexString = lift . lexString'
+
+lexString' :: ByteString -> Parser LexState ByteString
+lexString' bs = Parser go
 
     where
     go (LexState r c i)
@@ -67,7 +72,10 @@ lexString bs = lift $ Parser go
         (start, rest) = C8.splitAt bsLength i
 
 lTakeWhile :: (Char -> Bool) -> LineLexer ByteString
-lTakeWhile p = lift $ Parser go
+lTakeWhile = lift . lTakeWhile'
+
+lTakeWhile' :: (Char -> Bool) -> Parser LexState ByteString
+lTakeWhile' p = Parser go
     where
     go (LexState r c i) =
         let (some, rest) = C8.span p i
@@ -96,18 +104,14 @@ newLineCol r c consumed =
         -- Some newlines hit.  Adjust both row and col
         ns -> (r + length ns, len - last ns - 1)
 
--- | Add an error message to the accumulated list
-tellError :: T.Text -> LineLexer ()
-tellError = tell . pure
-
 -- | Run the LineLexer and return either the accumulated errors or the result
-runLineLexer :: LineLexer a -> LexState -> Either T.Text (LexState, a)
+runLineLexer :: LineLexer a -> LexState -> Either [Text] (LexState, a)
 runLineLexer m ls =
     case runWriterT m `runParser` ls of
-        Right (ls', (a, errs))
-            | null errs -> Right (ls', a)
-            | otherwise -> Left $ T.unlines errs
-        Left err -> Left err
+        Right (ls', (a, logs))
+            | null logs -> Right (ls', a)
+            | otherwise -> Left logs
+        Left err -> Left [err]
 
 -- | Run a sub-parser and discard any accumulated errors if it fails
 -- Useful for backtracking with <|>

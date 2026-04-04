@@ -39,7 +39,7 @@ type QueryApi = "query" :> Capture "col" CollectionName
 
            :<|> "structured-query" :> Capture "col" CollectionName
                                    :> ReqBody '[PlainText] Text
-                                   :> Post '[JSON] (Either Text UnscoredResults)
+                                   :> Post '[JSON] (Either [Text] UnscoredResults)
 
            :<|> "spelling" :> Capture "col" CollectionName
                            :> QueryParam' '[Required] "s" Text
@@ -71,7 +71,9 @@ queryServer qp sp struc reg wfr logger
 
     structuredQuery cn txt = do
         case parseQuery (encodeUtf8 txt) of
-            Left e   -> pure $ Left e
+            Left es   -> do
+                mapM_ print es
+                pure $ Left es
             Right sq -> do
                 info logger [[i|Parsed: #{sq}|]]
                 runStructured struc cn sq

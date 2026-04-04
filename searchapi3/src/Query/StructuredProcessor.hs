@@ -27,7 +27,7 @@ import           Data.Text                (Text)
 import           Data.Text.Encoding       (decodeUtf8, encodeUtf8)
 
 newtype StructuredProcessor =
-    StructuredProcessor { runStructured :: CollectionName -> Clause -> IO (Either Text UnscoredResults)
+    StructuredProcessor { runStructured :: CollectionName -> Clause -> IO (Either [Text] UnscoredResults)
                         }
 
 data Mode = Normal | Regex deriving Eq
@@ -47,7 +47,7 @@ runStructuredImpl :: Environment
                   -> Logger
                   -> CollectionName
                   -> Clause
-                  -> IO (Either Text UnscoredResults)
+                  -> IO (Either [Text] UnscoredResults)
 runStructuredImpl env reg metadataApi logger collectionName@(CollectionName cn) clause =
     withLocks reg collectionName $ \lockedComponents -> do
         rs <- go lockedComponents clause
