@@ -1,35 +1,44 @@
-{-# LANGUAGE OverloadedStrings, OverloadedLists #-}
+{-# LANGUAGE OverloadedStrings
+           , OverloadedLists #-}
 
-import Util.BinarySearchTests (binarySearchTests)
+import Api                       (Doc (..), IndexRequest (..))
+import Compactor                 (Compactor, createCompactor)
+import CompactorStrategy         (fibSet, hybridStrategy)
+import Component                 (Component (..))
+import Environment               (Environment (..))
+import Importer                  (Importer, createImporter)
+import Indexer                   (Indexer (..), createIndexer)
+import Logger                    (Logger, LoggerType (TestLogger), createLogger)
+import Query.QueryParams         (QueryParams (..))
+import Query.QueryProcessor      (QueryProcessor (..), createQueryProcessor)
+import Query.QueryProcessorTypes (QueryResults (..))
+import Registry                  (Registry (..), createRegistry)
+import Metadata                  (MetadataApi, createMetadataApi)
+import Types                     (CollectionName (..), numDocs)
+import Util.BinarySearchTests    (binarySearchTests)
+import WarcFileReader            (WarcFileReader, createWarcFileReader)
+import WarcFileWriter            (WarcFileWriter, createWarcFileWriter)
 
-import Api                    (Doc (..))
-import Compactor              (Compactor, createCompactor)
-import CompactorStrategy      (fibSet, hybridStrategy)
-import Component              (Component (..))
-import Environment            (Environment (..))
-import Importer               (Importer, createImporter)
-import Indexer                (Indexer (..), createIndexer)
-import QueryParams            (QueryParams (..))
-import QueryProcessor         (QueryProcessor (..), createQueryProcessor)
-import QueryProcessorTypes    (QueryResults (..)) 
-import Registry               (Registry (..), createRegistry)
-import Metadata               (MetadataApi, createMetadataApi)
-import System.Directory       (removeDirectoryRecursive)
-import Types                  (CollectionName (..), numDocs)
-import WarcFileReader         (WarcFileReader, createWarcFileReader)
-import WarcFileWriter         (WarcFileWriter, createWarcFileWriter)
-
-import           Control.Monad               (replicateM, unless)
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.State   (StateT, execStateT, modify')
-import           Control.Concurrent.STM      (atomically)
-import           Data.ByteString.Char8       (ByteString)
+import           Control.Monad             (replicateM, unless)
+import           Control.Monad.IO.Class    (MonadIO (liftIO))
+import           Control.Monad.Trans.State (StateT, execStateT, modify')
+import           Control.Concurrent.STM    (atomically)
 import qualified Data.IntSet     as IS
 import qualified Data.Map.Strict as M
 import qualified Data.Set        as S
-import           Hedgehog
+import           Data.Text                 (Text)
+import qualified Data.Text       as T
+import           Hedgehog                  (assert,
+                                            forAll,
+                                            property,
+                                            checkParallel,
+                                            Gen,
+                                            Group(..),
+                                            Property,
+                                            PropertyT)
 import qualified Hedgehog.Gen    as Gen
 import qualified Hedgehog.Range  as Range
+import           System.Directory          (removeDirectoryRecursive)
 
 main :: IO Bool
 main = do
@@ -48,24 +57,27 @@ testEnv :: Monad m => StateT [Group] m Environment
 testEnv = do
     let idxPath = "../bin/indexer-qp2"
         colPath = "../collections-test"
-        env     = Environment colPath idxPath Nothing
+        env     = Environment { collectionsDir = colPath
+                              , indexerBinary  = idxPath
+                              , hostname       = "test-hostname"
+                              , proxySetting   = Nothing
+                              }
         test1   = ("indexerPath",    property (assert $ indexerBinary env == idxPath))
         test2   = ("collectionsDir", property (assert $ collectionsDir env == colPath))
-    modify' ((++) [Group "Environment tests" [test1, test2]])
+    modify' ((++) [ Group { groupName = "Environment tests"
+                          , groupProperties = [test1, test2]
+                          } ])
     pure env
 
-noopLogger :: Monad m => StateT [Group] m (ByteString -> IO ())
-noopLogger = pure $ \_ -> pure ()
-
 testedRegistry :: MonadIO m => Environment
-                            -> (ByteString -> IO ()) 
+                            -> Logger
                             -> StateT [Group] m Registry
 testedRegistry env logger = do
     registry <- liftIO $ createRegistry env logger
     pure registry
 
 testedWarcReader :: MonadIO m => Int
-                              -> (ByteString -> IO ())
+                              -> Logger
                               -> StateT [Group] m WarcFileReader
 testedWarcReader n l = do
     let warcReader = createWarcFileReader n l
@@ -88,7 +100,7 @@ testedMetadataApi wfr = do
 testedQueryProcessor :: MonadIO m => Environment
                                   -> Registry
                                   -> MetadataApi
-                                  -> (ByteString -> IO ())
+                                  -> Logger
                                   -> StateT [Group] m QueryProcessor
 testedQueryProcessor env registry metadataApi logger = do
     let queryProcessor = createQueryProcessor env registry metadataApi logger
@@ -108,72 +120,70 @@ willReturnToFib = property $ do
         | all (\c -> cmp_size c `IS.member` fibSet) cs = pure ()
         | otherwise =
             case hybridStrategy cs of
-                Nothing -> go (n+1) (S.insert (Component 1 (show n)) cs)
+                Nothing -> go (n+1) (S.insert (Component { cmp_size = 1, cmp_filePath = (show n) }) cs)
                 Just (_, a, b) ->
                     let sa = cmp_size a
                         sb = cmp_size b
-                        cs' = S.insert (Component (sa + sb) (show n)) . S.delete a . S.delete b $ cs
+                        cs' = S.insert (Component { cmp_size = (sa + sb), cmp_filePath = (show n) }) . S.delete a . S.delete b $ cs
                     in go (n+1) cs'
 
     component :: Gen Component
     component = do
         i <- Gen.int $ Range.constant 0 10
-        pure $ Component i (show i)
+        pure $ Component { cmp_size = i, cmp_filePath = (show i) }
 
     nonFibComponent :: Gen Component
     nonFibComponent = do
         i <- Gen.filter (\i -> not $ IS.member i fibSet) . Gen.int $ Range.constant 0 200
-        pure $ Component i (show i)
+        pure $ Component { cmp_size = i, cmp_filePath = (show i) }
 
 testedCompactor :: MonadIO m => Environment
                              -> Registry
                              -> WarcFileWriter
                              -> MetadataApi
-                             -> (ByteString -> IO ())
+                             -> Logger
                              -> StateT [Group] m Compactor
 testedCompactor env reg wfw metadataApi logger = do
-
     let compactor = createCompactor env reg wfw metadataApi logger
-
     modify' ((++) [Group "Compactor" [("will return to fibonacci", willReturnToFib)]])
-
     pure compactor
-
-
 
 testedImporter :: MonadIO m => Environment
                             -> Registry
                             -> Compactor
+                            -> Logger
                             -> StateT [Group] m Importer
-testedImporter env reg compactor = do
-    let importer = createImporter env reg compactor
+testedImporter env registry compactor logger = do
+    let importer = createImporter env
+                                  registry
+                                  compactor
+                                  logger
     -- TODO tests
     pure importer
 
 testedIndexer :: MonadIO m => Environment
-                           -> WarcFileReader
                            -> WarcFileWriter
                            -> MetadataApi
                            -> Compactor
                            -> Registry
                            -> StateT [Group] m Indexer
-testedIndexer env wfr wfw metadataApi compactor reg = do
-    let indexer = createIndexer env wfr wfw metadataApi compactor reg
+testedIndexer env warcWriter metadataApi compactor registry = do
+    let indexer = createIndexer env warcWriter metadataApi compactor registry
     -- TODO tests
     pure indexer
-                        
+
 buildTestedEnvironment :: StateT [Group] IO (Environment, Registry, Indexer, QueryProcessor)
 buildTestedEnvironment = do
     env         <- testEnv
-    logger      <- noopLogger
+    let logger   = createLogger TestLogger
     registry    <- testedRegistry env logger
     warcReader  <- testedWarcReader 128 logger
     warcWriter  <- testedWarcWriter
     metadataApi <- testedMetadataApi warcReader
     qp          <- testedQueryProcessor env registry metadataApi logger
     compactor   <- testedCompactor env registry warcWriter metadataApi logger
-    _           <- testedImporter env registry compactor
-    indexer     <- testedIndexer env warcReader warcWriter metadataApi compactor registry
+    _           <- testedImporter env registry compactor logger
+    indexer     <- testedIndexer env warcWriter metadataApi compactor registry
     pure (env, registry, indexer, qp)
 
 buildAndRunTests :: StateT [Group] IO ()
@@ -193,13 +203,13 @@ testAddTwoDocs env registry indexer = do
     liftIO $ do
 
         -- Add two docs
-        indexDocuments indexer cn [Doc "foo-1" "bar-1"] >>= \r ->
+        indexDocs indexer cn (IndexRequest [Doc "foo-1" "bar-1"]) >>= \r ->
             assertR "Indexed 1 document" id 1 r
 
         sum . map numDocs . S.toList <$> atomically (viewCollectionComponents registry cn) >>= \r ->
             assertR "Expected 1 doc in total" id 1 (Right r)
 
-        indexDocuments indexer cn [Doc "foo-2" "bar-2"] >>= \r ->
+        indexDocs indexer cn (IndexRequest [Doc "foo-2" "bar-2"]) >>= \r ->
             assertR "Indexed 1 document" id 1 r
 
         sum . map numDocs . S.toList <$> atomically (viewCollectionComponents registry cn) >>= \r ->
@@ -216,8 +226,8 @@ testSimpleQueries env registry indexer queryProcessor = do
     liftIO $ do
 
         -- Test simple queries
-        indexDocuments indexer cn [ Doc "doc-1" "words in first doc"
-                                  , Doc "doc-2" "words in second doc" ] >>= \r ->
+        indexDocs indexer cn (IndexRequest [ Doc "doc-1" "words in first doc"
+                                           , Doc "doc-2" "words in second doc" ]) >>= \r ->
             assertR "Indexed 2 documents" id 2 r
 
         runQuery queryProcessor cn (QueryParams { query = "missing", maxResults = Nothing }) >>= \r -> do
@@ -244,9 +254,9 @@ testDocumentDeletion env registry indexer queryProcessor = do
     liftIO $ do
 
         -- Make three documents
-        indexDocuments indexer cn [ Doc "doc-1" "words in first doc"
-                                  , Doc "doc-2" "words in second doc"
-                                  , Doc "doc-3" "this is doc 3" ] >>= \r ->
+        indexDocs indexer cn (IndexRequest [ Doc "doc-1" "words in first doc"
+                                           , Doc "doc-2" "words in second doc"
+                                           , Doc "doc-3" "this is doc 3" ]) >>= \r ->
             assertR "Indexed 3 documents" id 3 r
 
         -- Ensure query returns all three
@@ -284,12 +294,12 @@ testMultiIndexDeletion env registry indexer = do
         cn = CollectionName colName
     liftIO $ do
 
-        let doc1 = Doc "doc-1" "words in first doc"
-            doc2 = Doc "doc-2" "words in second doc"
-            doc3 = Doc "doc-3" "this is doc 3"
+        let doc1 = Doc { d_url = "doc-1", d_content = "words in first doc" }
+            doc2 = Doc { d_url = "doc-2", d_content = "words in second doc" }
+            doc3 = Doc { d_url = "doc-3", d_content = "this is doc 3" }
 
         -- Index three documents
-        indexDocuments indexer cn [doc1, doc2, doc3] >>= \r ->
+        indexDocs indexer cn (IndexRequest [doc1, doc2, doc3]) >>= \r ->
             assertR "Indexed 3 documents" id 3 r
 
         -- The three docs should comprise one index
@@ -297,7 +307,7 @@ testMultiIndexDeletion env registry indexer = do
             assertR "One index" id 1 n
 
         -- Index an already indexed document
-        indexDocuments indexer cn [doc1] >>= \r ->
+        indexDocs indexer cn (IndexRequest [doc1]) >>= \r ->
             assertR "Indexed 1 document" id 1 r
 
         -- The fourth doc should comprise an extra index
@@ -328,12 +338,12 @@ testDeletionAndMerge env registry indexer = do
         cn = CollectionName colName
     liftIO $ do
 
-        let doc1 = Doc "doc-1" "words in first doc"
-            doc2 = Doc "doc-2" "words in second doc"
-            doc3 = Doc "doc-3" "this is doc 3"
+        let doc1 = Doc { d_url = "doc-1", d_content = "words in first doc" }
+            doc2 = Doc { d_url = "doc-2", d_content = "words in second doc" }
+            doc3 = Doc { d_url = "doc-3", d_content = "this is doc 3" }
 
         -- Index two documents
-        indexDocuments indexer cn [doc1, doc2] >>= \r ->
+        indexDocs indexer cn (IndexRequest [doc1, doc2]) >>= \r ->
             assertR "Indexed 2 documents" id 2 r
 
         -- The two docs should comprise one index
@@ -349,7 +359,7 @@ testDeletionAndMerge env registry indexer = do
             assertR "doc-1 is deleted" id (M.singleton "DELETED" 1) r
 
         -- Index a third document
-        indexDocuments indexer cn [doc3] >>= \r ->
+        indexDocs indexer cn (IndexRequest [doc3]) >>= \r ->
             assertR "Indexed 1 document" id 1 r
 
         -- The third doc should cause a merge (into 1 index)
@@ -368,14 +378,14 @@ testDeleteAndReAdd :: MonadIO m => Indexer -> QueryProcessor -> m ()
 testDeleteAndReAdd indexer queryProcessor =
     let colName = "doc-delete-and-readd"
         cn      = CollectionName colName
-        doc1    = Doc "doc-1" "words in first doc"
-        doc2    = Doc "doc-2" "words in second doc"
-        doc3    = Doc "doc-3" "this is doc 3"
+        doc1    = Doc { d_url = "doc-1", d_content = "words in first doc" }
+        doc2    = Doc { d_url = "doc-2", d_content = "words in second doc" }
+        doc3    = Doc { d_url = "doc-3", d_content = "this is doc 3" }
 
     in liftIO $ do
 
         -- Index three documents
-        indexDocuments indexer cn [doc1, doc2, doc3] >>= \r ->
+        indexDocs indexer cn (IndexRequest [doc1, doc2, doc3]) >>= \r ->
             assertR "Indexed 3 documents" id 3 r
 
         -- Delete doc-2
@@ -391,21 +401,21 @@ testDeleteAndReAdd indexer queryProcessor =
             assertR "Expected 0 results" num_results 0 r
 
         -- Index doc-2 again
-        indexDocuments indexer cn [doc2] >>= \r ->
+        indexDocs indexer cn (IndexRequest [doc2]) >>= \r ->
             assertR "Indexed 1 documents" id 1 r
 
         -- It should return a result
         runQuery queryProcessor cn (QueryParams { query = "second", maxResults = Nothing }) >>= \r ->
             assertR "Expected 1 results" num_results 1 r
 
-countCollectionsIO :: Registry -> CollectionName -> IO (Either String Int)
+countCollectionsIO :: Registry -> CollectionName -> IO (Either [Text] Int)
 countCollectionsIO reg cn = atomically (Right . S.size <$> viewCollectionComponents reg cn)
 
 assertR :: (Applicative f, Eq a, Show a) => String
                                          -> (b -> a)
                                          -> a 
-                                         -> Either String b -> f ()
-assertR   _ _ _ (Left l)  = error l
+                                         -> Either [Text] b -> f ()
+assertR   _ _ _ (Left ls) = error . unlines $ map T.unpack ls
 assertR msg f y (Right x) =
     let y' = f x in
     unless (y' == y) . error $ unlines [ "\nExpected:"

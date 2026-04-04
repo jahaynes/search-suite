@@ -18,7 +18,6 @@ import Types
 
 import           Control.Concurrent.Async (forConcurrently)
 import           Control.Monad            (unless)
-import           Data.ByteString          (ByteString)
 import           Data.Either              (partitionEithers)
 import           Data.List.NonEmpty       (NonEmpty (..))
 import qualified Data.Map.Strict as M
@@ -71,10 +70,10 @@ runStructuredImpl env reg metadataApi logger collectionName@(CollectionName cn) 
         r :| rs <- mapM (go lockedComponents) cs
         pure (foldl' f r rs)
 
-    runUnscored :: Mode -> [Component] -> Text -> IO (Either [ByteString] UnscoredResults)
+    runUnscored :: Mode -> [Component] -> Text -> IO (Either [Text] UnscoredResults)
     runUnscored _ [] _ = do
         let errMsg = [i|No such collection: #{cn}|]
-        infoBs logger [errMsg]
+        info logger [errMsg]
         pure $ Left [errMsg]
 
     runUnscored mode lockedComponents q = do
@@ -84,7 +83,7 @@ runStructuredImpl env reg metadataApi logger collectionName@(CollectionName cn) 
         let bads = concat badss
 
         unless (null bads)
-               (infoBs logger bads)
+               (info logger bads)
 
         pure $ if null goods
                 then Left bads
@@ -93,7 +92,7 @@ runStructuredImpl env reg metadataApi logger collectionName@(CollectionName cn) 
         where
         -- Fetching the metadata probably isn't great down here
         -- But we have the handle to the component
-        unscoredQuery :: Component -> IO (Either [ByteString] UnscoredResults)
+        unscoredQuery :: Component -> IO (Either [Text] UnscoredResults)
         unscoredQuery lc =
 
             queryComponent env logger (execParams lc) (encodeUtf8 q) >>= \case

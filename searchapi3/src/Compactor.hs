@@ -18,9 +18,9 @@ import WarcFileWriter    ( WarcFileWriter (..) )
 
 import           Control.Concurrent.STM     (STM, atomically)
 import           Control.Monad              (unless)
-import           Data.ByteString.Char8      (ByteString)
 import qualified Data.Set              as S
 import           Data.String.Interpolate    (i)
+import           Data.Text                  (Text)
 import qualified Data.UUID             as U
 import qualified Data.UUID.V4          as U
 import           System.Directory           (canonicalizePath, createDirectoryIfMissing, removeDirectoryRecursive)
@@ -75,14 +75,14 @@ compactImpl env registry wfw metadataApi logger collectionName@(CollectionName c
 
                              Just (x, y) -> do
 
-                                 infoBs logger [[i|Took locks: #{cmp_filePath x} #{cmp_filePath y}|]]
+                                 info logger [[i|Took locks: #{cmp_filePath x} #{cmp_filePath y}|]]
 
                                  mergeResult <- mergeComponentFiles env wfw metadataApi collectionName x y logger
 
                                  case mergeResult of
 
                                      Left errMsg -> do
-                                         infoBs logger errMsg
+                                         info logger errMsg
                                          pure False
 
                                      Right z -> do
@@ -93,7 +93,7 @@ compactImpl env registry wfw metadataApi logger collectionName@(CollectionName c
                                              viewCollectionComponents registry collectionName
                                          removeDirectoryRecursive (path x)
                                          removeDirectoryRecursive (path y)
-                                         infoBs logger [[i|#{cn} components: #{cmp_size <$> S.toList componentSet}|]]
+                                         info logger [[i|#{cn} components: #{cmp_size <$> S.toList componentSet}|]]
                                          pure True)
 
 -- TODO (critical - old directory can be removed on failure)
@@ -148,7 +148,7 @@ mergeComponentFiles :: Environment
                     -> Component
                     -> Component
                     -> Logger
-                    -> IO (Either [ByteString] Component)
+                    -> IO (Either [Text] Component)
 mergeComponentFiles env wfw metadataApi collectionName x y logger = do
 
     let cn = getCollectionPath env collectionName

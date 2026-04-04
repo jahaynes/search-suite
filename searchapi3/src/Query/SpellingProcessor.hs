@@ -16,7 +16,6 @@ import Types
 
 import           Control.Concurrent.Async (forConcurrently)
 import           Control.Monad            (unless)
-import           Data.ByteString          (ByteString)
 import           Data.Either              (partitionEithers)
 import           Data.Functor             ((<&>))
 import           Data.Maybe               (fromMaybe)
@@ -25,7 +24,7 @@ import           Data.Text                (Text)
 import qualified Data.Text as T
 
 newtype SpellingProcessor =
-    SpellingProcessor { runSpelling :: CollectionName -> Text -> Maybe Int -> IO (Either [ByteString] SpellingSuggestions) }
+    SpellingProcessor { runSpelling :: CollectionName -> Text -> Maybe Int -> IO (Either [Text] SpellingSuggestions) }
 
 createSpellingProcessor :: Environment
                         -> Registry
@@ -41,7 +40,7 @@ runSpellingImpl :: Environment
                 -> CollectionName
                 -> Text
                 -> Maybe Int
-                -> IO (Either [ByteString] SpellingSuggestions)
+                -> IO (Either [Text] SpellingSuggestions)
 runSpellingImpl env registry logger collectionName@(CollectionName cn) s mMaxDist =
 
     withLocks registry collectionName $ \lockedComponents ->
@@ -57,14 +56,14 @@ runSpellingImpl env registry logger collectionName@(CollectionName cn) s mMaxDis
                 let bads = concat badss
 
                 unless (null bads)
-                       (infoBs logger bads)
+                       (info logger bads)
 
                 pure $ if null goods
                            then Left bads
                            else Right . mconcat . map snd $ goods
 
     where
-    spellingComponent :: Component -> IO (Either [ByteString] SpellingSuggestions)
+    spellingComponent :: Component -> IO (Either [Text] SpellingSuggestions)
     spellingComponent cmp =
 
         let maxDist = fromMaybe 1 mMaxDist

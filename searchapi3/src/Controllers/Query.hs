@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds,
              LambdaCase,
              OverloadedStrings,
+             QuasiQuotes,
              TypeOperators #-}
 
 module Controllers.Query (QueryApi, queryServer) where
@@ -21,11 +22,12 @@ import WarcFileReader            (WarcFileReader (..))
 
 import           Control.Concurrent.STM      (atomically)
 import           Control.Monad               (forM)
-import qualified Data.ByteString.Char8 as C8
 import           Data.Functor                ((<&>))
 import           Data.Maybe                  (catMaybes, fromMaybe)
 import           Data.Set                    (toList)
+import           Data.String.Interpolate     (i)
 import           Data.Text                   (Text)
+import qualified Data.Text as T
 import           Data.Text.Encoding          (decodeUtf8, encodeUtf8)
 import           Safe                        (headMay)
 import           Servant
@@ -71,12 +73,12 @@ queryServer qp sp struc reg wfr logger
         case parseQuery (encodeUtf8 txt) of
             Left e   -> pure $ Left e
             Right sq -> do
-                infoBs logger ["Parsed: " <> (C8.pack . show $ sq)]
+                info logger [[i|Parsed: #{sq}|]]
                 runStructured struc cn sq
 
     serveSpelling cn s mn =
         runSpelling sp cn s mn <&> \case
-            Left l  -> Left . decodeUtf8 $ C8.unlines l
+            Left l  -> Left (T.unlines l)
             Right r -> Right r
 
     -- TODO take a read lock on each component

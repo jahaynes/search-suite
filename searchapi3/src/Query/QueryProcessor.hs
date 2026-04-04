@@ -18,7 +18,6 @@ import Types
 
 import           Control.Concurrent.Async (forConcurrently)
 import           Control.Monad            (unless)
-import           Data.ByteString          (ByteString)
 import           Data.Either              (partitionEithers)
 import           Data.Heap                (Heap)
 import qualified Data.Heap as H
@@ -31,7 +30,7 @@ import qualified Data.Vector as V
 import           Text.Printf              (printf)
 
 newtype QueryProcessor =
-    QueryProcessor { runQuery :: CollectionName -> QueryParams -> IO (Either [ByteString] QueryResults)
+    QueryProcessor { runQuery :: CollectionName -> QueryParams -> IO (Either [Text] QueryResults)
                    }
 
 createQueryProcessor :: Environment
@@ -58,7 +57,7 @@ runQueryImpl :: Environment
              -> Logger
              -> CollectionName
              -> QueryParams
-             -> IO (Either [ByteString] QueryResults)
+             -> IO (Either [Text] QueryResults)
 runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) params =
 
     withLocks registry collectionName $ \lockedComponents ->
@@ -75,7 +74,7 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
                 let bads = concat badss
 
                 unless (null bads)
-                       (infoBs logger bads)
+                       (info logger bads)
 
                 if null goods
                     then pure $ Left bads

@@ -20,7 +20,7 @@ import WarcFileWriter  (WarcFileWriter (..))
 
 import           Control.Concurrent.STM           (STM, atomically)
 import           Control.Monad                    (forM, void)
-import           Data.ByteString                  (ByteString)
+
 import qualified Data.ByteString.Char8      as C8
 import qualified Data.ByteString.Lazy.Char8 as L8
 import           Data.Either                      (partitionEithers)
@@ -77,16 +77,14 @@ indexDocsImpl env writer metadataApi compactor registry collectionName (IndexReq
 
     runCbor bin >>= \case
 
-        Left l -> pure
-                . Left
-                . map decodeUtf8
-                $ l
+        Left l ->
+            pure (Left l)
 
         Right (stderr, IndexReply nd _ _) ->
 
             case fromIntegral nd of
 
-                0 -> pure $ Right 0
+                0 -> pure (Right 0)
 
                 nDocs -> do
 
@@ -147,12 +145,10 @@ deleteDocumentImpl env reg collectionName docUrl =
 
                 then Right ()
 
-                else Left
-                   . map decodeUtf8
-                   $ concat lefts
+                else Left (concat lefts)
 
         where
-        deleteJob :: Component -> IO (Either [ByteString] ())
+        deleteJob :: Component -> IO (Either [Text] ())
         deleteJob cmp =
             let bin = Bin { getCmd   = indexerBinary env
                           , getArgs  = ["delete_doc", cmp_filePath cmp, docUrl]
@@ -185,12 +181,10 @@ isDocDeletedImpl env reg collectionName docUrl =
                    . zip rights
                    $ repeat 1
 
-                else Left
-                   . map decodeUtf8
-                   $ concat lefts
+                else Left (concat lefts)
 
     where
-    isDeleted :: Component -> IO (Either [ByteString] Text)
+    isDeleted :: Component -> IO (Either [Text] Text)
     isDeleted cmp =
         let bin = Bin { getCmd   = indexerBinary env
                       , getArgs  = ["is_deleted", cmp_filePath cmp, docUrl]

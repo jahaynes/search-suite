@@ -14,12 +14,12 @@ import Types
 
 import Control.Concurrent.STM (atomically)
 import Control.Monad          (unless, when)
-import Data.ByteString.Char8  (ByteString)
 import Data.Either            (partitionEithers)
+import Data.Text              (Text)
 import System.Directory       (canonicalizePath, getDirectoryContents)
 
 newtype Importer =
-    Importer { importCollection :: CollectionName -> IO (Either ByteString ())
+    Importer { importCollection :: CollectionName -> IO (Either [Text] ())
              }
 
 createImporter :: Environment -> Registry -> Compactor -> Logger -> Importer
@@ -31,7 +31,7 @@ importCollectionImpl :: Environment
                      -> Compactor
                      -> Logger
                      -> CollectionName
-                     -> IO (Either ByteString ())
+                     -> IO (Either [Text] ())
 importCollectionImpl env registry compactor logger collectionName = do
 
     let name = getCollectionPath env collectionName
@@ -48,7 +48,7 @@ importCollectionImpl env registry compactor logger collectionName = do
 
     unless (null failures)
            $ do putStrLn "WARNING, FAILED IMPORTS"
-                mapM_ (infoBs logger . (\x -> [x])) failures
+                mapM_ (info logger . (\x -> [x])) failures
 
     mapM_ (atomically . registerInPlace registry collectionName) components
 
@@ -63,7 +63,7 @@ importCollectionImpl env registry compactor logger collectionName = do
         print progress
         when progress loadingCompaction
 
-    loadComponent :: FilePath -> IO (Either [ByteString] Component)
+    loadComponent :: FilePath -> IO (Either [Text] Component)
     loadComponent componentPath =
 
         let bin = Bin { getCmd   = indexerBinary env

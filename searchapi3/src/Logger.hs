@@ -18,11 +18,12 @@ data LoggerType = CompactorLogger
                 | StructuredProcessorLogger
                 | WarcFileReaderLogger
                 | WarcIndexerLogger
+                | TestLogger
                     deriving Show
 
 data Logger =
     Logger { info   :: !([Text] -> IO ())
-           , infoBs :: !([ByteString] -> IO ()) }
+           , infoBs :: !([ByteString] -> IO ()) } -- TODO - eventually remove bs
 
 createLogger :: LoggerType -> Logger
 createLogger loggerType =

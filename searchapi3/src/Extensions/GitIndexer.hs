@@ -13,7 +13,6 @@ import Types   (CollectionName)
 import qualified Data.ByteString.Lazy.Char8 as L8
 import           Data.String.Interpolate          (i)
 import           Data.Text                        (Text)
-import           Data.Text.Encoding               (decodeUtf8)
 import           System.Directory                 (canonicalizePath, doesDirectoryExist)
 
 newtype GitIndexer =
@@ -46,7 +45,7 @@ indexGitPathImpl indexer collection fp =
             runBs bin >>= \case
 
                 Left l ->
-                    pure . Left . map decodeUtf8 $ l
+                    pure (Left l)
 
                 Right (stderr, stdout) ->
 
