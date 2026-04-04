@@ -6,7 +6,8 @@ module Query.QueryParser ( Clause (..)
 
 import Parser.Combinators
 import Parser.LineLexer
-import Parser.Parser
+
+import           Control.Monad.Trans.Class (lift)
 
 import           Control.Applicative         ((<|>))
 import           Data.ByteString             (ByteString)
@@ -33,14 +34,12 @@ data Op = And | Or | Sub deriving (Eq, Show)
 
 parseQuery :: ByteString -> Either Text Clause
 parseQuery bs =
-    case runParser parse (fromInput bs) of
-        Right (ls, p)
-            | C8.null (_input ls) -> Right p
-            | otherwise           -> Left "Parse failure (leftover)"
-        Left l                    -> Left l
+    runLineLexer parse (fromInput bs) >>= \(ls, p) ->
+        case C8.null (_input ls) of
+            True  -> Right p
+            False -> Left "Parse failure (leftover)"
 
 -- Still to do.  Check AND-OR mismatches,  AND/ORs introduced out of nowhere
--- TODO - use a proper Writer for errors?
 parse :: LineLexer Clause
 parse = clauseOrText <* ws
 
@@ -52,15 +51,15 @@ parse = clauseOrText <* ws
         clause :: LineLexer Clause
         clause = do
             (col, op) <- junc
-            Conjunction op <$> sepBy1 (matchJunc col op) clauseOrText
+            Conjunction op <$> sepBy1' (matchJunc col op) clauseOrText
 
             where
             matchJunc :: Int -> Op -> LineLexer ()
             matchJunc col op = do
                 (col', op') <- junc
                 case (col == col', op == op') of
-                    (False, _)    -> reject "not aligned"
-                    (True, False) -> error "mismatch!" -- TODO: would like this reported
+                    (False, _)    -> tellError "not aligned" *> lift (reject "not aligned")
+                    (True, False) -> tellError "mismatch!" *> lift (reject "mismatch!")
                     (True, True)  -> pure ()
 
         junc :: LineLexer (Int, Op)

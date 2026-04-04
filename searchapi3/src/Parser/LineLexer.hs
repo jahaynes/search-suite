@@ -4,6 +4,8 @@ module Parser.LineLexer where
 
 import Parser.Parser (Parser (..))
 
+import           Control.Monad.Trans.Class (lift)
+import           Control.Monad.Trans.Writer (WriterT, tell, runWriterT, censor)
 import           Data.ByteString             (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Text as T
@@ -19,13 +21,15 @@ fromInput :: ByteString -> LexState
 fromInput = LexState 0 0
 
 type LineLexer a =
-    Parser LexState a
+    WriterT [T.Text] (Parser LexState) a
 
 getCol :: LineLexer Int
-getCol = Parser (\ls@(LexState _ c _ ) -> Right (ls, c))
+getCol = do
+    r <- lift $ Parser (\ls@(LexState _ c _ ) -> Right (ls, c))
+    pure r
 
 lexChar :: (Char -> Bool) -> LineLexer Char
-lexChar f = Parser go
+lexChar f = lift $ Parser go
     where
     go (LexState r c i)
 
@@ -43,7 +47,7 @@ lexChar f = Parser go
         (start, rest) = C8.splitAt 1 i
 
 lexString :: ByteString -> LineLexer ByteString
-lexString bs = Parser go
+lexString bs = lift $ Parser go
 
     where
     go (LexState r c i)
@@ -63,7 +67,7 @@ lexString bs = Parser go
         (start, rest) = C8.splitAt bsLength i
 
 lTakeWhile :: (Char -> Bool) -> LineLexer ByteString
-lTakeWhile p = Parser go
+lTakeWhile p = lift $ Parser go
     where
     go (LexState r c i) =
         let (some, rest) = C8.span p i
@@ -71,7 +75,7 @@ lTakeWhile p = Parser go
         in Right (LexState r' c' rest, some)
 
 restOfLine :: LineLexer ByteString
-restOfLine = Parser go
+restOfLine = lift $ Parser go
 
     where
     go (LexState r c i) =
@@ -91,3 +95,21 @@ newLineCol r c consumed =
 
         -- Some newlines hit.  Adjust both row and col
         ns -> (r + length ns, len - last ns - 1)
+
+-- | Add an error message to the accumulated list
+tellError :: T.Text -> LineLexer ()
+tellError = tell . pure
+
+-- | Run the LineLexer and return either the accumulated errors or the result
+runLineLexer :: LineLexer a -> LexState -> Either T.Text (LexState, a)
+runLineLexer m ls =
+    case runWriterT m `runParser` ls of
+        Right (ls', (a, errs))
+            | null errs -> Right (ls', a)
+            | otherwise -> Left $ T.unlines errs
+        Left err -> Left err
+
+-- | Run a sub-parser and discard any accumulated errors if it fails
+-- Useful for backtracking with <|>
+censorErrors :: LineLexer a -> LineLexer a
+censorErrors = censor (const [])
