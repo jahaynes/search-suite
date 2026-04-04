@@ -15,7 +15,7 @@ import           Data.ByteString             (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import           Data.Char                   (isSpace)
 import           Data.Functor                (void)
-import           Data.List.NonEmpty          (NonEmpty)
+import           Data.List.NonEmpty          (NonEmpty (..))
 import           Data.Text                   (Text)
 
 data Clause = Conjunction !Op !(NonEmpty Clause)
@@ -64,16 +64,23 @@ parse = clauseOrText <* ws
         clause :: LineLexer Clause
         clause = do
             (col, op) <- junc
-            Conjunction op <$> sepBy1 (matchJunc col op) clauseOrText
+            first <- clauseOrText
+            rest <- parseRest col op
+            pure $ Conjunction op (first :| rest)
 
             where
-            matchJunc :: Int -> Op -> LineLexer ()
-            matchJunc col op = do
-                (col', op') <- junc
-                case (col == col', op == op') of
-                    (True, True)  -> pure ()
-                    (True, False) -> tell ["mismatch!"] *> lift (reject "mismatch!")
-                    (False, _)    -> lift (reject "Junctions not aligned")
+            parseRest :: Int -> Op -> LineLexer [Clause]
+            parseRest col op =
+                (do
+                    (col', op') <- junc
+                    case (col == col', op == op') of
+                        (True, True) -> do
+                            c <- clauseOrText
+                            cs <- parseRest col op
+                            pure (c : cs)
+                        (True, False) -> tell ["mismatch!"] *> pure []
+                        (False, _)    -> tell ["Junctions not aligned"] *> pure []
+                ) <|> pure []
 
         junc :: LineLexer (Int, Op)
         junc = ws *> ((,) <$> getCol <*> parseOp)
