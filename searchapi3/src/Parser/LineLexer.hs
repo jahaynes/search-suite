@@ -4,13 +4,13 @@ module Parser.LineLexer where
 
 import Parser.Parser (Parser (..))
 
-import           Control.Monad.Trans.Class (lift)
-import           Control.Monad.Trans.Writer (WriterT, tell, runWriterT, censor)
+import           Control.Monad.Trans.Class   (lift)
+import           Control.Monad.Trans.Writer  (WriterT)
 import           Data.ByteString             (ByteString)
 import qualified Data.ByteString.Char8 as C8
-import           Data.Text (Text)
+import           Data.Text                   (Text)
 import qualified Data.Text as T
-import           Data.Text.Encoding (decodeUtf8)
+import           Data.Text.Encoding          (decodeUtf8)
 
 data LexState =
     LexState { _row   :: !Int
@@ -103,17 +103,3 @@ newLineCol r c consumed =
 
         -- Some newlines hit.  Adjust both row and col
         ns -> (r + length ns, len - last ns - 1)
-
--- | Run the LineLexer and return either the accumulated errors or the result
-runLineLexer :: LineLexer a -> LexState -> Either [Text] (LexState, a)
-runLineLexer m ls =
-    case runWriterT m `runParser` ls of
-        Right (ls', (a, logs))
-            | null logs -> Right (ls', a)
-            | otherwise -> Left logs
-        Left err -> Left [err]
-
--- | Run a sub-parser and discard any accumulated errors if it fails
--- Useful for backtracking with <|>
-censorErrors :: LineLexer a -> LineLexer a
-censorErrors = censor (const [])
