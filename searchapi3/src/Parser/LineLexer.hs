@@ -4,7 +4,7 @@ module Parser.LineLexer where
 
 import Parser.Transformer (ParserT (..))
 
-import           Data.Functor.Identity       (Identity (..))
+import           Control.Monad.Trans.Writer  (Writer, writer)
 import           Data.ByteString             (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Text as T
@@ -20,7 +20,7 @@ fromInput :: ByteString -> LexState
 fromInput = LexState 0 0
 
 type LineLexer a =
-    ParserT LexState Identity a
+    ParserT LexState (Writer [T.Text]) a
 
 getCol :: LineLexer Int
 getCol = ParserT (\ls@(LexState _ c _ ) -> pure (Right (ls, c)))
@@ -28,13 +28,14 @@ getCol = ParserT (\ls@(LexState _ c _ ) -> pure (Right (ls, c)))
 lexChar :: (Char -> Bool) -> LineLexer Char
 lexChar f = ParserT go
     where
+    go :: LexState -> Writer [T.Text] (Either T.Text (LexState, Char))
     go (LexState r c i)
 
         | C8.null i =
             pure (Left "Insufficient input")
 
         | f first = let (r', c') = newLineCol r c start in
-            pure (Right (LexState r' c' rest, first))
+            writer (Right (LexState r' c' rest, first), [T.singleton first]) -- Check this TODO
 
         | otherwise =
             pure (Left $ "Unsatisfied char f(" <> T.pack (show first) <> ")")
@@ -47,13 +48,14 @@ lexString :: ByteString -> LineLexer ByteString
 lexString bs = ParserT go
 
     where
+    go :: LexState -> Writer [T.Text] (Either T.Text (LexState, ByteString))
     go (LexState r c i)
 
         | bsLength > inputLength =
             pure (Left "Insufficient input")
 
         | start == bs = let (r', c') = newLineCol r c bs in
-            pure (Right (LexState r' c' rest, bs))
+            writer (Right (LexState r' c' rest, bs), [decodeUtf8 bs]) -- TODO check this
 
         | otherwise =
             pure (Left $ "Expected: " <> decodeUtf8 bs) -- TODO not too happy about this decode
@@ -66,19 +68,21 @@ lexString bs = ParserT go
 lTakeWhile :: (Char -> Bool) -> LineLexer ByteString
 lTakeWhile p = ParserT go
     where
+    go :: LexState -> Writer [T.Text] (Either T.Text (LexState, ByteString))
     go (LexState r c i) =
         let (some, rest) = C8.span p i
             (r', c')     = newLineCol r c some
-        in pure (Right (LexState r' c' rest, some))
+        in writer (Right (LexState r' c' rest, some), [decodeUtf8 some])
 
 restOfLine :: LineLexer ByteString
 restOfLine = ParserT go
 
     where
+    go :: LexState -> Writer [T.Text] (Either T.Text (LexState, ByteString))
     go (LexState r c i) =
         let (start, rest) = C8.break (=='\n') i
             (r', c')      = newLineCol r c start
-        in pure (Right (LexState r' c' rest, start))
+        in writer (Right (LexState r' c' rest, start), [decodeUtf8 start])
 
 newLineCol :: Int -> Int -> ByteString -> (Int, Int)
 newLineCol r c consumed =

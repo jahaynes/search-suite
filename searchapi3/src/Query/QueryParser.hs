@@ -9,7 +9,7 @@ import Parser.LineLexer
 import Parser.Transformer (ParserT (..))
 
 import           Control.Applicative         ((<|>))
-import           Data.Functor.Identity       (runIdentity)
+import           Control.Monad.Trans.Writer  (runWriter)
 import           Data.ByteString             (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import           Data.Char                   (isSpace)
@@ -34,7 +34,7 @@ data Op = And | Or | Sub deriving (Eq, Show)
 
 parseQuery :: ByteString -> Either Text Clause
 parseQuery bs =
-    case runIdentity (runParserT parse (fromInput bs)) of
+    case fst (runWriter (runParserT parse (fromInput bs))) of
         Left l -> Left l
         Right (ls, p)
             | C8.null (_input ls) -> Right p
