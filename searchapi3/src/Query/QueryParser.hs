@@ -9,13 +9,15 @@ import Parser.LineLexer
 import Parser.Transformer (ParserT (..))
 
 import           Control.Applicative         ((<|>))
-import           Control.Monad.Trans.Writer  (runWriter)
+import           Control.Monad.Trans.Class (lift)
+import           Control.Monad.Trans.Writer  (runWriter, tell)
 import           Data.ByteString             (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import           Data.Char                   (isSpace)
 import           Data.Functor                (void)
 import           Data.List.NonEmpty          (NonEmpty)
 import           Data.Text                   (Text)
+import qualified Data.Text as T
 
 data Clause = Conjunction !Op !(NonEmpty Clause)
             | ClauseText !ByteString
@@ -33,12 +35,17 @@ data Op = And | Or | Sub deriving (Eq, Show)
 -}
 
 parseQuery :: ByteString -> Either Text Clause
-parseQuery bs =
-    case fst (runWriter (runParserT parse (fromInput bs))) of
-        Left l -> Left l
-        Right (ls, p)
-            | C8.null (_input ls) -> Right p
-            | otherwise           -> Left "Parse failure (leftover)"
+parseQuery bs = do
+
+    let (r, xs) = runWriter (runParserT parse (fromInput bs))
+
+    if null xs
+        then case r of
+                 Left l -> Left l
+                 Right (ls, p)
+                     | C8.null (_input ls) -> Right p
+                     | otherwise           -> Left "Parse failure (leftover)"
+        else Left $ T.unlines xs 
 
 -- Still to do.  Check AND-OR mismatches,  AND/ORs introduced out of nowhere
 -- TODO - use a proper Writer for errors?
@@ -61,7 +68,9 @@ parse = clauseOrText <* ws
                 (col', op') <- junc
                 case (col == col', op == op') of
                     (False, _)    -> reject "not aligned"
-                    (True, False) -> error "mismatch!" -- TODO: would like this reported
+                    (True, False) -> do
+                        lift $ tell ["mismatch"]
+                        pure ()
                     (True, True)  -> pure ()
 
         junc :: LineLexer (Int, Op)
