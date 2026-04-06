@@ -9,6 +9,7 @@ import Parser.LineLexer
 import Parser.Transformer (ParserT (..))
 
 import           Control.Applicative         ((<|>))
+import           Data.Functor.Identity       (runIdentity)
 import           Data.ByteString             (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import           Data.Char                   (isSpace)
@@ -31,14 +32,13 @@ data Op = And | Or | Sub deriving (Eq, Show)
 /\ feature
 -}
 
-parseQuery :: ByteString -> IO (Either Text Clause)
+parseQuery :: ByteString -> Either Text Clause
 parseQuery bs =
-    runParserT parse (fromInput bs) >>= \result ->
-        case result of
-            Left l -> pure (Left l)
-            Right (ls, p)
-                | C8.null (_input ls) -> pure (Right p)
-                | otherwise           -> pure (Left "Parse failure (leftover)")
+    case runIdentity (runParserT parse (fromInput bs)) of
+        Left l -> Left l
+        Right (ls, p)
+            | C8.null (_input ls) -> Right p
+            | otherwise           -> Left "Parse failure (leftover)"
 
 -- Still to do.  Check AND-OR mismatches,  AND/ORs introduced out of nowhere
 -- TODO - use a proper Writer for errors?
