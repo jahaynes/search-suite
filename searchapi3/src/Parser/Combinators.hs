@@ -1,13 +1,17 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Parser.Combinators where
 
-import Parser.Parser
+import Parser.Transformer
 
-import Control.Applicative (many)
+import Control.Applicative (Alternative(empty), many)
+import Control.Monad.IO.Class (MonadIO)
 import Data.List.NonEmpty  (NonEmpty (..))
 import Data.Text           (Text)
 
-reject :: Text -> Parser s a
-reject msg = Parser $ \_ -> Left msg
+-- TODO looks wrong.  Can be a monadfail perhaps?
+reject :: (Monad m, Alternative (ParserT s m)) => Text -> ParserT s m a
+reject _ = empty
 
-sepBy1 :: Parser s b -> Parser s a -> Parser s (NonEmpty a)
+sepBy1 :: (Monad m, Alternative (ParserT s m)) => ParserT s m b -> ParserT s m a -> ParserT s m (NonEmpty a)
 sepBy1 sep p = (:|) <$> p <*> many (sep *> p)

@@ -70,7 +70,7 @@ queryServer qp sp struc reg wfr logger
             Right results -> pure results
 
     structuredQuery cn txt = do
-        case parseQuery (encodeUtf8 txt) of
+        parseQuery (encodeUtf8 txt) >>= \case
             Left e   -> pure $ Left e
             Right sq -> do
                 info logger [[i|Parsed: #{sq}|]]

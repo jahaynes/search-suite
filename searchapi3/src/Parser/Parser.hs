@@ -1,48 +1,54 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving
+           , OverloadedStrings #-}
 
-module Parser.Parser where
+module Parser.Parser ( Parser(..)
+                     , ParseResult(..)
+                     ) where
 
 import           Control.Applicative
 import           Data.Functor        ((<&>))
 import           Data.Text           (Text)
 
-newtype Parser s a =
-    Parser { runParser :: s -> Either Text (s, a) }
+-- | Base parser type parameterized over a monad m
+newtype Parser m s a =
+    Parser { runParser :: s -> m (s, a) }
 
-instance Functor (Parser s) where
+-- | Newtype wrapper for Either Text to provide Alternative instance
+newtype ParseResult a = ParseResult { runParseResult :: Either Text a }
+    deriving (Functor, Applicative, Monad)
 
+instance Alternative ParseResult where
+    empty = ParseResult (Left "empty")
+    ParseResult (Left _) <|> b = b
+    a <|> _ = a
+
+-- Functor instance for Parser
+instance (Functor m) => Functor (Parser m s) where
     fmap f (Parser run) =
-        Parser $ \s -> run s <&> \(s', a) -> (s', f a)
+        Parser $ \s -> (\(s', a) -> (s', f a)) <$> run s
 
-instance Applicative (Parser s) where
-
-    pure x = Parser (\s -> Right (s, x))
+-- Applicative instance for Parser
+-- Note: Requires Monad m because state threading in <*> needs >>=
+instance Monad m => Applicative (Parser m s) where
+    pure x = Parser (\s -> pure (s, x))
 
     Parser pf <*> Parser px = Parser $ \s ->
-        case pf s of
-            Left l -> Left l
-            Right (s', f) ->
-                case px s' of
-                    Left l -> Left l
-                    Right (s'', x) -> Right (s'', f x)
+        pf s >>= \(s', f) ->
+        px s' <&> \(s'', x) -> (s'', f x)
 
-instance Alternative (Parser s) where
-
-    empty = Parser (\_ -> Left "No more Alternatives")
+-- Alternative instance for Parser
+instance (Monad m, Alternative m) => Alternative (Parser m s) where
+    empty = Parser (\_ -> empty)
 
     Parser pa <|> Parser pb = Parser $ \s ->
-        case pa s of
-            Left{} -> pb s
-            r      -> r
+        pa s <|> pb s
 
-instance Monad (Parser s) where
-
+-- Monad instance for Parser
+instance (Monad m) => Monad (Parser m s) where
     return = pure
 
     Parser runA >>= pf = Parser $ \s ->
-        case runA s of
-            Left l        -> Left l
-            Right (s', a) ->
-                let Parser runB = pf a
-                in
-                runB s'
+        runA s >>= \(s', a) ->
+        let Parser runB = pf a
+        in
+        runB s'

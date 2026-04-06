@@ -6,7 +6,7 @@ module Query.QueryParser ( Clause (..)
 
 import Parser.Combinators
 import Parser.LineLexer
-import Parser.Parser
+import Parser.Transformer (ParserT (..))
 
 import           Control.Applicative         ((<|>))
 import           Data.ByteString             (ByteString)
@@ -31,13 +31,14 @@ data Op = And | Or | Sub deriving (Eq, Show)
 /\ feature
 -}
 
-parseQuery :: ByteString -> Either Text Clause
+parseQuery :: ByteString -> IO (Either Text Clause)
 parseQuery bs =
-    case runParser parse (fromInput bs) of
-        Right (ls, p)
-            | C8.null (_input ls) -> Right p
-            | otherwise           -> Left "Parse failure (leftover)"
-        Left l                    -> Left l
+    runParserT parse (fromInput bs) >>= \result ->
+        case result of
+            Left l -> pure (Left l)
+            Right (ls, p)
+                | C8.null (_input ls) -> pure (Right p)
+                | otherwise           -> pure (Left "Parse failure (leftover)")
 
 -- Still to do.  Check AND-OR mismatches,  AND/ORs introduced out of nowhere
 -- TODO - use a proper Writer for errors?

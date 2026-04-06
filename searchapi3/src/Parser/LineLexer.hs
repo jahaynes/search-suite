@@ -2,9 +2,10 @@
 
 module Parser.LineLexer where
 
-import Parser.Parser (Parser (..))
+import Parser.Transformer (ParserT (..))
 
 import           Data.ByteString             (ByteString)
+import           Data.Text                   (Text)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Text as T
 import           Data.Text.Encoding (decodeUtf8)
@@ -19,43 +20,43 @@ fromInput :: ByteString -> LexState
 fromInput = LexState 0 0
 
 type LineLexer a =
-    Parser LexState a
+    ParserT LexState IO a
 
 getCol :: LineLexer Int
-getCol = Parser (\ls@(LexState _ c _ ) -> Right (ls, c))
+getCol = ParserT (\ls@(LexState _ c _ ) -> pure (Right (ls, c)))
 
 lexChar :: (Char -> Bool) -> LineLexer Char
-lexChar f = Parser go
+lexChar f = ParserT go
     where
     go (LexState r c i)
 
         | C8.null i =
-            Left "Insufficient input"
+            pure (Left "Insufficient input")
 
         | f first = let (r', c') = newLineCol r c start in
-            Right (LexState r' c' rest, first)
+            pure (Right (LexState r' c' rest, first))
 
         | otherwise =
-            Left $ "Unsatisfied char f(" <> T.pack (show first) <> ")"
+            pure (Left $ "Unsatisfied char f(" <> T.pack (show first) <> ")")
 
         where
         first         = C8.head i
         (start, rest) = C8.splitAt 1 i
 
 lexString :: ByteString -> LineLexer ByteString
-lexString bs = Parser go
+lexString bs = ParserT go
 
     where
     go (LexState r c i)
 
         | bsLength > inputLength =
-            Left "Insufficient input"
+            pure (Left "Insufficient input")
 
         | start == bs = let (r', c') = newLineCol r c bs in
-            Right (LexState r' c' rest, bs)
+            pure (Right (LexState r' c' rest, bs))
 
         | otherwise =
-            Left $ "Expected: " <> decodeUtf8 bs -- TODO not too happy about this decode
+            pure (Left $ "Expected: " <> decodeUtf8 bs) -- TODO not too happy about this decode
 
         where
         bsLength      = C8.length bs
@@ -63,21 +64,21 @@ lexString bs = Parser go
         (start, rest) = C8.splitAt bsLength i
 
 lTakeWhile :: (Char -> Bool) -> LineLexer ByteString
-lTakeWhile p = Parser go
+lTakeWhile p = ParserT go
     where
     go (LexState r c i) =
         let (some, rest) = C8.span p i
             (r', c')     = newLineCol r c some
-        in Right (LexState r' c' rest, some)
+        in pure (Right (LexState r' c' rest, some))
 
 restOfLine :: LineLexer ByteString
-restOfLine = Parser go
+restOfLine = ParserT go
 
     where
     go (LexState r c i) =
         let (start, rest) = C8.break (=='\n') i
             (r', c')      = newLineCol r c start
-        in Right (LexState r' c' rest, start)
+        in pure (Right (LexState r' c' rest, start))
 
 newLineCol :: Int -> Int -> ByteString -> (Int, Int)
 newLineCol r c consumed =
