@@ -48,19 +48,25 @@ function renderResult(collectionName: string, result: UnscoredResult) {
                 a.href = result.ur_uri;
                 break;
         }
-        a.textContent = result.ur_metadata['title'] ?? 'Untitled';
+        a.textContent = result.ur_metadata['title'] ?? 'Untitled';  // TODO
         title.appendChild(a);
         return title;
     }
 
     const renderFileResult = () => {
+
         const resultItem = document.createElement("li");
         resultItem.classList.add("result");
+
         const title = createTitle(Mode.File);
+
         const filePath = document.createElement("small");
+        // Nasty way to strip off file://hostname
         filePath.textContent = result.ur_uri.slice(result.ur_uri.lastIndexOf('//') + 1);
+
         resultItem.appendChild(title);
         resultItem.appendChild(filePath);
+
         return resultItem;
     }
 
