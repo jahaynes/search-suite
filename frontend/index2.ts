@@ -99,19 +99,8 @@ const renderCollections = async (state: StoreState) => {
     }
 }
 
-function renderQuery(state: StoreState) {
-    const query = document.querySelector<HTMLInputElement>("#search")!;
-    query.value = state.query;
-
-    const maxResults = document.querySelector<HTMLInputElement>("#max_results")!;
-    maxResults.value = (state.maxResults ?? 10).toString();
-}
-
-function renderResults(state: StoreState) {
-
-    const resultList = document.querySelector<HTMLElement>("#results")!;
-    resultList.innerHTML = '';
-
+function renderResults(state: StoreState): HTMLOListElement {
+    const resultList = document.createElement("ol");
     if (state.selectedCollection) {
         console.log("making results");
         for (let i = 0; i < state.results.results.length; i++) {
@@ -120,9 +109,10 @@ function renderResults(state: StoreState) {
             console.log("Appending: " + JSON.stringify(resultItem));
         }
     }
+    return resultList;
 }
 
-function renderResult(collectionName: string, result: QueryResult) {
+function renderResult(collectionName: string, result: QueryResult): HTMLLIElement {
 
     const createTitle = () => {
         const title = document.createElement("div");
@@ -188,14 +178,21 @@ function renderResult(collectionName: string, result: QueryResult) {
     return resultItem;
 }
 
-function render(storedState: StoreState) {
+function render(state: StoreState) {
 
-    renderCollections(storedState);
+    renderCollections(state);
 
-    renderQuery(storedState);
+    document.querySelector<HTMLInputElement>("#search")!
+        .value = state.query;
 
-    renderResults(storedState);
+    document.querySelector<HTMLInputElement>("#max_results")!
+        .value = (state.maxResults ?? 10).toString();
+
+    document
+        .querySelector<HTMLElement>('#result_wrapper')!
+        .replaceChildren(renderResults(state));
 }
+
 
 const init = async () => {
 
