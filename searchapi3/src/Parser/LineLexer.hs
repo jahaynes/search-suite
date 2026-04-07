@@ -2,12 +2,14 @@
 
 module Parser.LineLexer where
 
-import Parser.Parser (Parser (..))
+import Parser.Transformer (ParserT (..))
 
+import           Control.Monad.Trans.Writer  (Writer)
 import           Data.ByteString             (ByteString)
 import qualified Data.ByteString.Char8 as C8
+import           Data.Text                   (Text)
 import qualified Data.Text as T
-import           Data.Text.Encoding (decodeUtf8)
+import           Data.Text.Encoding          (decodeUtf8)
 
 data LexState =
     LexState { _row   :: !Int
@@ -19,14 +21,15 @@ fromInput :: ByteString -> LexState
 fromInput = LexState 0 0
 
 type LineLexer a =
-    Parser LexState a
+    ParserT LexState (Writer [Text]) a
 
 getCol :: LineLexer Int
-getCol = Parser (\ls@(LexState _ c _ ) -> Right (ls, c))
+getCol = ParserT (\ls@(LexState _ c _ ) -> pure (Right (ls, c)))
 
 lexChar :: (Char -> Bool) -> LineLexer Char
-lexChar f = Parser go
+lexChar f = ParserT { runParserT = pure . go }
     where
+    go :: LexState -> Either Text (LexState, Char)
     go (LexState r c i)
 
         | C8.null i =
@@ -43,9 +46,10 @@ lexChar f = Parser go
         (start, rest) = C8.splitAt 1 i
 
 lexString :: ByteString -> LineLexer ByteString
-lexString bs = Parser go
+lexString bs = ParserT { runParserT = pure . go }
 
     where
+    go :: LexState -> Either Text (LexState, ByteString)
     go (LexState r c i)
 
         | bsLength > inputLength =
@@ -63,17 +67,22 @@ lexString bs = Parser go
         (start, rest) = C8.splitAt bsLength i
 
 lTakeWhile :: (Char -> Bool) -> LineLexer ByteString
-lTakeWhile p = Parser go
+lTakeWhile p = ParserT { runParserT = pure . go }
     where
+    go :: LexState -> Either Text (LexState, ByteString)
     go (LexState r c i) =
         let (some, rest) = C8.span p i
             (r', c')     = newLineCol r c some
         in Right (LexState r' c' rest, some)
 
+reject :: Applicative m => Text -> ParserT s m a
+reject msg = ParserT (\_ -> pure $ Left msg)
+
 restOfLine :: LineLexer ByteString
-restOfLine = Parser go
+restOfLine = ParserT { runParserT = pure . go }
 
     where
+    go :: LexState -> Either Text (LexState, ByteString)
     go (LexState r c i) =
         let (start, rest) = C8.break (=='\n') i
             (r', c')      = newLineCol r c start
