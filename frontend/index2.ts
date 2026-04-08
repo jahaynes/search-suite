@@ -51,10 +51,9 @@ const fakeState: StoreState = {
 
 const restoreStoredState = (): StoreState | null => {
     const strStoredState = sessionStorage.getItem(SESSION_KEY_STORED_STATE);
-    if (strStoredState) {
-        return JSON.parse(strStoredState);
-    }
-    return null;
+    return strStoredState
+        ? JSON.parse(strStoredState)
+        : null;
 }
 
 const renderCollections = async (state: StoreState, collectionSwitchHandler: EventListener) => {
@@ -67,10 +66,6 @@ const renderCollections = async (state: StoreState, collectionSwitchHandler: Eve
     collections.append(legend);
 
     for (const collectionName of state.collections) {
-
-        if (!state.selectedCollection) {
-            state.selectedCollection = collectionName;
-        }
 
         const radioName = "radio" + collectionName;
 
@@ -194,7 +189,7 @@ function render(state: StoreState) {
         .replaceChildren(renderResults(state));
 }
 
-const init = async () => 
+const init = async () =>
     render(restoreStoredState() ?? fakeState);
 
 init();
