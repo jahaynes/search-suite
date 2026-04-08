@@ -49,11 +49,19 @@ const fakeState: StoreState = {
     }
 };
 
-const restoreStoredState = (): StoreState | null => {
-    const strStoredState = sessionStorage.getItem(SESSION_KEY_STORED_STATE);
-    return strStoredState
-        ? JSON.parse(strStoredState)
+function restoreStoredState(): StoreState | null {
+    const strState = sessionStorage.getItem(SESSION_KEY_STORED_STATE);
+    return strState
+        ? JSON.parse(strState)
         : null;
+}
+
+function storeState(state: StoreState): void {
+    sessionStorage.setItem(SESSION_KEY_STORED_STATE, JSON.stringify(state));
+}
+
+const freshState = (): StoreState => {
+    return fakeState;
 }
 
 const renderCollections = async (state: StoreState, collectionSwitchHandler: EventListener) => {
@@ -91,11 +99,9 @@ const renderCollections = async (state: StoreState, collectionSwitchHandler: Eve
 function renderResults(state: StoreState): HTMLOListElement {
     const resultList = document.createElement("ol");
     if (state.selectedCollection) {
-        console.log("making results");
         for (let i = 0; i < state.results.results.length; i++) {
             const resultItem = renderResult(state.selectedCollection, state.results.results[i]!);
             resultList.appendChild(resultItem);
-            console.log("Appending: " + JSON.stringify(resultItem));
         }
     }
     return resultList;
@@ -167,13 +173,7 @@ function renderResult(collectionName: string, result: QueryResult): HTMLLIElemen
     return resultItem;
 }
 
-function render(state: StoreState) {
-
-    const collectionSwitchHandler = async (e: Event) => {
-        const target = e.target as HTMLInputElement;
-        state.selectedCollection = target.value;
-        await newQuery(state);
-    };
+function render(state: StoreState, collectionSwitchHandler: EventListener) {
 
     renderCollections(state, collectionSwitchHandler);
 
@@ -188,6 +188,17 @@ function render(state: StoreState) {
         .replaceChildren(renderResults(state));
 }
 
+const changeCollection = async (state: StoreState, collection: string) => {
+    await newQuery(state);
+}
+
+const changeResults = async (state: StoreState, results: QueryResults) => {
+    state.results = results;
+    document
+        .querySelector<HTMLElement>('#result_wrapper')!
+        .replaceChildren(renderResults(state));
+}
+
 const newQuery = async (state: StoreState) => {
 
     if (!state.selectedCollection || state.query.trim().length == 0 || state.maxResults < 1) {
@@ -196,23 +207,7 @@ const newQuery = async (state: StoreState) => {
 
     const queryResults = await fireSearch(state.selectedCollection, state.query, state.maxResults);
 
-    // This is a bad mute
-    state.results = queryResults;
-
-    document
-        .querySelector<HTMLElement>('#result_wrapper')!
-        .replaceChildren(renderResults(state));
-
-    /*
- const resultList = document.querySelector<HTMLElement>("#results")!;
-            resultList.innerHTML = '';
-            for (let i = 0; i < data.results.length; i++) {
-                const resultItem = renderResult(collectionName, data.results[i]!);
-                resultList.appendChild(resultItem);
-            }
-
-    */
-
+    changeResults(state, queryResults)
 }
 
 const fireSearch =
@@ -231,8 +226,24 @@ const fireSearch =
         return await fetch(url, reqHeaders).then(resp => resp.json());
     }
 
-const init = async () =>
-    render(restoreStoredState() ?? fakeState);
+const getState = (): StoreState => {
+    var state = restoreStoredState();
+    if (!state) {
+        state = freshState();
+        storeState(state);
+    }
+    return state;
+}
+
+const init = async () => {
+
+    const state = getState();
+
+    const collectionSwitchHandler = async (e: Event) =>
+        await changeCollection(state, (e.target as HTMLInputElement).value);
+
+    render(state, collectionSwitchHandler);
+}
 
 init();
 
