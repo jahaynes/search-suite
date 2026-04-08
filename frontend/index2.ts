@@ -172,8 +172,7 @@ function render(state: StoreState) {
     const collectionSwitchHandler = async (e: Event) => {
         const target = e.target as HTMLInputElement;
         state.selectedCollection = target.value;
-        // await fireSearch(state);
-        console.log("Should fire search");
+        await newQuery(state);
     };
 
     renderCollections(state, collectionSwitchHandler);
@@ -188,6 +187,49 @@ function render(state: StoreState) {
         .querySelector<HTMLElement>('#result_wrapper')!
         .replaceChildren(renderResults(state));
 }
+
+const newQuery = async (state: StoreState) => {
+
+    if (!state.selectedCollection || state.query.trim().length == 0 || state.maxResults < 1) {
+        return;
+    }
+
+    const queryResults = await fireSearch(state.selectedCollection, state.query, state.maxResults);
+
+    // This is a bad mute
+    state.results = queryResults;
+
+    document
+        .querySelector<HTMLElement>('#result_wrapper')!
+        .replaceChildren(renderResults(state));
+
+    /*
+ const resultList = document.querySelector<HTMLElement>("#results")!;
+            resultList.innerHTML = '';
+            for (let i = 0; i < data.results.length; i++) {
+                const resultItem = renderResult(collectionName, data.results[i]!);
+                resultList.appendChild(resultItem);
+            }
+
+    */
+
+}
+
+const fireSearch =
+    async (collectionName: string, query: string, maxResults: number): Promise<QueryResults> => {
+
+        const reqHeaders: RequestInit = {
+            cache: 'no-cache',
+            headers: { 'Content-Type': 'application/json' }
+        }
+
+        const params = new URLSearchParams();
+        params.append('q', query);
+        params.append('n', maxResults.toString());
+        const url = `/query/${encodeURIComponent(collectionName)}?${params.toString()}`;
+
+        return await fetch(url, reqHeaders).then(resp => resp.json());
+    }
 
 const init = async () =>
     render(restoreStoredState() ?? fakeState);
