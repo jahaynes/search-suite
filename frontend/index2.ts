@@ -31,7 +31,7 @@ const defaultState: StoreState = {
 
 const fakeState: StoreState = {
     collections: ["one", "two"],
-    selectedCollection: "one",
+    selectedCollection: "two",
     query: "some query",
     maxResults: 3,
     results: {
@@ -57,7 +57,7 @@ const restoreStoredState = (): StoreState | null => {
     return null;
 }
 
-const renderCollections = async (state: StoreState) => {
+const renderCollections = async (state: StoreState, collectionSwitchHandler: EventListener) => {
 
     const collections = document.getElementById("collections")!;
     collections.innerHTML = '';
@@ -83,18 +83,12 @@ const renderCollections = async (state: StoreState) => {
         if (state.selectedCollection === collectionName) {
             radio.setAttribute("checked", "checked");
         }
+        radio.addEventListener("change", collectionSwitchHandler);
+        collections.append(radio);
 
         const label = document.createElement("label");
         label.setAttribute("for", radioName);
         label.innerText = collectionName;
-
-        /*radio.addEventListener("change", async (e: Event) => {
-            const target = e.target as HTMLInputElement;
-            state.selectedCollection = target.value;
-            await fireSearch(state);
-        });*/
-
-        collections.append(radio);
         collections.append(label);
     }
 }
@@ -180,7 +174,14 @@ function renderResult(collectionName: string, result: QueryResult): HTMLLIElemen
 
 function render(state: StoreState) {
 
-    renderCollections(state);
+    const collectionSwitchHandler = async (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        state.selectedCollection = target.value;
+        // await fireSearch(state);
+        console.log("Should fire search");
+    };
+
+    renderCollections(state, collectionSwitchHandler);
 
     document.querySelector<HTMLInputElement>("#search")!
         .value = state.query;
@@ -193,19 +194,8 @@ function render(state: StoreState) {
         .replaceChildren(renderResults(state));
 }
 
-
-const init = async () => {
-
-    // Restore any saved state
-    const state = restoreStoredState() ?? fakeState;
-
-    // Re-render any saved state prior to the event-listeners being attached
-    render(state);
-
-    // Attach event listeners
-
-    // Done?
-}
+const init = async () => 
+    render(restoreStoredState() ?? fakeState);
 
 init();
 
