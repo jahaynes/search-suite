@@ -1,5 +1,5 @@
 
-const SESSION_KEY_STORED_STATE = 'stored_state';
+const SESSION_KEY_STORED_STATE = 'stored_state_2';
 
 type StoreState = {
     collections: string[]
@@ -60,8 +60,10 @@ function storeState(state: StoreState): void {
     sessionStorage.setItem(SESSION_KEY_STORED_STATE, JSON.stringify(state));
 }
 
-const freshState = (): StoreState => {
-    return fakeState;
+const freshState = async (): Promise<StoreState> => {
+    const state = defaultState;
+    state.collections = await fireCollections();
+    return state;
 }
 
 const renderCollections = async (state: StoreState, collectionSwitchHandler: EventListener) => {
@@ -173,12 +175,17 @@ function renderResult(collectionName: string, result: QueryResult): HTMLLIElemen
     return resultItem;
 }
 
-function render(state: StoreState, collectionSwitchHandler: EventListener) {
+function render(
+    state: StoreState,
+    collectionSwitchHandler: EventListener,
+    queryChangeHandler: EventListener) {
 
     renderCollections(state, collectionSwitchHandler);
 
-    document.querySelector<HTMLInputElement>("#search")!
-        .value = state.query;
+    // TODO - recreate this? otherwise it's just readded
+    const search = document.querySelector<HTMLInputElement>("#search")!
+    search.value = state.query;
+    search.addEventListener("input", queryChangeHandler);
 
     document.querySelector<HTMLInputElement>("#max_results")!
         .value = (state.maxResults ?? 10).toString();
@@ -189,6 +196,7 @@ function render(state: StoreState, collectionSwitchHandler: EventListener) {
 }
 
 const changeCollection = async (state: StoreState, collection: string) => {
+    state.selectedCollection = collection;
     await newQuery(state);
 }
 
@@ -202,6 +210,7 @@ const changeResults = async (state: StoreState, results: QueryResults) => {
 const newQuery = async (state: StoreState) => {
 
     if (!state.selectedCollection || state.query.trim().length == 0 || state.maxResults < 1) {
+        console.log("early abort" + state.selectedCollection + " " + state.query.trim() + " " + state.maxResults);
         return;
     }
 
@@ -210,26 +219,29 @@ const newQuery = async (state: StoreState) => {
     changeResults(state, queryResults)
 }
 
+const reqHeaders: RequestInit = {
+    cache: 'no-cache',
+    headers: { 'Content-Type': 'application/json' }
+}
+
+const fireCollections = async (): Promise<string[]> =>
+    await fetch("/collection", reqHeaders)
+        .then(resp => resp.json())
+
 const fireSearch =
     async (collectionName: string, query: string, maxResults: number): Promise<QueryResults> => {
-
-        const reqHeaders: RequestInit = {
-            cache: 'no-cache',
-            headers: { 'Content-Type': 'application/json' }
-        }
-
+        console.log("Firinsg search"); // Why not?
         const params = new URLSearchParams();
         params.append('q', query);
         params.append('n', maxResults.toString());
         const url = `/query/${encodeURIComponent(collectionName)}?${params.toString()}`;
-
         return await fetch(url, reqHeaders).then(resp => resp.json());
     }
 
-const getState = (): StoreState => {
+const getState = async (): Promise<StoreState> => {
     var state = restoreStoredState();
     if (!state) {
-        state = freshState();
+        state = await freshState();
         storeState(state);
     }
     return state;
@@ -237,13 +249,17 @@ const getState = (): StoreState => {
 
 const init = async () => {
 
-    const state = getState();
+    const state = await getState();
 
     const collectionSwitchHandler = async (e: Event) =>
         await changeCollection(state, (e.target as HTMLInputElement).value);
 
-    render(state, collectionSwitchHandler);
+    const queryChangeHandler = async (e: Event) => {
+        console.log("Query change handler");
+        await newQuery(state);
+    }
+
+    render(state, collectionSwitchHandler, queryChangeHandler);
 }
 
 init();
-
