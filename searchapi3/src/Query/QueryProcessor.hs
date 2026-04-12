@@ -1,6 +1,6 @@
- {-# LANGUAGE OverloadedStrings
-            , QuasiQuotes
-            , ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings
+           , QuasiQuotes
+           , ScopedTypeVariables #-}
 
 module Query.QueryProcessor ( QueryProcessor (..)
                             , createQueryProcessor
@@ -16,18 +16,16 @@ import Query.QueryProcessorTypes ( QueryResults (..), QueryResult (..) )
 import Registry                  ( Registry (..) )
 import Types
 
-import           Control.Concurrent.Async (forConcurrently)
-import           Control.Monad            (unless)
-import           Data.Either              (partitionEithers)
-import           Data.Heap                (Heap)
-import qualified Data.Heap as H
-import           Data.List                (sortOn)
+import           Control.Concurrent.Async   (forConcurrently)
+import           Control.Monad              (unless)
+import           Data.Either                (partitionEithers)
 import qualified Data.Map.Strict as M
-import           Data.Maybe               (fromMaybe)
-import           Data.String.Interpolate  (i)
-import           Data.Text                (Text)
+import           Data.Maybe                 (fromMaybe)
+import           Data.Ord                   (Down (..))
+import           Data.String.Interpolate    (i)
+import           Data.Text                  (Text)
 import qualified Data.Vector as V
-import           Text.Printf              (printf)
+import           Data.List                  (sortOn)
 
 newtype QueryProcessor =
     QueryProcessor { runQuery :: CollectionName -> QueryParams -> IO (Either [Text] QueryResults)
@@ -41,15 +39,6 @@ createQueryProcessor :: Environment
 createQueryProcessor env reg metadataApi lg =
     QueryProcessor { runQuery = runQueryImpl env reg metadataApi lg
                    }
-
-data ComponentResult = 
-    ComponentResult QueryResult Component deriving Show
-
-instance Eq ComponentResult where
-    (ComponentResult r1 c1) == (ComponentResult r2 c2) = score r1 == score r2 && c1 == c2
-
-instance Ord ComponentResult where
-    compare (ComponentResult r1 c1) (ComponentResult r2 c2) = compare (score r1, c1) (score r2, c2)
 
 runQueryImpl :: Environment
              -> Registry
@@ -85,67 +74,44 @@ runQueryImpl env registry metadataApi logger collectionName@(CollectionName cn) 
     execParams :: Component -> [String]
     execParams component =
         concat [ ["query"]
-               , case maxResults params of Just n -> [printf "-max_results=%d" n]; Nothing -> []
+               , case maxResults params of Just n -> ["-max_results=" ++ show n]; Nothing -> []
                , ["--base_path", path component]
                ]
 
-    -- This is interesting
+    -- Batch metadata lookups per component (avoids O(N) file open/close),
+    -- then parallelise across components.
     attachMetadata :: V.Vector (Component, QueryResult) -> IO QueryResults
     attachMetadata vcqrs = do
-        xs <- V.forM vcqrs $ \(cmp, qr) -> do
-            mmetadata <- lookupMetadata metadataApi (path cmp) (uri qr)
-            -- This is in two places
-            pure $ qr { metadata = M.delete "uri" . unMetadata <$> mmetadata }
+        -- Group by component path for batched file-handle reuse
+        let grouped :: M.Map FilePath [(Int, Component, QueryResult)]
+            grouped = V.ifoldl' (\m i (cmp, qr) -> M.insertWith (++) (path cmp) [(i, cmp, qr)] m) M.empty vcqrs
+
+        -- Look up metadata in parallel across components, batched within each
+        resultsList <- forConcurrently (M.toList grouped) $ \(fp, indexedPairs) -> do
+            let uris = map (\(_, _, qr) -> uri qr) indexedPairs
+            mmetas <- lookupMetadataBatch metadataApi fp uris
+            pure $ zipWith (\(idx, _, qr) mmeta -> (idx, qr { metadata = M.delete "uri" . unMetadata <$> mmeta })) indexedPairs mmetas
+
+        -- Reassemble in original order (already sorted by score from merge)
+        let xs = V.fromList . map snd . sortOn fst $ concat resultsList
         pure $ QueryResults (V.length xs) xs
 
     mergeQueryResults :: Maybe Int -> [(Component, QueryResults)] -> V.Vector (Component, QueryResult)
-    mergeQueryResults mLimit goods = do
+    mergeQueryResults mLimit goods =
 
-        let limit =
-                fromMaybe maxBound mLimit
+        let limit = fromMaybe maxBound mLimit
 
-        -- Gather the [limit] best-scored results into a heap
-        let resultHeap :: Heap ComponentResult =
-                foldl' (go1 limit) H.empty goods
+            -- Deduplicate by URI, keeping the highest-scored result, in one pass
+            resultMap :: M.Map Text (Component, QueryResult)
+            resultMap = foldl' (\m (cmp, QueryResults _ qs) ->
+                        V.foldl' (\m' qr -> M.insertWith keepHigher (uri qr) (cmp, qr) m') m qs
+                       ) M.empty goods
 
-        -- Since we may have duplicate urls with different scores
-        -- gather them into a map
-        let resultMap :: M.Map Text (Component, QueryResult) =
-                foldl' (\m (ComponentResult qr c) -> M.insertWith (maxBy (score . snd)) (uri qr) (c, qr) m) M.empty resultHeap
-
-            -- Maybe do a foldr or foldmaybe or something to try to simplify+
-
-        -- Could do more with mutable vectors
-
-        -- then resort by score
-        let qrs = V.fromList
-                . sortOn (negate . score . snd)
-                $ M.elems resultMap
-
-        qrs
+            -- Sort by score descending and take up to limit
+        in V.take limit . V.fromList . sortOn (Down . score . snd) $ M.elems resultMap
 
         where
-        maxBy :: Ord b => (a -> b) -> a -> a -> a
-        maxBy f a b | f a < f b = b
-                    | otherwise = a
-
-        go1 :: Int -> Heap ComponentResult -> (Component, QueryResults) -> H.Heap ComponentResult
-        go1 limit h (cmp, QueryResults _ qs) = foldl' go2 h qs
-
-            where
-            go2 :: Heap ComponentResult -> QueryResult -> Heap ComponentResult
-            go2 h' qr
-
-                -- Not enough results yet
-                | H.size h' < limit = H.insert (ComponentResult qr cmp) h'
-
-                | otherwise =
-
-                    case H.viewMin h' of
-                        Nothing -> h'
-                        Just (ComponentResult hqr _, h'') ->
-                            if score qr > score hqr
-                                -- Greater than smallest result
-                                then H.insert (ComponentResult qr cmp) h''
-                                -- Lesser (no change)
-                                else h'
+        keepHigher :: (Component, QueryResult) -> (Component, QueryResult) -> (Component, QueryResult)
+        keepHigher (c1, qr1) (c2, qr2)
+            | score qr1 >= score qr2 = (c1, qr1)
+            | otherwise              = (c2, qr2)
