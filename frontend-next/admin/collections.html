@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="component-base" content="../components">
+  <title>SearchSuite - Collections</title>
+  <script src="../js/components.js"></script>
+</head>
+<body>
+  <div id="header"></div>
+
+  <div class="layout">
+    <div id="sidebar" data-src="admin-sidebar.html"></div>
+
+    <main>
+      <h2>Collections</h2>
+
+      <section id="add">
+        <h3>Add New Collection</h3>
+        <form id="add-collection-form">
+          <label for="coll-name">Name:</label>
+          <input type="text" id="coll-name" name="name" required><br>
+
+          <label for="coll-seeds">Seed URLs (one per line):</label><br>
+          <textarea id="coll-seeds" name="seeds" rows="4" cols="50" placeholder="https://example.com&#10;https://example.org"></textarea><br>
+
+          <label for="coll-depth">Crawl Depth:</label>
+          <input type="number" id="coll-depth" name="depth" min="1" max="10" value="3"><br>
+
+          <button type="submit">Create Collection</button>
+        </form>
+      </section>
+
+      <section>
+        <h3>Existing Collections</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Documents</th>
+              <th>Last Indexed</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="collections-list">
+            <tr>
+              <td colspan="4">No collections yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+
+  <div id="footer"></div>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="component-base" content="components">
+  <title>SearchSuite - Results</title>
+  <script src="js/components.js"></script>
+</head>
+<body>
+  <div id="header"></div>
+
+  <div class="layout">
+    <div id="sidebar" data-src="public-sidebar.html"></div>
+
+    <main>
+      <h2>Search Results</h2>
+
+      <form action="results.html" method="get" id="search-form">
+        <input type="search" id="q" name="q" placeholder="Search...">
+        <button type="submit">Search</button>
+      </form>
+
+      <section id="results">
+        <p>Results will appear here.</p>
+        <!-- Example result item:
+        <article>
+          <h3><a href="#">Result Title</a></h3>
+          <p>https://example.com/page</p>
+          <p>Short description or snippet from the page content...</p>
+        </article>
+        -->
+      </section>
+
+      <nav id="pagination">
+        <span>Page 1 of 1</span>
+      </nav>
+    </main>
+  </div>
+
+  <div id="footer"></div>
+
+  <script>
+    // Populate search box from URL query param
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get('q');
+      if (q) {
+        const input = document.getElementById('q');
+        if (input) input.value = q;
+      }
+    })();
+  </script>
+</body>
+</html>

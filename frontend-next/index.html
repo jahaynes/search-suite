@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="component-base" content="components">
+  <title>SearchSuite - Home</title>
+  <script src="js/components.js"></script>
+</head>
+<body>
+  <div id="header"></div>
+
+  <div class="layout">
+    <div id="sidebar" data-src="public-sidebar.html"></div>
+
+    <main>
+      <h2>Search</h2>
+      <form action="results.html" method="get" id="search-form">
+        <label for="q">Enter your search query:</label><br>
+        <input type="search" id="q" name="q" placeholder="Search..." required>
+        <button type="submit">Search</button>
+      </form>
+    </main>
+  </div>
+
+  <div id="footer"></div>
+</body>
+</html>
