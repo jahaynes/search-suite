@@ -93,15 +93,12 @@ library
   hs-source-dirs:      src
   default-language:    Haskell2010
 
-executable benchmarks
+benchmark benchmarks
     import:           deps
     ghc-options:      -Wall -Wunused-packages -threaded -O2
+    type:             exitcode-stdio-1.0
     build-depends:    searchapi3, criterion
     main-is:          Bench.hs
-    other-modules:    CompactorStrategy
-                      Component
-                      Environment
-                      Types
     hs-source-dirs:   src
     default-language: Haskell2010
 
