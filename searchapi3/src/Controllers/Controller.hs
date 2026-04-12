@@ -81,7 +81,7 @@ runController compactor env indexer gitIndexer warcIndexer fetcher qp sp struc w
             :<|> gitIndexationServer gitIndexer
             :<|> warcIndexationServer warcIndexer
             :<|> diagnosticServer registry
-            :<|> serveDirectoryFileServer "frontend"
+            :<|> serveDirectoryFileServer "frontend-next"
 
     where
     searchApiWithDoc :: Proxy SearchApiWithDoc
