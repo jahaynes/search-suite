@@ -16,7 +16,8 @@ import           Util.BinarySearch
 import           WarcFileReader
 
 import           Codec.Serialise              (Serialise, deserialise, serialise)
-import           Control.Monad                (forM_)
+import           Control.Exception            (bracket)
+import           Control.Monad                (forM, forM_)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Resource
 import           Data.Binary                  (decode, encode)
@@ -37,9 +38,10 @@ import           System.IO
 import           Text.HTML.TagSoup
 
 data MetadataApi =
-    MetadataApi { generateMetadata :: !(FilePath -> IO ())
-                , mergeMetadata    :: !(FilePath -> FilePath -> FilePath -> IO ())
-                , lookupMetadata   :: !(FilePath -> Text -> IO (Maybe Metadata))
+    MetadataApi { generateMetadata    :: !(FilePath -> IO ())
+                , mergeMetadata       :: !(FilePath -> FilePath -> FilePath -> IO ())
+                , lookupMetadata      :: !(FilePath -> Text -> IO (Maybe Metadata))
+                , lookupMetadataBatch :: !(FilePath -> [Text] -> IO [Maybe Metadata])
                 }
 
 -- TODO: speedup opportunity
@@ -52,9 +54,10 @@ instance Serialise Metadata
 
 createMetadataApi :: WarcFileReader -> MetadataApi
 createMetadataApi wfr =
-    MetadataApi { generateMetadata = generateMetadataImpl wfr
-                , mergeMetadata    = mergeMetadataImpl
-                , lookupMetadata   = lookupMetadataImpl
+    MetadataApi { generateMetadata    = generateMetadataImpl wfr
+                , mergeMetadata       = mergeMetadataImpl
+                , lookupMetadata      = lookupMetadataImpl
+                , lookupMetadataBatch = lookupMetadataBatchImpl
                 }
 
 -- TODO resourceT
@@ -91,6 +94,30 @@ lookupMetadataImpl fp url = do
     hClose hOffs
 
     pure (snd <$> meta)
+
+-- Batch lookup: opens file handles once for all lookups on the same component path,
+-- avoiding O(N) open/close cycles.
+lookupMetadataBatchImpl :: FilePath -> [Text] -> IO [Maybe Metadata]
+lookupMetadataBatchImpl fp urls =
+    bracket
+        (do hOffs <- openBinaryFile (fp <> "/metadata.off") ReadMode
+            hMeta <- openBinaryFile (fp <> "/metadata.txt") ReadMode
+            pure (hOffs, hMeta)
+        )
+        (\(hOffs, hMeta) -> hClose hMeta >> hClose hOffs)
+        $ \(hOffs, hMeta) -> do
+            fs <- hFileSize hOffs
+            let (numOffsets, 0) = fs `divMod` 8
+            forM urls $ \url -> do
+                meta <- binarySearchM (fromIntegral numOffsets - 1) url $ \i -> do
+                    hSeek hOffs AbsoluteSeek (fromIntegral $ i * 8)
+                    loff :: Word64 <- decode <$> LBS.hGet hOffs 8
+                    roff :: Word64 <- decode <$> LBS.hGet hOffs 8
+                    let len = roff - loff
+                    hSeek hMeta AbsoluteSeek (fromIntegral loff)
+                    m <- deserialise <$> LBS.hGet hMeta (fromIntegral len)
+                    pure (uriOf m, m)
+                pure (snd <$> meta)
 
 generateMetadataImpl :: WarcFileReader -> FilePath -> IO ()
 generateMetadataImpl wfr x = do

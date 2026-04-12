@@ -99,16 +99,15 @@ runStructuredImpl env reg metadataApi logger collectionName@(CollectionName cn) 
 
                 Left e -> pure . Left $ e
                 Right (UnscoredResults n qrs) -> do
-                    -- TODO probably remove the set?
-                    qrs' <- mapM attachMetadata $ S.toList qrs
-                    pure $ Right (UnscoredResults n (S.fromList $ qrs'))
+                    let qrsList = S.toList qrs
+                    mmetas <- lookupMetadataBatch metadataApi (path lc) (map ur_uri qrsList)
+                    let qrs' = zipWith attachMetadata qrsList mmetas
+                    pure $ Right (UnscoredResults n (S.fromList qrs'))
 
             where
-            attachMetadata :: UnscoredResult -> IO UnscoredResult
-            attachMetadata ur =
-                lookupMetadata metadataApi (path lc) (ur_uri ur) >>= \case
-                    Nothing -> undefined -- TODO
-                    Just m -> pure ur { ur_metadata = Just . M.delete "uri" $ unMetadata m }
+            attachMetadata :: UnscoredResult -> Maybe Metadata -> UnscoredResult
+            attachMetadata ur Nothing  = ur { ur_metadata = Nothing }  -- TODO: was undefined
+            attachMetadata ur (Just m) = ur { ur_metadata = Just . M.delete "uri" $ unMetadata m }
 
         execParams :: Component -> [String]
         execParams component =
