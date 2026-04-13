@@ -47,8 +47,8 @@ main = do
 
         initialise job
 
-        frontier <- STF.create ":memory:" 0.4
-        --frontier <- STF.create "./foo.db" 0.4
+        --frontier <- STF.create ":memory:" 0.4
+        frontier <- STF.create "./local.db" 0.1
         -- frontier <- TF.create 0.4
 
         Right processor <- runExceptT $ do allowedUrls    <- A.create
