@@ -136,11 +136,9 @@ nextUrl perHostDelay lock now@(Now n) = liftIO $ timeMetric "nextUrl" $ do
 
     r <- withTransaction c $ do
 
-        --liftIO $ print ("Marking", uuid)
         execute c sqlMarkUrl (Only uuid)
 
         mUrlTime <- handle <$> query c sqlSelectUrl (Only uuid)
-        --liftIO $ print ("found", mUrlTime)
 
         case mUrlTime of
             
@@ -218,7 +216,7 @@ permitAccessAt c host pushBackTime nextTime =
 submitUrlImpl :: MonadIO m => ConnectionLock -> Now -> Maybe Url -> [Url] -> m ()
 submitUrlImpl lock (Now now) fromUrl urls = liftIO $ timeMetric "submitUrl" $ do
 
-    let distinctUrls = S.toList $ S.fromList urls
+    let distinctUrls = S.toList $ S.fromList urls -- TODO better
 
     unless (null distinctUrls) $ do
 
@@ -228,7 +226,8 @@ submitUrlImpl lock (Now now) fromUrl urls = liftIO $ timeMetric "submitUrl" $ do
 
             forM_ distinctUrls $ \url -> do
 
-                execute c sqlSubmitUrl (UrlRow url, UrlRow <$> fromUrl)
+                execute c sqlSubmitUrl (UrlRow url, 99 :: Int, UrlRow <$> fromUrl)
+                -- TODO fix 99, also print the fromUrl in the errors dump
                 changed <- (==1) <$> changes c
                 when changed $ do
                     permitAccessAt c (getHost url) DontPushBackTime now
@@ -240,8 +239,8 @@ submitUrlImpl lock (Now now) fromUrl urls = liftIO $ timeMetric "submitUrl" $ do
     sqlSubmitUrl :: Query
     sqlSubmitUrl =
         " INSERT OR IGNORE INTO completed_urls \
-        \ (url, fromUrl) VALUES                \
-        \ (  ?,       ?)                       "
+        \ (url, responseCode, fromUrl) VALUES  \
+        \ (  ?,            ?,       ?)         "
 
     sqlInsertHostUrl :: Query
     sqlInsertHostUrl =
@@ -259,11 +258,12 @@ createSqlTables c = do
 
     schemaCompleted :: Query
     schemaCompleted =
-        " CREATE TABLE IF NOT EXISTS              \
-        \   completed_urls                        \
-        \     ( url     TEXT PRIMARY KEY NOT NULL \
-        \     , fromUrl TEXT                      \
-        \     )                                   "
+        " CREATE TABLE IF NOT EXISTS                   \
+        \   completed_urls                             \
+        \     ( url          TEXT PRIMARY KEY NOT NULL \
+        \     , responseCode INTEGER NOT NULL          \
+        \     , fromUrl      TEXT                      \
+        \     )                                        "
 
     schemaHostUrls :: [Query]
     schemaHostUrls =
