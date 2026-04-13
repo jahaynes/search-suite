@@ -17,8 +17,8 @@ data PushBackTime = PushBackTime
                       deriving Eq
 
 data TimedFrontier m = 
-    TimedFrontier { tf_submit    :: !(Now -> Maybe Url -> NonEmpty Url -> m ())
-                  , tf_nextUrl   :: !(Now -> m Result)
+    TimedFrontier { tf_submit  :: !(Now -> Maybe Url -> NonEmpty Url -> m ())
+                  , tf_nextUrl :: !(Now -> m Result)
                   }
 
 getMicrosToWait :: Now -> UTCTime -> Maybe Int

@@ -60,7 +60,6 @@ main = do
         reporter <- R.create
         md5Store <- S.create
 
-
         run reporter md5Store processor (j_maxPages job)
 
 run :: R.Reporter IO
