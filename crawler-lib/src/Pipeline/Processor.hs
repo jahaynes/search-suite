@@ -12,14 +12,16 @@ import Pipeline.TimedFrontier (TimedFrontier (..))
 import Storage.WarcFileWriter (WarcFileWriter (..))
 import Url
 
-import Control.Concurrent
-import Control.Monad          (filterM, unless, when)
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.Maybe             (fromJust)
-import Data.Time.Clock
+import           Control.Concurrent
+import           Control.Monad            (filterM, when)
+import           Control.Monad.IO.Class   (MonadIO, liftIO)
+import           Data.List.NonEmpty       (NonEmpty)
+import qualified Data.List.NonEmpty as Ne
+import           Data.Maybe               (fromJust)
+import           Data.Time.Clock
 
 data Processor m =
-    Processor { p_submit :: !(Maybe Url -> [Url] -> m ())
+    Processor { p_submit :: !(Maybe Url -> NonEmpty Url -> m ())
               , p_step   :: !(m (Maybe Page))
               }
 
@@ -37,23 +39,26 @@ create frontier allowedUrls fetcher searchApiClient warcFileWriter job = do
             Processor { p_submit = submitImpl frontier allowedUrls
                       , p_step   = step frontier fetcher searchApiClient warcFileWriter (j_actions job)
                       }
-    let urls = map (fromJust . mkUrl) (j_seedUrls job)
-    seed frontier allowedUrls urls
-    pure processor
 
-seed :: MonadIO m => TimedFrontier m -> AllowedUrls m -> [Url] -> m ()
+    case Ne.nonEmpty . map (fromJust . mkUrl) $ j_seedUrls job of
+        Nothing   -> error "No seed URLs!"
+        Just urls -> do
+            seed frontier allowedUrls urls
+            pure processor
+
+seed :: MonadIO m => TimedFrontier m -> AllowedUrls m -> NonEmpty Url -> m ()
 seed frontier allowedUrls urls = do
     mapM_ (allowUrlAndVariants allowedUrls) urls
     submitImpl frontier allowedUrls Nothing urls
 
-submitImpl :: MonadIO m => TimedFrontier m -> AllowedUrls m -> Maybe Url -> [Url] -> m ()
+submitImpl :: MonadIO m => TimedFrontier m -> AllowedUrls m -> Maybe Url -> NonEmpty Url -> m ()
 submitImpl frontier allowedUrls fromUrl urls = do
-
-    allowed <- filterM (urlAllowed allowedUrls) urls
-
-    unless (null allowed) $ do
-        now <- Now <$> liftIO getCurrentTime
-        tf_submit frontier now fromUrl allowed
+    allowed <- filterM (urlAllowed allowedUrls) $ Ne.toList urls
+    case Ne.nonEmpty allowed of
+        Nothing -> pure ()
+        Just urls1 -> do
+            now <- Now <$> liftIO getCurrentTime
+            tf_submit frontier now fromUrl urls1
 
 step :: MonadIO m
      => TimedFrontier m

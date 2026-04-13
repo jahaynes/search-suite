@@ -11,6 +11,7 @@ import           Url
 import           Control.Concurrent.STM
 import           Control.Monad                 (when, unless)
 import           Control.Monad.IO.Class        (MonadIO, liftIO)
+import           Data.List.NonEmpty            (NonEmpty)
 import qualified Data.Map.Strict         as M
 import           Data.Time.Clock
 import qualified ListT                   as L
@@ -50,7 +51,7 @@ create perHostDelay = do
                 S.insert url completedUrls
                 MM.insert url (getHost url) hostUrls
 
-    let submitM :: MonadIO m => Now -> Maybe Url -> [Url] -> m ()
+    let submitM :: MonadIO m => Now -> Maybe Url -> NonEmpty Url -> m ()
         submitM now fromUrl urls = liftIO . atomically $ mapM_ (submit now) urls
 
     let unregisterAccess :: Host -> STM ()

@@ -8,10 +8,10 @@ import Url
 
 import           Control.Concurrent
 import           Control.Concurrent.STM
-import           Control.Monad                    (forM_, unless, when)
+import           Control.Monad                    (forM_, when)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
 import           Data.Maybe                       (fromJust)
-import qualified Data.Set as S
+import           Data.List.NonEmpty               (NonEmpty)
 import           Data.Time.Clock
 import           Data.Time.Clock.POSIX
 import           Data.UUID                        (UUID, fromText, toText)
@@ -213,27 +213,23 @@ permitAccessAt c host pushBackTime nextTime =
         \ (host, time) VALUES                   \
         \ (   ?,    ?)                          "
 
-submitUrlImpl :: MonadIO m => ConnectionLock -> Now -> Maybe Url -> [Url] -> m ()
-submitUrlImpl lock (Now now) fromUrl urls = liftIO $ timeMetric "submitUrl" $ do
+submitUrlImpl :: MonadIO m => ConnectionLock -> Now -> Maybe Url -> NonEmpty Url -> m ()
+submitUrlImpl lock (Now now) fromUrl urls = liftIO $ do
 
-    let distinctUrls = S.toList $ S.fromList urls -- TODO better
+    c <- acquire lock
 
-    unless (null distinctUrls) $ do
+    withTransaction c $
 
-        c <- acquire lock
+        forM_ urls $ \url -> do
 
-        withTransaction c $
+            execute c sqlSubmitUrl (UrlRow url, 99 :: Int, UrlRow <$> fromUrl)
+            -- TODO fix 99, also print the fromUrl in the errors dump
+            changed <- (==1) <$> changes c
+            when changed $ do
+                permitAccessAt c (getHost url) DontPushBackTime now
+                execute c sqlInsertHostUrl (UrlHostRow url (getHost url))
 
-            forM_ distinctUrls $ \url -> do
-
-                execute c sqlSubmitUrl (UrlRow url, 99 :: Int, UrlRow <$> fromUrl)
-                -- TODO fix 99, also print the fromUrl in the errors dump
-                changed <- (==1) <$> changes c
-                when changed $ do
-                    permitAccessAt c (getHost url) DontPushBackTime now
-                    execute c sqlInsertHostUrl (UrlHostRow url (getHost url))
-
-        release lock c
+    release lock c
 
     where
     sqlSubmitUrl :: Query
