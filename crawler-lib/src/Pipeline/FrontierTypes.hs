@@ -2,7 +2,8 @@ module Pipeline.FrontierTypes where
 
 import Url
 
-import Data.Time.Clock (UTCTime, diffUTCTime)
+import Data.List.NonEmpty (NonEmpty)
+import Data.Time.Clock    (UTCTime, diffUTCTime)
 
 newtype Now =
     Now UTCTime
@@ -16,7 +17,7 @@ data PushBackTime = PushBackTime
                       deriving Eq
 
 data TimedFrontier m = 
-    TimedFrontier { tf_submit    :: !(Now -> Maybe Url -> [Url] -> m ())
+    TimedFrontier { tf_submit    :: !(Now -> Maybe Url -> NonEmpty Url -> m ())
                   , tf_nextUrl   :: !(Now -> m Result)
                   }
 
