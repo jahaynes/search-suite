@@ -1,12 +1,11 @@
 {-# LANGUAGE MultiWayIf #-}
 
-module Pipeline.AllowedUrls where
+module Pipeline.AllowedUrls ( AllowedUrls(..), create ) where
 
-import Storage.Store as S (Store (..), create)
+import Storage.Store as S (Store (..))
 import Url                (Host (..), Url, getHost)
 
-import Control.Monad.IO.Class     (MonadIO, liftIO)
-import Control.Monad.Trans.Except (ExceptT)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.List
 import Data.List.Split
 import Text.Regex.TDFA
@@ -16,18 +15,15 @@ data AllowedUrls m =
                 , urlAllowed          :: !(Url -> m Bool)
                 }
 
-create :: MonadIO m => m (AllowedUrls (ExceptT e IO))
-create = do
 
-    store <- S.create
+create :: MonadIO m => Store String m -> IO (AllowedUrls m)
+create store =
 
     pure AllowedUrls { allowUrlAndVariants = allowUrlAndVariantsImpl store
                      , urlAllowed          = urlAllowedImpl store
                      }
 
-allowUrlAndVariantsImpl :: Store String (ExceptT e IO)
-                        -> Url
-                        -> ExceptT e IO ()
+allowUrlAndVariantsImpl :: MonadIO m => Store String m -> Url -> m ()
 allowUrlAndVariantsImpl store url = do
     let variants = buildVariantRegex url
     liftIO . putStrLn $ variants
@@ -70,13 +66,8 @@ buildVariantRegex url = do
     replace :: String -> String -> String -> String
     replace src dest = intercalate dest . splitOn src
 
-urlAllowedImpl :: Store String (ExceptT e IO)
-               -> Url
-               -> ExceptT e IO Bool
+urlAllowedImpl :: MonadIO m => Store String m -> Url -> m Bool
 urlAllowedImpl store url = do
-
     let url' = show url
-
     patterns <- s_toList store
-
     pure $ any (url' =~) patterns

@@ -9,7 +9,7 @@ import Page.Page
 import Url
 
 import Control.Exception.Safe     (SomeException, catchAny, catchAnyDeep)
-import Control.Monad.IO.Class     (liftIO)
+import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Control.Monad.Trans.Except (ExceptT (ExceptT), throwE)
 import Crypto.Hash.MD5
 import Data.ByteString.Char8      (ByteString, unpack)
@@ -52,7 +52,7 @@ fetchImpl man url = do
                     (throwE . urlError)
 
     body <- catchAnyDeep (ExceptT $ withResponse req man readResponse)
-                         (throwE . fetchError)
+                         _ --(throwE . fetchError)
 
     let md5 = hash body
 

@@ -4,7 +4,6 @@ module Storage.Store ( Store (..)
 
 import           Control.Concurrent.STM     (atomically)
 import           Control.Monad.IO.Class     (MonadIO, liftIO)
-import           Control.Monad.Trans.Except (ExceptT)
 import           Data.Hashable              (Hashable)
 import qualified ListT                      (toList)
 import           StmContainers.Set          (Set)
@@ -16,7 +15,7 @@ data Store a m =
           , s_toList :: !(m [a])
           }
 
-create :: (Eq a, Hashable a, MonadIO m) => m (Store a (ExceptT e IO))
+create :: (Eq a, Hashable a, MonadIO m) => IO (Store a m)
 create = do
     s <- liftIO S.newIO
     pure $ Store { s_member = member s
@@ -24,11 +23,11 @@ create = do
                  , s_toList = toList s
                  }
 
-member :: (Eq a, Hashable a) => Set a -> a -> ExceptT e IO Bool
+member :: (Eq a, Hashable a, MonadIO m) => Set a -> a -> m Bool
 member s x = liftIO . atomically $ S.lookup x s
 
-set :: (Eq a, Hashable a) => Set a -> a -> ExceptT e IO ()
+set :: (Eq a, Hashable a, MonadIO m) => Set a -> a -> m ()
 set s x = liftIO . atomically $ S.insert x s
 
-toList :: Set a -> ExceptT e IO [a]
+toList :: MonadIO m => Set a -> m [a]
 toList = liftIO . atomically . ListT.toList . S.listT

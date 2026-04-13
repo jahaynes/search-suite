@@ -1,4 +1,5 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase
+           , ScopedTypeVariables #-}
 
 module Main where
 
@@ -9,6 +10,7 @@ import qualified Network.Fetcher           as F
 import           Page.Page
 import           Page.Scrape
 import qualified Pipeline.AllowedUrls      as A
+import           Pipeline.FrontierTypes
 import qualified Pipeline.Processor        as P
 -- import qualified Pipeline.TimedFrontier    as TF
 import qualified Pipeline.SqlTimedFrontier as STF
@@ -22,6 +24,7 @@ import           Control.Concurrent.Async
 import           Control.Monad.IO.Class     (liftIO)
 import           Control.Monad.Trans.Except (ExceptT, runExceptT)
 import           Data.ByteString.Char8      (ByteString)
+import qualified Data.List.NonEmpty as Ne
 import           System.Directory           (doesFileExist)
 import           System.Environment         (getArgs)
 
@@ -48,11 +51,19 @@ main = do
         initialise job
 
         --frontier <- STF.create ":memory:" 0.4
-        frontier <- STF.create "./local.db" 0.1
+
         -- frontier <- TF.create 0.4
 
-        Right processor <- runExceptT $ do allowedUrls    <- A.create
-                                           fetcher        <- liftIO $ F.createFetcher Nothing -- TODO accept proxy settings
+        frontier    :: TimedFrontier IO  <- STF.create "./local.db" 0.1
+        store       :: S.Store String IO <- S.create
+        allowedUrls :: A.AllowedUrls IO  <- A.create store
+        fetcher      <- F.createFetcher Nothing -- TODO accept proxy settings
+
+        undefined
+
+{-
+        Right processor <- runExceptT $ do 
+                                           
                                            client         <- liftIO C.create
                                            warcFileWriter <- liftIO W.create
                                            P.create frontier allowedUrls fetcher client warcFileWriter job
@@ -60,7 +71,7 @@ main = do
         reporter <- R.create
         md5Store <- S.create
 
-        run reporter md5Store processor (j_maxPages job)
+        run reporter md5Store processor (j_maxPages job) -}
 
 run :: R.Reporter IO
     -> S.Store ByteString (ExceptT Error IO)
@@ -108,8 +119,9 @@ run reporter md5store processor maxPages = do
                             Right False -> do
                                 sr <- runExceptT $ do
                                     S.s_put md5store (p_md5 page)
-                                    let urls = scrape page
-                                    P.p_submit processor (Just $ p_url page) urls
+                                    case Ne.nonEmpty (scrape page) of
+                                        Nothing   -> pure ()
+                                        Just urls -> P.p_submit processor (Just $ p_url page) urls
 
                                 case sr of
                                         Left e -> do
