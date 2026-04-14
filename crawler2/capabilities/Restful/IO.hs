@@ -12,10 +12,10 @@ import Data.Text                 (Text)
 import Network.HTTP.Client       (Manager, httpLbs, parseRequest, responseBody, responseStatus)
 import Network.HTTP.Types.Status (statusCode)
 
-fetchGetImpl :: (MonadCatch m, MonadIO m) => Manager -> String -> m (Either [Text] Response)
+fetchGetImpl :: (MonadCatch m, MonadIO m) => Manager -> Url -> m (Either [Text] Response)
 fetchGetImpl http url =
 
-    case parseRequest url of
+    case parseRequest (show url) of
 
         Left ex ->
 
@@ -26,7 +26,8 @@ fetchGetImpl http url =
 
             let job = do
                     resp <- httpLbs req http
-                    right Response { getCode = statusCode $ responseStatus resp
+                    right Response { getUrl  = url
+                                   , getCode = statusCode $ responseStatus resp
                                    , getBody = toStrict $ responseBody resp
                                    }
             in catchAnyDeep (liftIO job) (left . asErrMsg)

@@ -1,9 +1,9 @@
 module Restful.Class ( Restful (..) ) where
 
-import Restful.Types
+import Restful.Types (Response, Url)
 
 import Data.Text                 (Text)
 
 class Restful m where
 
-    fetchGet :: String -> m (Either [Text] Response)
+    fetchGet :: Url -> m (Either [Text] Response)
