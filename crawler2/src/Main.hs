@@ -1,8 +1,5 @@
-module Main (main) where
-
-import Fetcher (fetch)
+module Main ( main ) where
 
 main :: IO ()
 main = do
     putStrLn "Hello, Haskell!"
-    fetch

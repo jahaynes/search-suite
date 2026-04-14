@@ -1,8 +1,13 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving,
+             InstanceSigs #-}
 
 module Main (main) where
 
+import Restful.Class (Restful (..))
+import Restful.Types (Response)
+
 import Control.Monad.Trans.Reader (ReaderT)
+import Data.Text                  (Text)
 
 data TestEnv = TestEnv
 
@@ -12,3 +17,9 @@ newtype TestCrawler m a =
 
 main :: IO ()
 main = putStrLn "Test suite not yet implemented."
+
+instance Restful (TestCrawler m) where
+
+    fetchGet :: String -> TestCrawler m (Either [Text] Response)
+    fetchGet url =
+        undefined

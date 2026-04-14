@@ -1,33 +1,16 @@
-{-# LANGUAGE DeriveGeneric,
-             QuasiQuotes #-}
+{-# LANGUAGE QuasiQuotes #-}
 
-module Restful ( Manager
-               , Response (..)
-               , Restful (..)
-               , fetchGetImpl
-               ) where
+module Restful.IO ( fetchGetImpl ) where
 
-import Control.DeepSeq           (NFData)
-import Control.Exception.Safe
+import Restful.Types
+
+import Control.Exception.Safe    (MonadCatch, SomeException, catchAnyDeep)
 import Control.Monad.IO.Class    (MonadIO, liftIO)
-import Data.ByteString           (ByteString)
 import Data.ByteString.Lazy      (toStrict)
 import Data.String.Interpolate   (i)
 import Data.Text                 (Text)
-import GHC.Generics              (Generic)
 import Network.HTTP.Client       (Manager, httpLbs, parseRequest, responseBody, responseStatus)
 import Network.HTTP.Types.Status (statusCode)
-
-class Restful m where
-
-    fetchGet :: String -> m (Either [Text] Response)
-
-data Response =
-    Response { getCode :: !Int
-             , getBody :: !ByteString
-             } deriving Generic
-
-instance NFData Response
 
 fetchGetImpl :: (MonadCatch m, MonadIO m) => Manager -> String -> m (Either [Text] Response)
 fetchGetImpl http url =

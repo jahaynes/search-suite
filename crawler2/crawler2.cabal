@@ -13,7 +13,9 @@ common common
 
 library capabilities
     import:           common
-    exposed-modules:  Restful
+    exposed-modules:  Restful.Class
+                      Restful.IO
+                      Restful.Types
     build-depends:    base,
                       bytestring,
                       deepseq,
@@ -28,9 +30,9 @@ library capabilities
 library
     import:           common
     exposed-modules:  Crawler
-                      Fetcher
     build-depends:    base,
                       capabilities,
+                      http-client,
                       safe-exceptions,
                       transformers,
                       text
@@ -52,5 +54,7 @@ test-suite crawler2-test
     hs-source-dirs:   test
     main-is:          Test.hs
     build-depends:    base,
+                      capabilities,
                       crawler2,
+                      text,
                       transformers

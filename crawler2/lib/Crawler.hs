@@ -3,13 +3,16 @@
 
 module Crawler where
 
-import Restful
+import Restful.Class (Restful (..))
+import Restful.IO    (fetchGetImpl)
+import Restful.Types (Response)
 
 import Control.Exception.Safe     (MonadCatch, MonadThrow)
 import Control.Monad.IO.Class     (MonadIO)
 import Control.Monad.Trans.Reader (ReaderT, ask)
 import Data.Functor               ((<&>))
 import Data.Text                  (Text)
+import Network.HTTP.Client        (Manager)
 
 data Env = Env Manager
 
