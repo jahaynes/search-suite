@@ -2,30 +2,43 @@
 
 module Main ( main ) where
 
-import Crawler
-import Restful.Class (Restful (..))
-import Restful.Types
-import Scrape
+import Crawler        (runCrawler)
+import Frontier.Class (Frontier (..), NextUrl (..))
+import Restful.Class  (Restful (..))
+import Restful.Types  (mkUrl)
+import Scrape         (scrapeUrls)
 
-import           Control.Monad.IO.Class
-import qualified Data.ByteString.Char8 as C8
+import Control.Monad.IO.Class
 
 main :: IO ()
-main = do
+main = runCrawler simple3
 
-    let Just url = mkUrl "http://[::1]:9090/content/wikipedia_en_all_maxi/Johannes_Gutenberg"
+simple3 :: (Frontier m, MonadIO m, Restful m) => m ()
+simple3 =
+    case mkUrl "http://127.0.0.1:3000" of
+        Nothing -> error "Bad url"
+        Just url -> do
+            insert url
+            go
 
-    runCrawler (simple3 url)
+go :: (Frontier m, MonadIO m, Restful m) => m ()
+go =
 
-simple3 :: (Applicative m, MonadIO m, Restful m) => Url -> m ()
-simple3 url = do
+    nextUrl >>= \case
 
-    fetchGet url >>= \case
+        NoMoreUrls ->
+            liftIO $ putStrLn "No more urls.  Done"
 
-        Left l -> error $ show l
+        RetryInMicros _ -> error "RetryInMicros"
 
-        Right response -> do
-            liftIO . C8.putStrLn . getBody $ response
-            liftIO $ print (getCode response)
-            let urls = scrapeUrls response
-            mapM_ (liftIO . print) urls
+        NextUrl url ->
+
+            fetchGet url >>= \case
+
+                Left l ->
+                    error $ show l
+
+                Right response -> do
+                    let urls = scrapeUrls response
+                    mapM_ insert urls
+                    go

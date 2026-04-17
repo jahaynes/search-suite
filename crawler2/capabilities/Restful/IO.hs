@@ -23,8 +23,9 @@ fetchGetImpl http url =
                  , [i|#{ex}|] ]
 
         Right req ->
-
+            
             let job = do
+                    liftIO $ putStrLn [i|Fetching: #{url}|]
                     resp <- httpLbs req http
                     right Response { getUrl  = url
                                    , getCode = statusCode $ responseStatus resp

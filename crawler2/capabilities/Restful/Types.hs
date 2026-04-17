@@ -22,7 +22,7 @@ data Response =
 instance NFData Response
 
 newtype Url =
-    Url URI deriving Generic
+    Url URI deriving (Generic, Eq, Ord)
 
 instance NFData Url
 

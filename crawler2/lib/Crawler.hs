@@ -5,34 +5,45 @@ module Crawler ( Crawler
                , runCrawler
                ) where
 
-import Restful.Class (Restful (..))
-import Restful.IO    (fetchGetImpl)
-import Restful.Types (Url, Response)
+import Frontier.Class          (Frontier (..), NextUrl (..))
+import Frontier.InMemFrontier
+import Restful.Class           (Restful (..))
+import Restful.IO              (fetchGetImpl)
+import Restful.Types           (Url, Response)
 
 import Control.Exception.Safe     (MonadCatch, MonadThrow)
-import Control.Monad.IO.Class     (MonadIO)
+import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
-import Data.Functor               ((<&>))
 import Data.Text                  (Text)
 import Network.HTTP.Client        (Manager, defaultManagerSettings, newManager)
 
-data Env = Env Manager
+data Env = Env InMemFrontier Manager
 
 newtype Crawler a =
     Crawler { unCrawler :: ReaderT Env IO a }
         deriving (Functor, Applicative, Monad, MonadIO, MonadCatch, MonadThrow)
 
-getHttp :: Crawler Manager
-getHttp = Crawler (ask <&> \(Env http) -> http)
-
 instance Restful Crawler where
 
     fetchGet :: Url -> Crawler (Either [Text] Response)
-    fetchGet url =
-        getHttp >>= \http ->
-            fetchGetImpl http url
+    fetchGet url = do
+        Env _ http <- Crawler ask
+        fetchGetImpl http url
+
+instance Frontier Crawler where
+
+    insert :: Url -> Crawler ()
+    insert url = do
+        Env frontier _ <- Crawler ask
+        liftIO $ insert' frontier url
+
+    nextUrl :: Crawler NextUrl
+    nextUrl = do
+        Env frontier _ <- Crawler ask
+        liftIO $ nextUrl' frontier
 
 runCrawler :: Crawler a -> IO a
 runCrawler crawler = do
+    frontier <- new'
     http <- newManager defaultManagerSettings
-    runReaderT (unCrawler crawler) (Env http)
+    runReaderT (unCrawler crawler) (Env frontier http)

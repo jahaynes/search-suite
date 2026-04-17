@@ -13,11 +13,14 @@ common common
 
 library capabilities
     import:           common
-    exposed-modules:  Restful.Class
+    exposed-modules:  Frontier.Class
+                      Frontier.InMemFrontier
+                      Restful.Class
                       Restful.IO
                       Restful.Types
     build-depends:    base,
                       bytestring,
+                      containers,
                       deepseq,
                       http-client,
                       http-types,
