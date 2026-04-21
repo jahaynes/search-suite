@@ -4,7 +4,7 @@
 module Main (main) where
 
 import Restful.Class (Restful (..))
-import Restful.Types (Response)
+import Restful.Types (Response, Url)
 
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Text                  (Text)
@@ -20,6 +20,6 @@ main = putStrLn "Test suite not yet implemented."
 
 instance Restful (TestCrawler m) where
 
-    fetchGet :: String -> TestCrawler m (Either [Text] Response)
+    fetchGet :: Url -> TestCrawler m (Either [Text] Response)
     fetchGet url =
         undefined
