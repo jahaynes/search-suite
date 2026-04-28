@@ -23,7 +23,6 @@ library capabilities
                       bytestring,
                       containers,
                       deepseq,
-                      heaps,
                       http-client,
                       http-types,
                       network-uri,

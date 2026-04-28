@@ -1,1 +1,41 @@
 spelling is done - include it somewhere?
+
+## crawler2 bugs
+
+### Bug 1 (Critical): `derelativise` uses wrong base URI for scheme/authority — `Types.hs:62`
+
+When `mBaseHref` is `Just (Url baseHref)`, the base **path** is taken from `baseHref` (line 55), but the record update is applied to `bu` (the original base URL, not the `<base>` href). This means the resulting URL keeps the scheme and authority of `bu` — which is correct — but the **fragment** from `bu` may leak through if `uriFragment ref` is empty. The path computation comes from `baseHref` logic but the starting record is `bu`, which is inconsistent and fragile.
+
+Compare with `crawler-lib/src/Url.hs:81` which does:
+```haskell
+fromUri $ (val baseUrl) { uriPath = path'', ... }
+```
+
+### Bug 2 (Critical): `fromUri` doesn't strip fragments — `Types.hs:35-38`
+
+```haskell
+fromUri uri = do
+    _ <- uriAuthority uri
+    pure $ Url uri
+```
+
+Compare with `crawler-lib/src/Url.hs:41-46`:
+```haskell
+fromUri uri = do
+    _   <- uriAuthority uri
+    pure $ if stripFragments
+        then Url $! uri { uriFragment = "" }
+        else Url uri
+```
+
+The crawler2 version never strips fragments from URLs. This means:
+- `scrapeUrls` will produce URLs with fragments (e.g., `#section`), leading to duplicate crawling of the same page
+- `derelativise` can produce URLs carrying fragments from the base URI when the relative reference has no fragment
+
+### Bug 3 (Medium): `Scrape.scrapeUrls` parses tags twice — `Scrape.hs:16-24`
+
+The body is parsed with `parseTags` on line 16 (and canonicalized into `tags`), but then `parseTags` is called again on line 23 without `canonicalizeTags`. This means:
+1. Redundant work — parsing the same body twice
+2. Inconsistency — `findBaseHref` uses canonicalized tags, but the `<a>` tag extraction uses non-canonicalized tags. `canonicalizeTags` normalizes tag names to lowercase and merges adjacent text, so if the HTML has uppercase tag names like `<A HREF="...">`, the `isTagOpenName "a"` filter on the non-canonicalized tags would miss them.
+
+The fix is to use the already-canonicalized `tags` variable instead of re-parsing.

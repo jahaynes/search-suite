@@ -19,7 +19,8 @@ import           Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
 import           Data.Text                  (Text)
 import           Network.HTTP.Client        (Manager, defaultManagerSettings, newManager)
 
-data Env = Env InMemFrontier Manager
+data Env =
+    Env !InMemFrontier !Manager
 
 newtype Crawler a =
     Crawler { unCrawler :: ReaderT Env IO a }
@@ -44,7 +45,7 @@ instance Multithread Crawler where
             where
             unlift :: Crawler b -> IO b
             unlift (Crawler run) = runReaderT run env
- 
+
 instance Frontier Crawler where
 
     insert :: Url -> Crawler ()
