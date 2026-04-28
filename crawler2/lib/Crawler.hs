@@ -6,7 +6,7 @@ module Crawler ( Crawler
                ) where
 
 import Frontier.Class          (Frontier (..), NextUrl (..))
-import Frontier.InMemFrontier
+import Frontier.StmFrontier
 import Multithread.Class       (Multithread (..))
 import Restful.Class           (Restful (..))
 import Restful.IO              (fetchGetImpl)
@@ -20,7 +20,7 @@ import           Data.Text                  (Text)
 import           Network.HTTP.Client        (Manager, defaultManagerSettings, newManager)
 
 data Env =
-    Env !InMemFrontier !Manager
+    Env !StmFrontier !Manager
 
 newtype Crawler a =
     Crawler { unCrawler :: ReaderT Env IO a }

@@ -14,7 +14,7 @@ common common
 library capabilities
     import:           common
     exposed-modules:  Frontier.Class
-                      Frontier.InMemFrontier
+                      Frontier.StmFrontier
                       Multithread.Class
                       Restful.Class
                       Restful.IO
@@ -27,6 +27,7 @@ library capabilities
                       http-types,
                       network-uri,
                       safe-exceptions,
+                      stm,
                       string-interpolate,
                       text
     hs-source-dirs:   capabilities
