@@ -15,6 +15,7 @@ library capabilities
     import:           common
     exposed-modules:  Frontier.Class
                       Frontier.InMemFrontier
+                      Multithread.Class
                       Restful.Class
                       Restful.IO
                       Restful.Types
@@ -22,6 +23,7 @@ library capabilities
                       bytestring,
                       containers,
                       deepseq,
+                      heaps,
                       http-client,
                       http-types,
                       network-uri,
@@ -35,7 +37,8 @@ library
     import:           common
     exposed-modules:  Crawler
                       Scrape
-    build-depends:    base,
+    build-depends:    async,
+                      base,
                       bytestring,
                       capabilities,
                       http-client,
