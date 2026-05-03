@@ -13,9 +13,7 @@ common common
 
 library capabilities
     import:           common
-    exposed-modules:  Frontier.Class
-                      Frontier.PoliteStmFrontier
-                      Multithread.Class
+    exposed-modules:  Multithread.Class
                       Restful.Class
                       Restful.IO
                       Restful.Types
@@ -23,14 +21,10 @@ library capabilities
                       bytestring,
                       deepseq,
                       hashable,
-                      heaps,
                       http-client,
                       http-types,
-                      list-t,
                       network-uri,
                       safe-exceptions,
-                      stm,
-                      stm-containers,
                       string-interpolate,
                       text
     hs-source-dirs:   capabilities
@@ -39,13 +33,19 @@ library capabilities
 library
     import:           common
     exposed-modules:  Crawler
+                      Frontier.Class
+                      Frontier.PoliteStmFrontier
                       Scrape
     build-depends:    async,
                       base,
                       bytestring,
                       capabilities,
+                      heaps,
                       http-client,
+                      list-t,
                       safe-exceptions,
+                      stm,
+                      stm-containers,
                       tagsoup,
                       transformers,
                       text,
