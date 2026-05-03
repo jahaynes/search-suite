@@ -30,6 +30,7 @@ data PoliteStmFrontier =
                       , remainingHostUrls :: !(Multimap Host Url)
                       }
 
+-- See if it's possible to make this a proper Frontier instance
 new :: IO PoliteStmFrontier
 new = PoliteStmFrontier <$> newTVarIO mempty
                         <*> S.newIO
