@@ -3,7 +3,7 @@
 module Main ( main ) where
 
 import Crawler        (runCrawler)
-import Frontier.Class (Frontier (..), Millis (..), NextUrl (..))
+import Frontier.Class (Frontier (..), Millis (..), NextUrl (..), UrlResult (..))
 import Restful.Class  (Restful (..))
 import Restful.Types  (mkUrl)
 import Scrape         (scrapeUrls)
@@ -40,12 +40,12 @@ go =
 
             fetchGet url >>= \case
 
-                Left l ->
-                    error $ show l
+                Left _ ->
+                    completed url (UrlFailure (-1)) -- TODO code this
 
                 Right response -> do
 
-                    completed url
+                    completed url Success -- TODO check
 
                     let urls = scrapeUrls response
                     mapM_ insert urls

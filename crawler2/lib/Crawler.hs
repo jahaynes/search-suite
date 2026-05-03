@@ -5,7 +5,7 @@ module Crawler ( Crawler
                , runCrawler
                ) where
 
-import Frontier.Class             (Frontier (..), Millis (..), NextUrl (..))
+import Frontier.Class             (Frontier (..), Millis (..), NextUrl (..), UrlResult (..))
 import Frontier.PoliteStmFrontier (PoliteStmFrontier, insertUrl, new, popEarliestHostUrl, signalUrlCompleted)
 import Multithread.Class          (Multithread (..))
 import Restful.Class              (Restful (..))
@@ -49,10 +49,10 @@ instance Multithread Crawler where
 
 instance Frontier Crawler where
 
-    completed :: Url -> Crawler ()
-    completed url = do
+    completed :: Url -> UrlResult -> Crawler ()
+    completed url result = do
         Env frontier _ <- Crawler ask
-        liftIO $ signalUrlCompleted frontier url
+        liftIO $ signalUrlCompleted frontier url result
 
     insert :: Url -> Crawler ()
     insert url = do

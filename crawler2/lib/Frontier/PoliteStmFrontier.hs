@@ -7,7 +7,7 @@ module Frontier.PoliteStmFrontier ( PoliteStmFrontier
                                   , signalUrlCompleted
                                   ) where
 
-import Frontier.Class (Millis (..), NextUrl (..))
+import Frontier.Class (Millis (..), NextUrl (..), UrlResult (..))
 import Restful.Types  (Host, Url, getHost)
 
 import           Control.Concurrent.STM
@@ -35,8 +35,9 @@ new = PoliteStmFrontier <$> newTVarIO mempty
                         <*> S.newIO
                         <*> MM.newIO
 
-signalUrlCompleted :: PoliteStmFrontier -> Url -> IO ()
-signalUrlCompleted frontier url = atomically $
+-- TODO: use result
+signalUrlCompleted :: PoliteStmFrontier -> Url -> UrlResult -> IO ()
+signalUrlCompleted frontier url _ = atomically $
     S.insert url (completedUrls frontier)
 
 data HostAction = NoHost
