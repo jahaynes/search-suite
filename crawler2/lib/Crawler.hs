@@ -1,9 +1,9 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving,
              InstanceSigs #-}
 
-module Crawler ( Crawler
-               , runCrawler
-               ) where
+module Crawler where
+
+{-
 
 import Frontier.Class             (Frontier (..), Millis (..), NextUrl (..), UrlResult (..))
 import Frontier.PoliteStmFrontier (PoliteStmFrontier, insertUrl, new, popEarliestHostUrl, signalUrlCompleted)
@@ -74,3 +74,5 @@ runCrawler crawler = do
     frontier <- new
     http <- newManager defaultManagerSettings
     runReaderT (unCrawler crawler) (Env frontier http)
+
+-}

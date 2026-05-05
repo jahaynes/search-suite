@@ -34,25 +34,16 @@ library
     import:           common
     exposed-modules:  Crawler
                       Frontier.Class
-                      Frontier.MultiplexedFrontier
                       Frontier.PoliteStmFrontier
                       Scrape
-    build-depends:    async,
-                      base,
+    build-depends:    base,
                       bytestring,
                       capabilities,
-                      hashable,
                       heaps,
-                      http-client,
                       list-t,
-                      safe-exceptions,
                       stm,
                       stm-containers,
-                      tagsoup,
-                      transformers,
-                      text,
-                      time,
-                      vector
+                      tagsoup
     hs-source-dirs:   lib
     default-language: Haskell2010
 
