@@ -28,7 +28,7 @@ import qualified Data.Vector as V
 import           Network.HTTP.Client           (Manager, defaultManagerSettings, newManager)
 
 data Env f =
-    Env !Manager !Int !(Vector f)
+    Env !Supervisor !Manager !Int !(Vector f)
 
 newtype MultiCrawler f a =
     MultiCrawler { unMultiCrawler :: ReaderT (Env f) IO a }
@@ -38,13 +38,13 @@ instance Frontier f => Crawler (MultiCrawler f) where
 
     addUrl :: Url -> MultiCrawler f ()
     addUrl url = do
-        Env _ nt ps <- MultiCrawler ask
+        Env _ _ nt ps <- MultiCrawler ask
         let h = hash url `mod` nt           -- This currently hashes the whole URL, not just the host.  Make this an option?
         liftIO $ insert (ps ! h) url
 
     start :: MultiCrawler f ()
     start = do
-        Env http _ ps <- MultiCrawler ask
+        Env _ http _ ps <- MultiCrawler ask
         forConcurrently_ ps (go http)
 
 instance Restful (MultiCrawler f) where
@@ -52,7 +52,7 @@ instance Restful (MultiCrawler f) where
     -- TODO: motivate the catch/throw dependencies here
     fetchGet :: Url -> MultiCrawler f (Either [Text] Response)
     fetchGet url = do        
-        Env http _ _ <- MultiCrawler ask
+        Env _ http _ _ <- MultiCrawler ask
         fetchGetImpl http url
 
 instance Time (MultiCrawler f) where
@@ -67,7 +67,10 @@ runCrawler :: Frontier f => Int -> MultiCrawler f a -> IO a
 runCrawler numThreads crawler = do
     http <- newManager defaultManagerSettings
     ps <- V.replicateM numThreads newFrontier
-    runReaderT (unMultiCrawler crawler) (Env http numThreads ps)
+
+    let supervisor = Supervisor undefined
+
+    runReaderT (unMultiCrawler crawler) (Env supervisor http numThreads ps)
 
 instance Multithread (MultiCrawler f) where
 
@@ -85,6 +88,10 @@ instance Multithread (MultiCrawler f) where
 
 unlift :: Env f -> MultiCrawler f b -> IO b
 unlift env (MultiCrawler run) = runReaderT run env
+
+-- newtype
+data Supervisor =
+    Supervisor { shouldHalt :: Int -> IO Bool }
 
 go :: Frontier f => Manager -> f -> MultiCrawler f ()
 go http p = do
@@ -112,6 +119,7 @@ go http p = do
 
                 Right response -> do
 
+                    -- completed could probably not need liftIO 
                     liftIO $ completed p url Success -- TODO check
 
                     let urls = scrapeUrls response
