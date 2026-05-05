@@ -1,9 +1,7 @@
 module Frontier.Class where
 
 import Restful.Types (Url)
-
-newtype Millis =
-    Millis Int deriving (Eq, Ord)
+import Time.Class    (Millis)
 
 data UrlResult = Success
                | UrlFailure !Int

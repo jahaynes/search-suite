@@ -7,8 +7,9 @@ module Frontier.PoliteStmFrontier ( PoliteStmFrontier
                                   , signalUrlCompleted
                                   ) where
 
-import Frontier.Class (Millis (..), NextUrl (..), UrlResult (..))
+import Frontier.Class (NextUrl (..), UrlResult (..))
 import Restful.Types  (Host, Url, getHost)
+import Time.Class     (Millis (..))
 
 import           Control.Concurrent.STM
 import           Control.Monad                (unless)

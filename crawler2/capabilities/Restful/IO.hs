@@ -25,7 +25,7 @@ fetchGetImpl http url =
         Right req ->
 
             let job = do
-                    liftIO $ putStrLn [i|Fetching: #{url}|] -- TODO log
+                    liftIO $ putStrLn [i|Fetching: #{url}|] -- TODO log.  Or lift outside
                     resp <- httpLbs req http
 
                     right Response { getUrl  = url
