@@ -31,59 +31,57 @@ import           Network.HTTP.Client           (Manager, defaultManagerSettings,
 numThreads :: Int
 numThreads = 4
 
-data Env =
-    Env !Manager !(Vector PoliteStmFrontier)
+data Env f =
+    Env !Manager !(Vector f)
 
-newtype MultiCrawler a =
-    MultiCrawler { unMultiCrawler :: ReaderT Env IO a }
+newtype MultiCrawler f a =
+    MultiCrawler { unMultiCrawler :: ReaderT (Env f) IO a }
         deriving (Functor, Applicative, Monad, MonadIO, MonadCatch, MonadThrow)
 
-instance Crawler MultiCrawler where
+instance Crawler (MultiCrawler f) where
 
-    addUrl :: Url -> MultiCrawler ()
+    addUrl :: Url -> MultiCrawler f ()
     addUrl url = do
         Env _ ps <- MultiCrawler ask
         let h = hash url `mod` numThreads
-        liftIO $ P.insertUrl (ps ! h) url
+        undefined -- liftIO $ P.insertUrl (ps ! h) url
 
-    start :: MultiCrawler ()
+    start :: MultiCrawler f ()
     start = do
         Env _ ps <- MultiCrawler ask
         forConcurrently_ ps (go ps)
 
-go :: Vector PoliteStmFrontier -> PoliteStmFrontier -> MultiCrawler ()
+go :: Vector f -> f -> MultiCrawler f ()
 go frontiers frontier = undefined
 
-instance Restful MultiCrawler where
+instance Restful (MultiCrawler f) where
 
     -- TODO: motivate the catch/throw dependencies here
-    fetchGet :: Url -> MultiCrawler (Either [Text] Response)
+    fetchGet :: Url -> MultiCrawler f (Either [Text] Response)
     fetchGet url = do        
         Env http _ <- MultiCrawler ask
         fetchGetImpl http url
-        
+
 create :: Int -> IO ()
 create numThreads = do
-
     ps <- V.replicateM numThreads P.new
-
     pure ()
 
-instance Multithread MultiCrawler where
+instance Multithread (MultiCrawler f) where
 
-    mapConcurrently :: Traversable t => (a -> MultiCrawler b) -> t a -> MultiCrawler (t b)
+    mapConcurrently :: Traversable t => (a -> MultiCrawler f b) -> t a -> MultiCrawler f (t b)
     mapConcurrently f xs =
         MultiCrawler $ do
             env <- ask
             liftIO $ A.mapConcurrently (unlift env . f) xs
 
-    forConcurrently_ :: Traversable t => t a -> (a -> MultiCrawler ()) -> MultiCrawler ()
+    forConcurrently_ :: Traversable t => t a -> (a -> MultiCrawler f ()) -> MultiCrawler f ()
     forConcurrently_ xs f =
         MultiCrawler $ do
             env <- ask
             liftIO $ A.forConcurrently_ xs (unlift env . f)
 
-unlift :: Env -> MultiCrawler b -> IO b
+unlift :: Env f -> MultiCrawler f b -> IO b
 unlift env (MultiCrawler run) = runReaderT run env
 
 {-
@@ -119,13 +117,6 @@ go http p ps = do
                     mapM_ (addUrl ps) urls
                     go http p ps
 -}
-
-
--- Capability?
---currentMillis :: IO Millis
---currentMillis = Millis . round . (* 1000) <$> getPOSIXTime
-
-
 {-
 
 import Frontier.Class             (Frontier (..), Millis (..), NextUrl (..), UrlResult (..))
