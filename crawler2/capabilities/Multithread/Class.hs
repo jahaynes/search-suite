@@ -1,4 +1,4 @@
-module Multithread.Class where
+module Multithread.Class ( Multithread (..) ) where
 
 class Multithread m where
 

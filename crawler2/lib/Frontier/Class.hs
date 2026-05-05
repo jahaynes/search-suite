@@ -13,8 +13,10 @@ data NextUrl
 
 class Frontier m where
 
-    completed :: Url -> UrlResult -> m ()
+    newFrontier :: IO m
 
-    insert :: Url -> m ()
+    completed :: m -> Url -> UrlResult -> IO ()
 
-    nextUrl :: m NextUrl
+    insert :: m -> Url -> IO ()
+
+    nextUrl :: m -> Millis -> IO NextUrl -- Probably don't need millis in the sig

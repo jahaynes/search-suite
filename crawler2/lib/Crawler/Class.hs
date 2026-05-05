@@ -1,8 +1,6 @@
-module Crawler.Class where
+module Crawler.Class ( Crawler (..) ) where
 
 import Restful.Types (Url)
-
-import Control.Concurrent.Async (Async)
 
 class Crawler m where
 

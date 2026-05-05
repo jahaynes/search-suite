@@ -2,7 +2,7 @@
 
 module Restful.IO ( fetchGetImpl ) where
 
-import Restful.Types
+import Restful.Types ( Url, Response (..) )
 
 import Control.Exception.Safe    (MonadCatch, SomeException, catchAnyDeep)
 import Control.Monad.IO.Class    (MonadIO, liftIO)
