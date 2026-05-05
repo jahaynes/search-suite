@@ -4,8 +4,8 @@ import Restful.Types (Url)
 
 import Control.Concurrent.Async (Async)
 
-class Crawler c where
+class Crawler m where
 
-    addUrl :: Url -> c ()
+    addUrl :: Url -> m ()
 
-    start :: c (Async ())
+    start :: m ()

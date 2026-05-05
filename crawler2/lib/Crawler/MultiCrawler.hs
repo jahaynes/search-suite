@@ -5,27 +5,28 @@
 module Crawler.MultiCrawler where
 
 import           Crawler.Class
-import           Frontier.Class                  (NextUrl (..), UrlResult (..))
+import           Frontier.Class                  (NextUrl (..), UrlResult (..), Frontier)
 -- TODO: hide P behind class:
 import           Frontier.PoliteStmFrontier      (PoliteStmFrontier)
 import qualified Frontier.PoliteStmFrontier as P
+import           Multithread.Class
 import           Restful.Class
 import           Restful.IO                      (fetchGetImpl)
 import           Restful.Types                   (Response, Url, mkUrl)
 import           Scrape                          (scrapeUrls)
 import           Time.Class                      (Millis (..))
 
-import           Control.Concurrent         (threadDelay)
-import           Control.Concurrent.Async   (Async, async)
-import           Control.Exception.Safe     (MonadCatch, MonadThrow)
-import           Control.Monad.IO.Class     (MonadIO, liftIO)
-import           Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
-import           Data.Hashable              (Hashable (hash))
-import           Data.Text                  (Text)
-import           Data.Time.Clock.POSIX      (getPOSIXTime)
-import           Data.Vector                ((!), Vector)
+import           Control.Concurrent            (threadDelay)
+import qualified Control.Concurrent.Async as A
+import           Control.Exception.Safe        (MonadCatch, MonadThrow)
+import           Control.Monad.IO.Class        (MonadIO, liftIO)
+import           Control.Monad.Trans.Reader    (ReaderT, ask, runReaderT)
+import           Data.Hashable                 (Hashable (hash))
+import           Data.Text                     (Text)
+import           Data.Time.Clock.POSIX         (getPOSIXTime)
+import           Data.Vector                   ((!), Vector)
 import qualified Data.Vector as V
-import           Network.HTTP.Client        (Manager, defaultManagerSettings, newManager)
+import           Network.HTTP.Client           (Manager, defaultManagerSettings, newManager)
 
 numThreads :: Int
 numThreads = 4
@@ -45,12 +46,13 @@ instance Crawler MultiCrawler where
         let h = hash url `mod` numThreads
         liftIO $ P.insertUrl (ps ! h) url
 
-    start :: MultiCrawler (Async ())
+    start :: MultiCrawler ()
     start = do
-        
-        _ <- fetchGet undefined
-        
-        liftIO . async $ pure ()
+        Env _ ps <- MultiCrawler ask
+        forConcurrently_ ps (go ps)
+
+go :: Vector PoliteStmFrontier -> PoliteStmFrontier -> MultiCrawler ()
+go frontiers frontier = undefined
 
 instance Restful MultiCrawler where
 
@@ -62,13 +64,27 @@ instance Restful MultiCrawler where
         
 create :: Int -> IO ()
 create numThreads = do
-    
+
     ps <- V.replicateM numThreads P.new
 
-    
     pure ()
 
+instance Multithread MultiCrawler where
 
+    mapConcurrently :: Traversable t => (a -> MultiCrawler b) -> t a -> MultiCrawler (t b)
+    mapConcurrently f xs =
+        MultiCrawler $ do
+            env <- ask
+            liftIO $ A.mapConcurrently (unlift env . f) xs
+
+    forConcurrently_ :: Traversable t => t a -> (a -> MultiCrawler ()) -> MultiCrawler ()
+    forConcurrently_ xs f =
+        MultiCrawler $ do
+            env <- ask
+            liftIO $ A.forConcurrently_ xs (unlift env . f)
+
+unlift :: Env -> MultiCrawler b -> IO b
+unlift env (MultiCrawler run) = runReaderT run env
 
 {-
 go :: Manager -> PoliteStmFrontier -> Vector PoliteStmFrontier -> IO ()
