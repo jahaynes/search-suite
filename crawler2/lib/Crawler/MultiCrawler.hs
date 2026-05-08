@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving,
              InstanceSigs,
-             LambdaCase #-}
+             LambdaCase,
+             OverloadedLists #-}
 
 module Crawler.MultiCrawler ( MultiCrawler
                             , runCrawler
@@ -17,6 +18,7 @@ import Time.Class        (Millis (..), Time (..))
 
 import           Control.Concurrent            (threadDelay)
 import qualified Control.Concurrent.Async as A
+import           Control.Concurrent.STM        (STM, atomically)
 import           Control.Exception.Safe        (MonadCatch, MonadThrow)
 import           Control.Monad.IO.Class        (MonadIO, liftIO)
 import           Control.Monad.Trans.Reader    (ReaderT, ask, runReaderT)
@@ -25,7 +27,10 @@ import           Data.Text                     (Text)
 import           Data.Time.Clock.POSIX         (getPOSIXTime)
 import           Data.Vector                   ((!), Vector)
 import qualified Data.Vector as V
+import ListT
 import           Network.HTTP.Client           (Manager, defaultManagerSettings, newManager)
+import           StmContainers.Map             (Map)
+import qualified StmContainers.Map as M
 
 data Env f =
     Env !Supervisor !Manager !Int !(Vector f)
@@ -44,8 +49,8 @@ instance Frontier f => Crawler (MultiCrawler f) where
 
     start :: MultiCrawler f ()
     start = do
-        Env _ http _ ps <- MultiCrawler ask
-        forConcurrently_ ps (go http)
+        Env sup http _ ps <- MultiCrawler ask
+        forConcurrently_ (V.zip [0..] ps) (go sup http)
 
 instance Restful (MultiCrawler f) where
 
@@ -68,7 +73,8 @@ runCrawler numThreads crawler = do
     http <- newManager defaultManagerSettings
     ps <- V.replicateM numThreads newFrontier
 
-    let supervisor = Supervisor undefined
+    m <- M.newIO
+    let supervisor = Supervisor  (imIdleAreWeImpl m)
 
     runReaderT (unMultiCrawler crawler) (Env supervisor http numThreads ps)
 
@@ -89,28 +95,40 @@ instance Multithread (MultiCrawler f) where
 unlift :: Env f -> MultiCrawler f b -> IO b
 unlift env (MultiCrawler run) = runReaderT run env
 
--- newtype
-data Supervisor =
-    Supervisor { shouldHalt :: Int -> IO Bool }
+newtype Supervisor =
+    Supervisor { imIdleAreWe :: Int -> Bool -> IO Bool }
 
-go :: Frontier f => Manager -> f -> MultiCrawler f ()
-go http p = do
+-- Lift instead multicrawler
+imIdleAreWeImpl :: Map Int Bool -> Int -> Bool -> IO Bool
+imIdleAreWeImpl m crawlerId hasWork = atomically $ do
+    M.insert hasWork crawlerId m
+    fold (\acc x -> pure $ acc && snd x) True (M.listT m)
+
+go :: Frontier f => Supervisor -> Manager -> (Int, f) -> MultiCrawler f ()
+go sup http (i, p) = do
 
     now <- currentMillis
 
     liftIO (nextUrl p now) >>= \case
 
         NoMoreUrls -> do
-            wait $ Millis 250
-            liftIO $ putStrLn "No more urls.  Waited"
-            go http p
+            liftIO $ putStrLn "No more urls.  Waiting"
+            liftIO (imIdleAreWe sup i True) >>= \case
+                True -> do
+                    liftIO $ print (i, "Done")
+                False -> do 
+                    wait $ Millis 250
+                    go sup http (i, p)
 
         RetryIn ms -> do
+            liftIO (imIdleAreWe sup i False)
             liftIO $ putStrLn ("Waiting " ++ show ms)
             wait ms
-            go http p
+            go sup http (i, p)
 
-        NextUrl url ->
+        NextUrl url -> do
+
+            liftIO (imIdleAreWe sup i False)
 
             fetchGetImpl http url >>= \case
 
@@ -124,4 +142,4 @@ go http p = do
 
                     let urls = scrapeUrls response
                     mapM_ addUrl urls
-                    go http p
+                    go sup http (i, p)

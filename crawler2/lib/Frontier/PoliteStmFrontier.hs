@@ -20,7 +20,7 @@ import           StmContainers.Multimap       (Multimap)
 import qualified StmContainers.Multimap as MM
 
 perHostWaitMs :: Int
-perHostWaitMs = 50
+perHostWaitMs = 20
 
 data PoliteStmFrontier =
     PoliteStmFrontier { hostTimes         :: !(TVar (Heap (Millis, Host)))
