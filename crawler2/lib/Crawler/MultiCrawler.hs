@@ -18,8 +18,9 @@ import Time.Class        (Millis (..), Time (..))
 
 import           Control.Concurrent            (threadDelay)
 import qualified Control.Concurrent.Async as A
-import           Control.Concurrent.STM        (STM, atomically)
+import           Control.Concurrent.STM        (atomically)
 import           Control.Exception.Safe        (MonadCatch, MonadThrow)
+import           Control.Monad                 (unless)
 import           Control.Monad.IO.Class        (MonadIO, liftIO)
 import           Control.Monad.Trans.Reader    (ReaderT, ask, runReaderT)
 import           Data.Hashable                 (Hashable (hash))
@@ -27,13 +28,16 @@ import           Data.Text                     (Text)
 import           Data.Time.Clock.POSIX         (getPOSIXTime)
 import           Data.Vector                   ((!), Vector)
 import qualified Data.Vector as V
-import ListT
 import           Network.HTTP.Client           (Manager, defaultManagerSettings, newManager)
-import           StmContainers.Map             (Map)
-import qualified StmContainers.Map as M
+import           StmContainers.Set             (Set)
+import qualified StmContainers.Set as S
 
 data Env f =
-    Env !Manager !Int !(Vector f)
+    Env { getHttp       :: !Manager
+        , getNumThreads :: !Int
+        , getCrawlers   :: !(Vector f)
+        , getSleeping   :: !(Set Int)
+        }
 
 newtype MultiCrawler f a =
     MultiCrawler { unMultiCrawler :: ReaderT (Env f) IO a }
@@ -43,35 +47,55 @@ instance Frontier f => Crawler (MultiCrawler f) where
 
     addUrl :: Url -> MultiCrawler f ()
     addUrl url = do
-        Env _ nt ps <- MultiCrawler ask
-        let h = hash url `mod` nt           -- This currently hashes the whole URL, not just the host.  Make this an option?
-        liftIO $ insert (ps ! h) url
+        env <- MultiCrawler ask
+        let p = hash url `mod` (getNumThreads env) -- This currently hashes the whole URL, not just the host.  Make this an option?
+        -- Make the below two (wake/insert) needs to be together in raw STM?
+        wake p  -- TODO
+        liftIO $ insert (getCrawlers env ! p) url
 
     start :: MultiCrawler f ()
     start = do
-        Env http _ ps <- MultiCrawler ask
-        forConcurrently_ (V.zip [0..] ps) (go http)
+
+        env <- MultiCrawler ask
+
+        forConcurrently_ (V.zip [0..] (getCrawlers env))
+                         (go (getHttp env))
 
 class Sleeper m where
 
+    -- wastful n*n ?
+    allSleeping :: m Bool
+
     rest :: Int -> m ()
+
     wake :: Int -> m ()
 
 instance Sleeper (MultiCrawler f) where
 
+    allSleeping :: MultiCrawler f Bool
+    allSleeping = do
+        env <- MultiCrawler ask
+        liftIO . atomically $ do
+            s <- S.size $ getSleeping env
+            pure $ getNumThreads env == s
+
     rest :: Int -> MultiCrawler f ()
-    rest p = undefined
+    rest p = do
+        env <- MultiCrawler ask
+        liftIO . atomically $ S.insert p (getSleeping env)
 
     wake :: Int -> MultiCrawler f ()
-    wake p = undefined
+    wake p = do
+        env <- MultiCrawler ask
+        liftIO . atomically $ S.delete p (getSleeping env)
 
 instance Restful (MultiCrawler f) where
 
     -- TODO: motivate the catch/throw dependencies here
     fetchGet :: Url -> MultiCrawler f (Either [Text] Response)
     fetchGet url = do        
-        Env http _ _ <- MultiCrawler ask
-        fetchGetImpl http url
+        env <- MultiCrawler ask
+        fetchGetImpl (getHttp env) url
 
 instance Time (MultiCrawler f) where
 
@@ -83,10 +107,12 @@ instance Time (MultiCrawler f) where
 
 runCrawler :: Frontier f => Int -> MultiCrawler f a -> IO a
 runCrawler numThreads crawler = do
-    http <- newManager defaultManagerSettings
-    ps <- V.replicateM numThreads newFrontier
-    runReaderT (unMultiCrawler crawler) (Env http numThreads ps)
+    http     <- newManager defaultManagerSettings
+    ps       <- V.replicateM numThreads newFrontier
+    sleeping <- S.newIO
+    runReaderT (unMultiCrawler crawler) (Env http numThreads ps sleeping)
 
+-- Maybe it makes no sense to group these, and demand everyone implements everything
 instance Multithread (MultiCrawler f) where
 
     mapConcurrently :: Traversable t => (a -> MultiCrawler f b) -> t a -> MultiCrawler f (t b)
@@ -107,11 +133,16 @@ unlift env (MultiCrawler run) = runReaderT run env
 go :: Frontier f => Manager -> (Int, f) -> MultiCrawler f ()
 go http (i, p) = do
 
-    now <- currentMillis
+    as <- allSleeping
 
-    liftIO (nextUrl p now) >>= \case
+    unless as $ do
+
+      now <- currentMillis
+
+      liftIO (nextUrl p now) >>= \case
 
         NoMoreUrls -> do
+            rest i -- right place for this? or end of method?
             liftIO $ putStrLn "Waiting"
             wait $ Millis 250
             go http (i, p)
