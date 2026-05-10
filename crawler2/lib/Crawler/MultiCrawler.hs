@@ -33,7 +33,7 @@ import           StmContainers.Map             (Map)
 import qualified StmContainers.Map as M
 
 data Env f =
-    Env !Supervisor !Manager !Int !(Vector f)
+    Env !Manager !Int !(Vector f)
 
 newtype MultiCrawler f a =
     MultiCrawler { unMultiCrawler :: ReaderT (Env f) IO a }
@@ -43,21 +43,34 @@ instance Frontier f => Crawler (MultiCrawler f) where
 
     addUrl :: Url -> MultiCrawler f ()
     addUrl url = do
-        Env _ _ nt ps <- MultiCrawler ask
+        Env _ nt ps <- MultiCrawler ask
         let h = hash url `mod` nt           -- This currently hashes the whole URL, not just the host.  Make this an option?
         liftIO $ insert (ps ! h) url
 
     start :: MultiCrawler f ()
     start = do
-        Env sup http _ ps <- MultiCrawler ask
-        forConcurrently_ (V.zip [0..] ps) (go sup http)
+        Env http _ ps <- MultiCrawler ask
+        forConcurrently_ (V.zip [0..] ps) (go http)
+
+class Sleeper m where
+
+    rest :: Int -> m ()
+    wake :: Int -> m ()
+
+instance Sleeper (MultiCrawler f) where
+
+    rest :: Int -> MultiCrawler f ()
+    rest p = undefined
+
+    wake :: Int -> MultiCrawler f ()
+    wake p = undefined
 
 instance Restful (MultiCrawler f) where
 
     -- TODO: motivate the catch/throw dependencies here
     fetchGet :: Url -> MultiCrawler f (Either [Text] Response)
     fetchGet url = do        
-        Env _ http _ _ <- MultiCrawler ask
+        Env http _ _ <- MultiCrawler ask
         fetchGetImpl http url
 
 instance Time (MultiCrawler f) where
@@ -72,11 +85,7 @@ runCrawler :: Frontier f => Int -> MultiCrawler f a -> IO a
 runCrawler numThreads crawler = do
     http <- newManager defaultManagerSettings
     ps <- V.replicateM numThreads newFrontier
-
-    m <- M.newIO
-    let supervisor = Supervisor  (imIdleAreWeImpl m)
-
-    runReaderT (unMultiCrawler crawler) (Env supervisor http numThreads ps)
+    runReaderT (unMultiCrawler crawler) (Env http numThreads ps)
 
 instance Multithread (MultiCrawler f) where
 
@@ -95,40 +104,24 @@ instance Multithread (MultiCrawler f) where
 unlift :: Env f -> MultiCrawler f b -> IO b
 unlift env (MultiCrawler run) = runReaderT run env
 
-newtype Supervisor =
-    Supervisor { imIdleAreWe :: Int -> Bool -> IO Bool }
-
--- Lift instead multicrawler
-imIdleAreWeImpl :: Map Int Bool -> Int -> Bool -> IO Bool
-imIdleAreWeImpl m crawlerId hasWork = atomically $ do
-    M.insert hasWork crawlerId m
-    fold (\acc x -> pure $ acc && snd x) True (M.listT m)
-
-go :: Frontier f => Supervisor -> Manager -> (Int, f) -> MultiCrawler f ()
-go sup http (i, p) = do
+go :: Frontier f => Manager -> (Int, f) -> MultiCrawler f ()
+go http (i, p) = do
 
     now <- currentMillis
 
     liftIO (nextUrl p now) >>= \case
 
         NoMoreUrls -> do
-            liftIO $ putStrLn "No more urls.  Waiting"
-            liftIO (imIdleAreWe sup i True) >>= \case
-                True -> do
-                    liftIO $ print (i, "Done")
-                False -> do 
-                    wait $ Millis 250
-                    go sup http (i, p)
+            liftIO $ putStrLn "Waiting"
+            wait $ Millis 250
+            go http (i, p)
 
         RetryIn ms -> do
-            liftIO (imIdleAreWe sup i False)
             liftIO $ putStrLn ("Waiting " ++ show ms)
             wait ms
-            go sup http (i, p)
+            go http (i, p)
 
-        NextUrl url -> do
-
-            liftIO (imIdleAreWe sup i False)
+        NextUrl url ->
 
             fetchGetImpl http url >>= \case
 
@@ -142,4 +135,4 @@ go sup http (i, p) = do
 
                     let urls = scrapeUrls response
                     mapM_ addUrl urls
-                    go sup http (i, p)
+                    go http (i, p)
