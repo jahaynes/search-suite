@@ -48,9 +48,11 @@ instance Frontier f => Crawler (MultiCrawler f) where
     addUrl :: Url -> MultiCrawler f ()
     addUrl url = do
         env <- MultiCrawler ask
+        -- Perhaps it could hash once on thread parallelism, then one on host,
+        -- and each number could be configured independently
         let p = hash url `mod` (getNumThreads env) -- This currently hashes the whole URL, not just the host.  Make this an option?
-        -- Make the below two (wake/insert) needs to be together in raw STM?
-        wake p  -- TODO
+        -- Do the following (wake/insert) need to be together in raw STM?
+        wake p
         liftIO $ insert (getCrawlers env ! p) url
 
     start :: MultiCrawler f ()
