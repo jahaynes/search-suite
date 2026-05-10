@@ -63,6 +63,8 @@ instance Frontier f => Crawler (MultiCrawler f) where
         forConcurrently_ (V.zip [0..] (getCrawlers env))
                          (go (getHttp env))
 
+        -- TODO return result or stats here
+
 class Sleeper m where
 
     -- wastful n*n ?
