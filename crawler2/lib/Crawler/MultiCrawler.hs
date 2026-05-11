@@ -1,4 +1,5 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving,
+{-# LANGUAGE DeriveGeneric,
+             GeneralizedNewtypeDeriving,
              InstanceSigs,
              LambdaCase,
              OverloadedLists #-}
@@ -28,15 +29,22 @@ import           Data.Text                     (Text)
 import           Data.Time.Clock.POSIX         (getPOSIXTime)
 import           Data.Vector                   ((!), Vector)
 import qualified Data.Vector as V
+import           GHC.Generics                  (Generic)
 import           Network.HTTP.Client           (Manager, defaultManagerSettings, newManager)
 import           StmContainers.Set             (Set)
 import qualified StmContainers.Set as S
+
+newtype CrawlerId =
+    CrawlerId Int
+        deriving (Eq, Generic)
+
+instance Hashable CrawlerId
 
 data Env f =
     Env { getHttp       :: !Manager
         , getNumThreads :: !Int
         , getCrawlers   :: !(Vector f)
-        , getSleeping   :: !(Set Int)
+        , getSleeping   :: !(Set CrawlerId)
         }
 
 newtype MultiCrawler f a =
@@ -52,7 +60,7 @@ instance Frontier f => Crawler (MultiCrawler f) where
         -- and each number could be configured independently
         let p = hash url `mod` (getNumThreads env) -- This currently hashes the whole URL, not just the host.  Make this an option?
         -- Do the following (wake/insert) need to be together in raw STM?
-        wake p
+        wake (CrawlerId p)
         liftIO $ insert (getCrawlers env ! p) url
 
     start :: MultiCrawler f ()
@@ -60,7 +68,7 @@ instance Frontier f => Crawler (MultiCrawler f) where
 
         env <- MultiCrawler ask
 
-        forConcurrently_ (V.zip [0..] (getCrawlers env))
+        forConcurrently_ (V.zip (CrawlerId <$> [0..]) (getCrawlers env))
                          (go (getHttp env))
 
         -- TODO return result or stats here
@@ -70,9 +78,9 @@ class Sleeper m where
     -- wastful n*n ?
     allSleeping :: m Bool
 
-    rest :: Int -> m ()
+    rest :: CrawlerId -> m ()
 
-    wake :: Int -> m ()
+    wake :: CrawlerId -> m ()
 
 instance Sleeper (MultiCrawler f) where
 
@@ -83,12 +91,12 @@ instance Sleeper (MultiCrawler f) where
             s <- S.size $ getSleeping env
             pure $ getNumThreads env == s
 
-    rest :: Int -> MultiCrawler f ()
+    rest :: CrawlerId -> MultiCrawler f ()
     rest p = do
         env <- MultiCrawler ask
         liftIO . atomically $ S.insert p (getSleeping env)
 
-    wake :: Int -> MultiCrawler f ()
+    wake :: CrawlerId -> MultiCrawler f ()
     wake p = do
         env <- MultiCrawler ask
         liftIO . atomically $ S.delete p (getSleeping env)
@@ -134,7 +142,7 @@ instance Multithread (MultiCrawler f) where
 unlift :: Env f -> MultiCrawler f b -> IO b
 unlift env (MultiCrawler run) = runReaderT run env
 
-go :: Frontier f => Manager -> (Int, f) -> MultiCrawler f ()
+go :: Frontier f => Manager -> (CrawlerId, f) -> MultiCrawler f ()
 go http (i, p) = do
 
     as <- allSleeping
